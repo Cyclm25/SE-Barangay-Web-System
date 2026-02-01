@@ -1,9 +1,0 @@
-export { ResidentPortal } from './ResidentPortal';
-export { ResidentHeader } from './ResidentHeader';
-export { ResidentHome } from './ResidentHome';
-export { ResidentServices } from './ResidentServices';
-export { ResidentAbout } from './ResidentAbout';
-export { ResidentProfile } from './ResidentProfile';
-export { TrackRequest } from './TrackRequest';
-export { AnnouncementDetail } from './AnnouncementDetail';
-export { ProfileSidebar } from './ProfileSidebar';
