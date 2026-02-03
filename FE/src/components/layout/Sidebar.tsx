@@ -20,22 +20,24 @@ interface SidebarProps {
   onLogout: () => void;
   adminName: string;
   adminId: string;
-  userRole?: 'admin' | 'official';
+  // Added 'superadmin' to the interface
+  userRole?: 'admin' | 'official' | 'superadmin';
 }
 
 const navigation = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'official'] },
+  // Defined which roles can see which tabs based on your ERD
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'official', 'superadmin'] },
   { id: 'residents', label: 'Resident Records', icon: Users, roles: ['admin', 'official'] },
-  { id: 'officials', label: 'Barangay Officials', icon: User, roles: ['admin'] },
+  { id: 'officials', label: 'Barangay Officials', icon: User, roles: ['admin', 'superadmin'] },
   { id: 'requests', label: 'Online Requests', icon: FileText, roles: ['admin', 'official'] },
   { id: 'announcements', label: 'Announcements', icon: Megaphone, roles: ['admin', 'official'] },
-  { id: 'transactions', label: 'Transaction History', icon: History, roles: ['admin'] },
+  { id: 'transactions', label: 'Transaction History', icon: History, roles: ['admin', 'superadmin'] },
 ];
 
 export function Sidebar({ activeTab, onTabChange, onLogout, adminName, adminId, userRole = 'admin' }: SidebarProps) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
-  // Filter navigation based on user role
+  // Filters navigation based on the userRole string passed from App.tsx
   const filteredNavigation = navigation.filter(item => item.roles.includes(userRole));
 
   const handleLogoutClick = () => {
@@ -91,7 +93,9 @@ export function Sidebar({ activeTab, onTabChange, onLogout, adminName, adminId, 
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-semibold truncate">{adminName}</p>
             <p className="text-[11px] text-white/70 truncate">
-              {userRole === 'admin' ? 'Barangay Secretary' : 'Barangay Official'}
+              {/* Dynamic role label */}
+              {userRole === 'superadmin' ? 'Super Administrator' : 
+               userRole === 'admin' ? 'Barangay Secretary' : 'Barangay Official'}
             </p>
           </div>
         </div>
@@ -105,7 +109,6 @@ export function Sidebar({ activeTab, onTabChange, onLogout, adminName, adminId, 
         </Button>
       </div>
 
-      {/* Logout Confirmation Dialog */}
       <ConfirmDialog
         isOpen={showLogoutConfirm}
         onClose={() => setShowLogoutConfirm(false)}

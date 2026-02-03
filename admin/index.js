@@ -1,15 +1,15 @@
 const express = require("express");
-const app = express();
 const cors = require("cors");
-const pool = require("./db");
-const authRoutes = require("./routes/auth"); 
+const app = express();
 
-app.use(cors());
+// 1. Enable CORS so your Frontend on Port 3000 can talk to this Backend
+app.use(cors()); 
 app.use(express.json());
 
-// Routes
-app.use("/auth", authRoutes); 
+// 2. Link your authentication routes
+app.use("/auth", require("./routes/auth"));
 
-app.listen(5000, () => {
-    console.log("Server is running on port 5000");
+// 3. Start on Port 5001
+app.listen(5001, () => {
+  console.log("Backend server is running on http://localhost:5001");
 });

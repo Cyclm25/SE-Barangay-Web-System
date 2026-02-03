@@ -11,12 +11,13 @@ import { ForgotPasswordPage } from './components/auth/ForgotPasswordPage';
 import { SetNewPasswordPage } from './components/auth/SetNewPasswordPage';
 import { ResidentPortal } from './components/resident/ResidentPortal';
 import { Toaster } from './components/ui/sonner';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface User {
   id: string;
   name: string;
-  role: 'admin' | 'resident' | 'official';
+  // Roles mapped to match your ERD instructions exactly
+  role: 'admin' | 'official' | 'resident';
 }
 
 type ActiveTab = 'dashboard' | 'residents' | 'officials' | 'requests' | 'announcements' | 'transactions';
@@ -28,57 +29,27 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [user, setUser] = useState<User | null>(null);
 
-  const handleLoginSuccess = (username: string) => {
-    // Determine user role based on username
-    // For demo: if username contains "admin", it's admin
-    // if username contains "official", it's official
-    // otherwise it's resident
-    const lowerUsername = username.toLowerCase();
-    let role: 'admin' | 'resident' | 'official';
-    let userId: string;
-    let userName: string;
-    
-    if (lowerUsername.includes('admin')) {
-      role = 'admin';
-      userId = 'AD20260001';
-      userName = 'Maria Santos';
-    } else if (lowerUsername.includes('official')) {
-      role = 'official';
-      userId = 'OF20260001';
-      userName = 'Roberto Cruz';
+  const handleLoginSuccess = (username: string, roleFromDb: string, firstName: string) => {
+    // Bridges Database strings to Frontend roles based on your ERD
+    let normalizedRole: 'admin' | 'official' | 'resident';
+    const dbRole = roleFromDb.toLowerCase().trim();
+
+    if (dbRole === 'superadmin') {
+      normalizedRole = 'admin'; // ERD SuperAdmin -> System Admin
+    } else if (dbRole === 'admin') {
+      normalizedRole = 'official'; // ERD BarangayAdmin -> System Official
     } else {
-      role = 'resident';
-      userId = 'RS20260001';
-      userName = 'Juan';
+      normalizedRole = 'resident';
     }
     
     setUser({
-      id: userId,
-      name: userName,
-      role: role
+      id: username,
+      name: firstName,
+      role: normalizedRole
     });
     
     setIsAuthenticated(true);
     setAuthView('dashboard');
-  };
-
-  const handleForgotPassword = () => {
-    setAuthView('forgot-password');
-  };
-
-  const handleOTPVerified = () => {
-    setAuthView('set-new-password');
-  };
-
-  const handlePasswordReset = () => {
-    toast.success('Password has been reset successfully!', {
-      description: 'You can now login with your new password.'
-    });
-    setAuthView('login');
-  };
-
-  const handleBackToLogin = () => {
-    setAuthView('login');
   };
 
   const handleLogout = () => {
@@ -89,89 +60,72 @@ export default function App() {
     toast.success('Logged out successfully.');
   };
 
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab as ActiveTab);
-  };
-
   const renderMainContent = () => {
     if (!user) return null;
 
     switch (activeTab) {
-      case 'dashboard':
+      case 'dashboard': 
         return <DashboardHome adminName={user.name} />;
-      case 'residents':
+      case 'residents': 
         return <ResidentRecords />;
-      case 'officials':
-        return <BarangayOfficials />;
-      case 'requests':
+      case 'officials': 
+        // Admin-only access for managing official profiles
+        return user.role === 'admin' ? <BarangayOfficials /> : <DashboardHome adminName={user.name} />;
+      case 'requests': 
         return <OnlineRequests />;
-      case 'announcements':
+      case 'announcements': 
         return <AnnouncementManagement />;
-      case 'transactions':
-        return <TransactionHistory />;
-      default:
+      case 'transactions': 
+        // Admin-only access for financial auditing
+        return user.role === 'admin' ? <TransactionHistory /> : <DashboardHome adminName={user.name} />;
+      default: 
         return <DashboardHome adminName={user.name} />;
     }
   };
 
-  // Show authentication views
+  // AUTHENTICATION VIEWS: Support for your new Split-Screen Landing Page
   if (!isAuthenticated) {
     return (
-      <>
+      <div className="min-h-screen bg-white">
         {authView === 'login' && (
           <LoginPage 
             onLoginSuccess={handleLoginSuccess}
-            onForgotPassword={handleForgotPassword}
+            onForgotPassword={() => setAuthView('forgot-password')}
           />
         )}
         {authView === 'forgot-password' && (
-          <ForgotPasswordPage 
-            onBack={handleBackToLogin}
-            onOTPVerified={handleOTPVerified}
-          />
+          <ForgotPasswordPage onBack={() => setAuthView('login')} onOTPVerified={() => setAuthView('set-new-password')} />
         )}
         {authView === 'set-new-password' && (
-          <SetNewPasswordPage 
-            onPasswordReset={handlePasswordReset}
-          />
+          <SetNewPasswordPage onPasswordReset={() => { toast.success('Password reset!'); setAuthView('login'); }} />
         )}
         <Toaster position="top-right" />
-      </>
+      </div>
     );
   }
 
-  // Show Resident Portal if user is a resident
+  // RESIDENT PORTAL VIEW
   if (user?.role === 'resident') {
     return (
       <>
-        <ResidentPortal 
-          residentName={user.name}
-          onLogout={handleLogout}
-        />
+        <ResidentPortal residentName={user.name} onLogout={handleLogout} />
         <Toaster position="top-right" />
       </>
     );
   }
 
-  // Show Admin Dashboard if user is an admin or official
+  // MANAGEMENT DASHBOARD (Admin & Official)
   return (
     <div className="h-screen flex bg-gray-50">
-      {/* Sidebar */}
       <Sidebar
         activeTab={activeTab}
-        onTabChange={handleTabChange}
+        onTabChange={(tab) => setActiveTab(tab as ActiveTab)}
         onLogout={handleLogout}
         adminName={user.name}
         adminId={user.id}
-        userRole={user.role === 'official' ? 'official' : 'admin'}
+        userRole={user.role} 
       />
-
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        {renderMainContent()}
-      </div>
-
-      {/* Toast Notifications */}
+      <div className="flex-1 overflow-auto">{renderMainContent()}</div>
       <Toaster position="top-right" />
     </div>
   );
