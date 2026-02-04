@@ -5,8 +5,7 @@ router.post("/login", async (req, res) => {
     try {
         const { residentId, password } = req.body; 
 
-        // Join 'residentaccount' to all three potential profile tables
-        // COALESCE picks the first name that isn't empty
+        // Strictly follows ERD: Joins Account to Resident, BarangayAdmin, and SuperAdmin
         const user = await pool.query(
             `SELECT 
                 ra."Password", 
@@ -22,22 +21,20 @@ router.post("/login", async (req, res) => {
             [residentId]
         );
 
-        // 1. Check if user exists
         if (user.rows.length === 0) {
             return res.status(401).json("User ID not found.");
         }
 
         const { Password, Role, DisplayName } = user.rows[0];
 
-        // 2. Verify password match (Case Sensitive)
+        // Security check for password
         if (password !== Password) {
             return res.status(401).json("Incorrect password.");
         }
 
-        // 3. Return data for the frontend 3-way redirect
         res.json({ 
             message: "Login Successful", 
-            role: Role, // 'Admin', 'Official', or 'Resident'
+            role: Role, 
             firstName: DisplayName 
         });
 
