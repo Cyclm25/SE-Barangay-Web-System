@@ -7,11 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '../ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Search, Eye, Upload, User } from 'lucide-react';
+import { Search, Eye, EyeOff, Upload, User, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatId } from '../../utils/formatId';
 
-// Interface remains same
 interface Resident {
   id: string;
   residentNo: string;
@@ -49,6 +48,10 @@ export function ResidentRecords() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [viewingResident, setViewingResident] = useState<Resident | null>(null);
   const [showDataPrivacyDialog, setShowDataPrivacyDialog] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState(''); // Added confirm password state
+  const [showPassword, setShowPassword] = useState(false);
   const [pendingResident, setPendingResident] = useState<Resident | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string>('');
   
@@ -62,13 +65,11 @@ export function ResidentRecords() {
     emergencyContactName: '', emergencyContactNumber: '', emergencyContactAddress: ''
   });
 
-  // FETCH & MAP DATA
   const loadResidents = async () => {
     try {
       const response = await fetch("http://localhost:5001/residents");
       if (response.ok) {
         const data = await response.json();
-        // Mapping PascalCase DB columns to camelCase UI properties
         const mappedData = data.map((r: any) => ({
           id: r.ResidentID,
           residentNo: r.ResidentID,
@@ -114,6 +115,8 @@ export function ResidentRecords() {
       emergencyContactName: '', emergencyContactNumber: '', emergencyContactAddress: ''
     });
     setProfileImagePreview('');
+    setPassword('');
+    setConfirmPassword('');
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,19 +174,34 @@ export function ResidentRecords() {
     setShowDataPrivacyDialog(true);
   };
 
-  const handleConfirmAddResident = async () => {
+  const handleConfirmPrivacy = () => {
+    setShowDataPrivacyDialog(false);
+    setShowPasswordDialog(true);
+  };
+
+  const handleFinalSubmit = async () => {
+    if (!password || !confirmPassword) {
+      toast.error("Please fill in both password fields.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match!");
+      return;
+    }
+
     if (pendingResident) {
       try {
         const response = await fetch("http://localhost:5001/residents/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(pendingResident),
+          body: JSON.stringify({ ...pendingResident, password }),
         });
 
         if (response.ok) {
-          toast.success('Resident record successfully saved!');
+          toast.success('Resident and Account successfully saved!');
           loadResidents();
-          setShowDataPrivacyDialog(false);
+          setShowPasswordDialog(false);
           setPendingResident(null);
           resetForm();
         } else {
@@ -373,18 +391,122 @@ export function ResidentRecords() {
         </CardContent>
       </Card>
 
+      {/* STEP 2: DATA PRIVACY DIALOG */}
       <AlertDialog open={showDataPrivacyDialog} onOpenChange={setShowDataPrivacyDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[400px]">
           <AlertDialogHeader>
             <AlertDialogTitle>Data Privacy Agreement</AlertDialogTitle>
             <AlertDialogDescription>Agree to process information for management purposes?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={handleCancelDataPrivacy}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmAddResident}>Agree and Add Resident</AlertDialogAction>
+            <AlertDialogAction onClick={handleConfirmPrivacy} className="bg-[#2957a1]">Agree and Continue</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* STEP 3: MINI SQUARED PASSWORD POP-UP */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent className="max-w-[400px] p-6 bg-white rounded-lg shadow-xl border-none">
+          <DialogHeader className="text-left mb-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <Lock className="w-5 h-5 text-[#2957a1]" />
+              </div>
+              <DialogTitle className="text-lg font-bold text-gray-900">
+                Set Account Password
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-gray-500">
+              Create and confirm the password for this resident account.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Box 1: Initial Password */}
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-gray-700">Initial Password *</Label>
+              <div className="relative">
+                <Input 
+                  type={showPassword ? "text" : "password"} 
+                  maxLength={50} 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password"
+                  className="h-10 pr-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#2957a1]"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Box 2: Confirm Password */}
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-gray-700">Confirm Password *</Label>
+              <Input 
+                type={showPassword ? "text" : "password"} 
+                maxLength={50} 
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-type password"
+                className={`h-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1] ${confirmPassword && password !== confirmPassword ? 'border-red-500 ring-red-500' : ''}`}
+              />
+              {confirmPassword && password !== confirmPassword && (
+                <p className="text-[10px] text-red-500 mt-1">Passwords do not match</p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="mt-6 flex justify-end gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => { setShowPasswordDialog(false); setConfirmPassword(''); }}
+              className="h-9 px-4 text-xs font-semibold text-gray-600"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleFinalSubmit} 
+              className="h-9 px-4 bg-[#2957a1] text-white text-xs font-bold rounded-md hover:bg-[#1e3f7a]"
+            >
+              Create Account & Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* VIEW RESIDENT DETAILS */}
+      <Dialog open={!!viewingResident} onOpenChange={(open) => { if (!open) setViewingResident(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Resident Details</DialogTitle>
+          </DialogHeader>
+          {viewingResident && (
+            <div className="space-y-4">
+               <div className="flex gap-4">
+                {viewingResident.profileImage && <img src={viewingResident.profileImage} alt="Profile" className="w-32 h-32 rounded-full object-cover" />}
+                <div className="flex-1 space-y-2">
+                  <p><strong>Name:</strong> {viewingResident.firstName} {viewingResident.middleName} {viewingResident.lastName}</p>
+                  <p><strong>Resident No:</strong> {formatId(viewingResident.residentNo)}</p>
+                  <p><strong>Age:</strong> {viewingResident.age}</p>
+                  <p><strong>Gender:</strong> {viewingResident.gender}</p>
+                  <p><strong>Contact:</strong> {viewingResident.contactNumber}</p>
+                  <p><strong>Email:</strong> {viewingResident.email}</p>
+                  <p><strong>Address:</strong> {viewingResident.houseNo} {viewingResident.streetAddress}, {viewingResident.city}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewingResident(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
