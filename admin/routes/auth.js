@@ -5,7 +5,7 @@ router.post("/login", async (req, res) => {
     try {
         const { residentId, password } = req.body; 
 
-        // Strictly follows ERD: Joins Account to Resident, BarangayAdmin, and SuperAdmin
+        // 1. Fetch the account and join with Resident/Admin names [cite: 462-466]
         const user = await pool.query(
             `SELECT 
                 ra."Password", 
@@ -22,25 +22,26 @@ router.post("/login", async (req, res) => {
         );
 
         if (user.rows.length === 0) {
-            return res.status(401).json("User ID not found.");
+            return res.status(401).json({ error: "Invalid ID or Password" });
         }
 
-        const { Password, Role, DisplayName } = user.rows[0];
+        const dbUser = user.rows[0];
 
-        // Security check for password
-        if (password !== Password) {
-            return res.status(401).json("Incorrect password.");
+        // 2. Case-sensitive password check [cite: 1108, 1131, 1167]
+        if (password !== dbUser.Password) {
+            return res.status(401).json({ error: "Invalid ID or Password" });
         }
 
+        // 3. SUCCESS - Send the Role exactly as 'Super Admin' [cite: 315]
         res.json({ 
             message: "Login Successful", 
-            role: Role, 
-            firstName: DisplayName 
+            role: dbUser.Role, 
+            firstName: dbUser.DisplayName 
         });
 
     } catch (err) {
         console.error("Database Error:", err.message);
-        res.status(500).send("Server Error");
+        res.status(500).json({ error: "Internal Server Error" });
     }
 });
 

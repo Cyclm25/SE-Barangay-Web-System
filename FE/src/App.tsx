@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { DashboardHome } from './components/dashboard/DashboardHome';
 import { ResidentRecords } from './components/dashboard/ResidentRecords';
@@ -13,10 +13,10 @@ import { ResidentPortal } from './components/resident/ResidentPortal';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 
+// 1. User Interface definition matching your DB User data [cite: 462-479]
 interface User {
   id: string;
   name: string;
-  // Roles mapped to match your ERD instructions exactly
   role: 'admin' | 'official' | 'resident';
 }
 
@@ -29,27 +29,44 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [user, setUser] = useState<User | null>(null);
 
+  // Persistence logic to keep user logged in on refresh [cite: 293-295]
+  useEffect(() => {
+    const savedUser = localStorage.getItem('app_user');
+    if (savedUser) {
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
+      setIsAuthenticated(true);
+      setAuthView('dashboard');
+    }
+  }, []);
+
+  // 2. CRITICAL FIX: Logic to map Database Roles to Frontend Views [cite: 315-325]
   const handleLoginSuccess = (username: string, roleFromDb: string, firstName: string) => {
-    // Bridges Database strings to Frontend roles based on your ERD
     let normalizedRole: 'admin' | 'official' | 'resident';
-    const dbRole = roleFromDb.toLowerCase().trim();
+    
+    // Strips all spaces and converts to lowercase to handle "Super Admin" vs "superadmin"
+    const dbRole = roleFromDb.toLowerCase().replace(/\s+/g, '').trim();
 
     if (dbRole === 'superadmin') {
-      normalizedRole = 'admin'; // ERD SuperAdmin -> System Admin
-    } else if (dbRole === 'admin') {
-      normalizedRole = 'official'; // ERD BarangayAdmin -> System Official
+      normalizedRole = 'admin'; // Mapping Super Admin (SA20260001) to top-level Admin access [cite: 315]
+    } else if (dbRole === 'barangayadmin' || dbRole === 'admin') {
+      normalizedRole = 'official'; // Mapping Barangay Admin to official-level access [cite: 305-313]
     } else {
-      normalizedRole = 'resident';
+      normalizedRole = 'resident'; // Default to resident portal [cite: 291-302]
     }
     
-    setUser({
-      id: username,
+    const userData: User = {
+      id: username, 
       name: firstName,
       role: normalizedRole
-    });
-    
+    };
+
+    setUser(userData);
     setIsAuthenticated(true);
     setAuthView('dashboard');
+    
+    localStorage.setItem('app_user', JSON.stringify(userData));
+    toast.success(`Welcome back, ${firstName}!`);
   };
 
   const handleLogout = () => {
@@ -57,9 +74,11 @@ export default function App() {
     setAuthView('login');
     setActiveTab('dashboard');
     setUser(null);
+    localStorage.removeItem('app_user');
     toast.success('Logged out successfully.');
   };
 
+  // 3. Routing Logic: Gates features based on authorized roles 
   const renderMainContent = () => {
     if (!user) return null;
 
@@ -69,21 +88,21 @@ export default function App() {
       case 'residents': 
         return <ResidentRecords />;
       case 'officials': 
-        // Admin-only access for managing official profiles
+        // Only the Super Admin ('admin') can manage officials [cite: 319-320]
         return user.role === 'admin' ? <BarangayOfficials /> : <DashboardHome adminName={user.name} />;
       case 'requests': 
         return <OnlineRequests />;
       case 'announcements': 
         return <AnnouncementManagement />;
       case 'transactions': 
-        // Admin-only access for financial auditing
+        // Only the Super Admin ('admin') sees full transaction summaries [cite: 325]
         return user.role === 'admin' ? <TransactionHistory /> : <DashboardHome adminName={user.name} />;
       default: 
         return <DashboardHome adminName={user.name} />;
     }
   };
 
-  // AUTHENTICATION VIEWS: Support for your new Split-Screen Landing Page
+  // View Gating for Authentication states
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-white">
@@ -104,7 +123,7 @@ export default function App() {
     );
   }
 
-  // RESIDENT PORTAL VIEW
+  // 4. Resident Portal Separation [cite: 291-302]
   if (user?.role === 'resident') {
     return (
       <>
@@ -114,7 +133,7 @@ export default function App() {
     );
   }
 
-  // MANAGEMENT DASHBOARD (Admin & Official)
+  // 5. Admin and Official Shared Dashboard Wrapper [cite: 305-325]
   return (
     <div className="h-screen flex bg-gray-50">
       <Sidebar
@@ -122,11 +141,11 @@ export default function App() {
         onTabChange={(tab) => setActiveTab(tab as ActiveTab)}
         onLogout={handleLogout}
         adminName={user.name}
-        adminId={user.id}
+        adminId={user.id} // Correct ID (e.g., SA20260001) for sidebar display
         userRole={user.role} 
       />
       <div className="flex-1 overflow-auto">{renderMainContent()}</div>
-      <Toaster position="top-right" />
+      <Toaster position="top-right" />   
     </div>
   );
 }
