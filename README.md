@@ -32,23 +32,111 @@ Ensure you have the following installed:
 
 SQL
 ```
-CREATE TABLE Resident (
-    ResidentID SERIAL PRIMARY KEY,
-    LastName VARCHAR(50) NOT NULL,
-    FirstName VARCHAR(50) NOT NULL,
-    MiddleName VARCHAR(50),
-    Email VARCHAR(100) UNIQUE NOT NULL,
-    ResidentType VARCHAR(30) CHECK (ResidentType IN ('Adult', 'Student', 'Senior Citizen')),
-    VoterStatus VARCHAR(10)
+-- 1. CLEAN UP: Drop existing tables if they exist to avoid conflicts
+DROP TABLE IF EXISTS notification CASCADE;
+DROP TABLE IF EXISTS request CASCADE;
+DROP TABLE IF EXISTS announcement CASCADE;
+DROP TABLE IF EXISTS residentaccount CASCADE;
+DROP TABLE IF EXISTS resident CASCADE;
+DROP TABLE IF EXISTS barangayadmin CASCADE;
+DROP TABLE IF EXISTS superadmin CASCADE;
+
+-- 2. CREATE BASE TABLES
+CREATE TABLE superadmin (
+    "SuperAdminID" VARCHAR(20) PRIMARY KEY, 
+    "Password" VARCHAR(50)
 );
 
-CREATE TABLE ResidentAccount (
-    AccountID SERIAL PRIMARY KEY,
-    ResidentID INT REFERENCES Resident(ResidentID) ON DELETE CASCADE,
-    Username VARCHAR(255) UNIQUE NOT NULL, -- Resident's Gmail address
-    Password VARCHAR(255) NOT NULL,
-    DateCreated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE barangayadmin (
+    "BarangayAdminID" VARCHAR(20) PRIMARY KEY, 
+    "AdminName" VARCHAR(100), 
+    "Password" VARCHAR(50), 
+    "Email" VARCHAR(100),
+    "SuperAdminID" VARCHAR(20) REFERENCES superadmin("SuperAdminID")
 );
+
+CREATE TABLE resident (
+    "ResidentID" VARCHAR(20) PRIMARY KEY, 
+    "LastName" VARCHAR(50), 
+    "FirstName" VARCHAR(50), 
+    "MiddleName" VARCHAR(50),
+    "Birthday" DATE,
+    "Age" INTEGER,
+    "Gender" VARCHAR(10),
+    "CivilStatus" VARCHAR(20),
+    "HouseNumber" VARCHAR(10),
+    "StreetAddress" VARCHAR(100),
+    "ContactNumber" VARCHAR(20),
+    "Email" VARCHAR(100),
+    "ResidentType" VARCHAR(20),
+    "VoterStatus" VARCHAR(5),
+    "password" VARCHAR(50),
+    "ResidentAccountID" INTEGER -- Link to the account table hub
+);
+
+-- 3. CREATE LOGIN HUB (ResidentAccount)
+CREATE TABLE residentaccount (
+    "ResidentAccountID" SERIAL PRIMARY KEY,
+    "ResidentID" VARCHAR(20) REFERENCES resident("ResidentID"),
+    "BarangayAdminID" VARCHAR(20) REFERENCES barangayadmin("BarangayAdminID"),
+    "SuperAdminID" VARCHAR(20) REFERENCES superadmin("SuperAdminID"),
+    "Password" VARCHAR(50) NOT NULL,
+    "Role" VARCHAR(50)
+);
+
+-- Insert Base Super Admin
+INSERT INTO superadmin ("SuperAdminID", "Password") 
+VALUES ('SA20260001', 'super123');
+
+-- Insert Base Barangay Admin
+INSERT INTO barangayadmin ("BarangayAdminID", "AdminName", "Password", "SuperAdminID") 
+VALUES ('AD20260001', 'Maria', 'admin123', 'SA20260001');
+
+-- Insert Base Resident
+INSERT INTO resident ("ResidentID", "LastName", "FirstName") 
+VALUES ('RS20260001', 'Mabutas', 'Carla');
+
+-- Create the Login Accounts
+INSERT INTO residentaccount ("SuperAdminID", "Password", "Role")
+VALUES ('SA20260001', 'super123', 'Super Admin');
+
+INSERT INTO residentaccount ("BarangayAdminID", "Password", "Role", "SuperAdminID")
+VALUES ('AD20260001', 'admin123', 'Admin', 'SA20260001');
+
+INSERT INTO residentaccount ("ResidentID", "Password", "Role")
+VALUES ('RS20260001', 'carla123', 'Resident');
+
+-- Link Resident Profile to Account
+UPDATE resident 
+SET "ResidentAccountID" = (SELECT "ResidentAccountID" FROM residentaccount WHERE "ResidentID" = 'RS20260001')
+WHERE "ResidentID" = 'RS20260001';
+
+-- Insert Base Super Admin
+INSERT INTO superadmin ("SuperAdminID", "Password") 
+VALUES ('SA20260001', 'super123');
+
+-- Insert Base Barangay Admin
+INSERT INTO barangayadmin ("BarangayAdminID", "AdminName", "Password", "SuperAdminID") 
+VALUES ('AD20260001', 'Maria', 'admin123', 'SA20260001');
+
+-- Insert Base Resident
+INSERT INTO resident ("ResidentID", "LastName", "FirstName") 
+VALUES ('RS20260001', 'Mabutas', 'Carla');
+
+-- Create the Login Accounts
+INSERT INTO residentaccount ("SuperAdminID", "Password", "Role")
+VALUES ('SA20260001', 'super123', 'Super Admin');
+
+INSERT INTO residentaccount ("BarangayAdminID", "Password", "Role", "SuperAdminID")
+VALUES ('AD20260001', 'admin123', 'Admin', 'SA20260001');
+
+INSERT INTO residentaccount ("ResidentID", "Password", "Role")
+VALUES ('RS20260001', 'carla123', 'Resident');
+
+-- Link Resident Profile to Account
+UPDATE resident 
+SET "ResidentAccountID" = (SELECT "ResidentAccountID" FROM residentaccount WHERE "ResidentID" = 'RS20260001')
+WHERE "ResidentID" = 'RS20260001';
 ```
 2. Backend Setup
 
@@ -62,18 +150,7 @@ Install required packages:
 ```
 npm install
 ```
-
-Create a .env file in the root of the server folder:
-```
-Code snippet
-
-EMAIL_USER=your-gmail@gmail.com
-EMAIL_PASS=your-16-character-app-password
-DB_USER=postgres
-DB_PASSWORD=your_db_password
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=barangay160_db
+cd admin
 ```
 Launch the server:
 ```
@@ -84,7 +161,7 @@ Launch the server:
 3. Frontend Setup
 Navigate to the client directory:
 ```
-cd client
+cd fe
 ```
 
 Install required packages: 
