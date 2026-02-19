@@ -1,28 +1,36 @@
 const express = require("express");
 const cors = require("cors");
-const app = express();
 require("dotenv").config();
+
+const app = express();
+const pool = require("./db");
+
+/* ================================
+   MIDDLEWARE
+================================ */
+
+app.use(cors({
+  origin: "http://localhost:3000",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  credentials: true
+}));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-const pool = require("./db");
 
-app.get("/_dbinfo", async (req, res) => {
-  const r = await pool.query(`
-    SELECT current_database() as db,
-           current_schema() as schema,
-           inet_server_addr() as server_ip,
-           inet_server_port() as server_port
-  `);
-  res.json(r.rows[0]);
+
+/* ================================
+   HEALTH CHECK ROUTES
+================================ */
+
+app.get("/", (req, res) => {
+  res.send("Backend is running");
 });
 
-// API is up
 app.get("/_ping", (req, res) => {
-  res.json({ ok: true });
+  res.status(200).json({ ok: true });
 });
 
-// DB is reachable
 app.get("/_dbping", async (req, res) => {
   try {
     const r = await pool.query("SELECT NOW() AS now");
@@ -32,19 +40,27 @@ app.get("/_dbping", async (req, res) => {
   }
 });
 
-
-app.use(cors());
-
-// ===== HEALTH CHECK =====
-app.get("/_ping", (req, res) => {
-  res.status(200).json({ ok: true });
+app.get("/_dbinfo", async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT current_database() as db,
+             current_schema() as schema,
+             inet_server_addr() as server_ip,
+             inet_server_port() as server_port
+    `);
+    res.json(r.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-app.get("/", (req, res) => {
-  res.send("Backend is running");
-});
 
-// ===== ROUTES =====
+/* ================================
+   API ROUTES
+================================ */
+
+app.use("/api/barangayadmins", require("./routes/barangayadmins"));
+
 try {
   const authRoutes = require("./routes/auth");
   app.use("/auth", authRoutes);
@@ -56,22 +72,12 @@ app.use("/residents", require("./routes/residents"));
 app.use("/requests", require("./routes/requests"));
 
 
-// ===== START SERVER =====
+/* ================================
+   START SERVER
+================================ */
+
 const PORT = 5001;
 
-app.get("/_ping", (req, res) => {
-  res.json({ ok: true });
-});
-
-app.get("/_dbping", async (req, res) => {
-  try {
-    const r = await pool.query("SELECT NOW() AS now");
-    res.json({ ok: true, now: r.rows[0].now });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
-
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, () => {
   console.log(`Server started on http://localhost:${PORT}`);
 });
