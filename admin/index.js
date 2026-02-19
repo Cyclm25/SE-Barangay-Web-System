@@ -1,24 +1,77 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
+require("dotenv").config();
 
-// 1. Enable CORS - Crucial for allowing your React app (Port 3000) to talk to this API
-app.use(cors()); 
-app.use(express.json()); // ✅ REQUIRED so req.body works in auth.js
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+const pool = require("./db");
 
-// 2. Link your authentication routes (Login/Auth logic)
-app.use("/auth", require("./routes/auth"));
-
-// 3. Link your resident management routes (CRUD operations for Residents)
-// This enables endpoints like GET /residents and POST /residents/register
-app.use("/residents", require("./routes/residents")); 
-
-// ✅ OPTIONAL but helpful: quick health check
-app.get("/", (req, res) => {
-  res.send("Backend API is running");
+app.get("/_dbinfo", async (req, res) => {
+  const r = await pool.query(`
+    SELECT current_database() as db,
+           current_schema() as schema,
+           inet_server_addr() as server_ip,
+           inet_server_port() as server_port
+  `);
+  res.json(r.rows[0]);
 });
 
-// 4. Start the server on Port 5001
-app.listen(5001, () => {
-  console.log("Backend server is running on http://localhost:5001");
+// API is up
+app.get("/_ping", (req, res) => {
+  res.json({ ok: true });
+});
+
+// DB is reachable
+app.get("/_dbping", async (req, res) => {
+  try {
+    const r = await pool.query("SELECT NOW() AS now");
+    res.json({ ok: true, now: r.rows[0].now });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+
+app.use(cors());
+
+// ===== HEALTH CHECK =====
+app.get("/_ping", (req, res) => {
+  res.status(200).json({ ok: true });
+});
+
+app.get("/", (req, res) => {
+  res.send("Backend is running");
+});
+
+// ===== ROUTES =====
+try {
+  const authRoutes = require("./routes/auth");
+  app.use("/auth", authRoutes);
+} catch (err) {
+  console.error("Failed to load auth routes:", err.message);
+}
+
+app.use("/residents", require("./routes/residents"));
+app.use("/requests", require("./routes/requests"));
+
+
+// ===== START SERVER =====
+const PORT = 5001;
+
+app.get("/_ping", (req, res) => {
+  res.json({ ok: true });
+});
+
+app.get("/_dbping", async (req, res) => {
+  try {
+    const r = await pool.query("SELECT NOW() AS now");
+    res.json({ ok: true, now: r.rows[0].now });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server started on http://localhost:${PORT}`);
 });

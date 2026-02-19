@@ -1,12 +1,10 @@
-import { useState } from 'react';
-import imgBarangayLogo from "../../assets/barangaylogo.png";
-import { ImageWithFallback } from '../figma/ImageWithFallback';
+import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 type ServiceType = 'barangay-id' | 'certificate' | 'other' | null;
 
 interface ResidentServicesProps {
-  onRequestSubmit?: (requestData: any) => void;
+  onRequestSubmit?: (requestData: any) => void; // kept (optional)
   onTrackRequest?: () => void;
 }
 
@@ -19,8 +17,8 @@ export function ResidentServices({ onRequestSubmit, onTrackRequest }: ResidentSe
         {selectedService === null ? (
           <ServiceSelection onSelectService={setSelectedService} onTrackRequest={onTrackRequest} />
         ) : (
-          <ServiceWebform 
-            serviceType={selectedService} 
+          <ServiceWebform
+            serviceType={selectedService}
             onBack={() => setSelectedService(null)}
             onRequestSubmit={onRequestSubmit}
           />
@@ -43,9 +41,8 @@ function ServiceSelection({ onSelectService, onTrackRequest }: ServiceSelectionP
           <h2 className="text-[24px] md:text-[32px] font-bold text-[#2957a1] mb-2 md:mb-3">Document Services</h2>
           <p className="text-gray-600 text-[14px] md:text-[16px]">Select a service to request your document</p>
         </div>
-        
+
         <div className="space-y-4 md:space-y-5">
-          {/* Barangay ID / Certificate Service */}
           <button
             onClick={() => onSelectService('barangay-id')}
             className="w-full bg-white hover:bg-gray-50 rounded-xl md:rounded-2xl p-4 md:p-8 flex items-center gap-4 md:gap-8 transition-all hover:shadow-2xl group transform hover:-translate-y-1 shadow-lg"
@@ -54,7 +51,7 @@ function ServiceSelection({ onSelectService, onTrackRequest }: ServiceSelectionP
               <div className="w-[70px] h-[70px] md:w-[110px] md:h-[110px] bg-[#2957a1] rounded-full flex items-center justify-center shadow-lg">
                 <div className="w-[55px] h-[55px] md:w-[85px] md:h-[85px] bg-[#5CE36C] rounded-full flex items-center justify-center">
                   <svg className="w-7 h-7 md:w-11 md:h-11 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                   </svg>
                 </div>
               </div>
@@ -63,14 +60,15 @@ function ServiceSelection({ onSelectService, onTrackRequest }: ServiceSelectionP
               <h3 className="text-[16px] md:text-[24px] font-bold text-[#2957a1] group-hover:text-[#1e4380] transition-colors mb-1 md:mb-2">
                 Barangay ID, Clearance & Certificate of Indigency
               </h3>
-              <p className="text-gray-600 text-[12px] md:text-[14px]">Request official barangay identification documents and certificates</p>
+              <p className="text-gray-600 text-[12px] md:text-[14px]">
+                Request official barangay identification documents and certificates
+              </p>
             </div>
             <svg className="w-5 h-5 md:w-7 md:h-7 text-[#2957a1] group-hover:translate-x-2 transition-transform flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
 
-          {/* Other Documents Service */}
           <button
             onClick={() => onSelectService('other')}
             className="w-full bg-white hover:bg-gray-50 rounded-xl md:rounded-2xl p-4 md:p-8 flex items-center gap-4 md:gap-8 transition-all hover:shadow-2xl group transform hover:-translate-y-1 shadow-lg"
@@ -79,7 +77,7 @@ function ServiceSelection({ onSelectService, onTrackRequest }: ServiceSelectionP
               <div className="w-[70px] h-[70px] md:w-[110px] md:h-[110px] bg-[#2957a1] rounded-full flex items-center justify-center shadow-lg">
                 <div className="w-[55px] h-[55px] md:w-[85px] md:h-[85px] bg-[#EA4D48] rounded-full flex items-center justify-center">
                   <svg className="w-7 h-7 md:w-11 md:h-11 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+                    <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
                   </svg>
                 </div>
               </div>
@@ -88,14 +86,15 @@ function ServiceSelection({ onSelectService, onTrackRequest }: ServiceSelectionP
               <h3 className="text-[16px] md:text-[24px] font-bold text-[#2957a1] group-hover:text-[#1e4380] transition-colors mb-1 md:mb-2">
                 Other Documents
               </h3>
-              <p className="text-gray-600 text-[12px] md:text-[14px]">Business permits, residency certificates, cedula, and other barangay documents</p>
+              <p className="text-gray-600 text-[12px] md:text-[14px]">
+                Business permits, residency certificates, cedula, and other barangay documents
+              </p>
             </div>
             <svg className="w-5 h-5 md:w-7 md:h-7 text-[#2957a1] group-hover:translate-x-2 transition-transform flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
 
-          {/* Track Request Button */}
           {onTrackRequest && (
             <button
               onClick={onTrackRequest}
@@ -116,70 +115,132 @@ function ServiceSelection({ onSelectService, onTrackRequest }: ServiceSelectionP
 interface ServiceWebformProps {
   serviceType: ServiceType;
   onBack: () => void;
-  onRequestSubmit?: (requestData: any) => void;
+  onRequestSubmit?: (requestData: any) => void; // kept (optional)
 }
 
+type ResidentProfile = {
+  ResidentID: string;
+  FirstName: string;
+  MiddleName: string;
+  LastName: string;
+  Age: number;
+  Birthday: string; // expected: YYYY-MM-DD from backend (best)
+  Gender: string;
+  CivilStatus: string;
+  HouseNumber: string;
+  StreetAddress: string;
+};
+
 function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebformProps) {
-  // Auto-filled data from logged-in resident profile
-  const residentData = {
-    lastName: 'Dela Cruz',
-    firstName: 'Juan',
-    middleName: 'Campos',
-    suffix: '',
-    age: '20',
-    sex: 'Male',
-    civilStatus: 'Single',
-    birthday: '2004-10-30',
-    houseNo: '15',
-    streetAddress: 'Yuseco Street'
-  };
+  const API_BASE = "http://localhost:5001";
+
+  const [residentProfile, setResidentProfile] = useState<ResidentProfile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
   const [formData, setFormData] = useState({
     documentType: '',
-    customDocumentType: '', // For "Others" option
+    customDocumentType: '',
     purpose: ''
   });
 
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getLoggedInResidentId = () =>
+    localStorage.getItem("residentId") ||
+    localStorage.getItem("loggedInId") ||
+    localStorage.getItem("residentId") ||
+    "";
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      const residentId = getLoggedInResidentId();
+      if (!residentId) {
+        setLoadingProfile(false);
+        setResidentProfile(null);
+        return;
+      }
+
+      try {
+        // ✅ Fetch ONE resident only (fast, correct, supports proper Birthday format from backend)
+        const res = await fetch(`${API_BASE}/residents/${residentId}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          setResidentProfile(null);
+          return;
+        }
+
+        setResidentProfile(data as ResidentProfile);
+      } catch {
+        setResidentProfile(null);
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+
+    loadProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const finalDocumentType =
+    formData.documentType === 'Others' ? formData.customDocumentType : formData.documentType;
+
   const handleSubmitClick = () => {
-    // Validate required fields
-    const finalDocumentType = formData.documentType === 'Others' 
-      ? formData.customDocumentType 
-      : formData.documentType;
-    
-    if (!finalDocumentType || !formData.purpose) {
-      return; // Don't show dialog if fields are empty
-    }
-    
+    if (!finalDocumentType || !formData.purpose) return;
     setShowSubmitConfirm(true);
   };
 
-  const handleConfirmSubmit = () => {
-    const finalDocumentType = formData.documentType === 'Others' 
-      ? formData.customDocumentType 
-      : formData.documentType;
+  // ✅ This is the real submit to DB + notifications
+  const handleConfirmSubmit = async () => {
+    const residentId = getLoggedInResidentId();
+    if (!residentId) return;
 
-    if (onRequestSubmit) {
-      onRequestSubmit({
-        ...residentData,
-        documentType: finalDocumentType,
-        purpose: formData.purpose,
-        serviceType,
-        dateRequested: new Date().toLocaleDateString()
+    if (!finalDocumentType || !formData.purpose) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          residentId,
+          requestType: finalDocumentType,
+          requestPurpose: formData.purpose,
+        }),
       });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        // backend sends {error, detail, code}
+        return;
+      }
+
+      // optional callback to parent
+      if (onRequestSubmit && residentProfile) {
+        onRequestSubmit({
+          residentId,
+          name: `${residentProfile.FirstName} ${residentProfile.MiddleName} ${residentProfile.LastName}`,
+          documentType: finalDocumentType,
+          purpose: formData.purpose,
+          serviceType,
+          dateRequested: new Date().toLocaleDateString(),
+          requestId: data.requestId,
+        });
+      }
+
+      // reset form
+      setFormData({ documentType: '', customDocumentType: '', purpose: '' });
+      setShowSubmitConfirm(false);
+    } finally {
+      setIsSubmitting(false);
     }
-    // Reset form
-    setFormData({
-      documentType: '',
-      customDocumentType: '',
-      purpose: ''
-    });
   };
 
   const handleCancelClick = () => {
@@ -187,17 +248,13 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
   };
 
   const handleConfirmCancel = () => {
-    setFormData({
-      documentType: '',
-      customDocumentType: '',
-      purpose: ''
-    });
+    setFormData({ documentType: '', customDocumentType: '', purpose: '' });
     onBack();
   };
 
-  const finalDocumentType = formData.documentType === 'Others' 
-    ? formData.customDocumentType 
-    : formData.documentType;
+  const nameText = residentProfile
+    ? `${residentProfile.FirstName} ${residentProfile.MiddleName} ${residentProfile.LastName}`.replace(/\s+/g, ' ').trim()
+    : "Unknown Resident";
 
   return (
     <div className="min-h-[calc(100vh-73px)] md:min-h-[calc(100vh-93px)] bg-gradient-to-br from-gray-50 to-blue-50 px-4 md:px-8 py-6 md:py-10">
@@ -213,38 +270,39 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
         </button>
 
         <div className="bg-white rounded-xl md:rounded-2xl shadow-lg p-5 md:p-10">
-          {/* Header */}
           <div className="mb-6 md:mb-8 pb-4 md:pb-6 border-b-2 border-gray-200">
             <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-4">
               <div className="w-12 h-12 md:w-16 md:h-16 bg-[#2957a1] rounded-full flex items-center justify-center flex-shrink-0">
                 <svg className="w-6 h-6 md:w-8 md:h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+                  <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
                 </svg>
               </div>
               <div>
                 <h2 className="text-[20px] md:text-[28px] text-[#2957a1] font-bold">Document Request Form</h2>
-                <p className="text-gray-600 text-[12px] md:text-[14px]">Your information has been auto-filled from your profile</p>
+                <p className="text-gray-600 text-[12px] md:text-[14px]">
+                  {loadingProfile ? "Loading your profile..." : "Your information has been auto-filled from your profile"}
+                </p>
               </div>
             </div>
           </div>
 
           <div className="space-y-6 md:space-y-8">
-            {/* Personal Information Section - Read Only */}
+            {/* Personal Information */}
             <div>
               <h3 className="text-[18px] font-bold text-[#2957a1] mb-4 flex items-center gap-2">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                 </svg>
                 Personal Information
                 <span className="text-[12px] text-gray-500 font-normal ml-2">(Auto-filled)</span>
               </h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="text-[13px] text-gray-700 font-semibold block mb-2">Last Name</label>
                   <input
                     type="text"
-                    value={residentData.lastName}
+                    value={residentProfile?.LastName ?? ''}
                     disabled
                     className="w-full border-2 border-gray-200 bg-gray-50 rounded-lg px-4 py-3 text-[14px] text-gray-600"
                   />
@@ -253,7 +311,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                   <label className="text-[13px] text-gray-700 font-semibold block mb-2">First Name</label>
                   <input
                     type="text"
-                    value={residentData.firstName}
+                    value={residentProfile?.FirstName ?? ''}
                     disabled
                     className="w-full border-2 border-gray-200 bg-gray-50 rounded-lg px-4 py-3 text-[14px] text-gray-600"
                   />
@@ -262,16 +320,16 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                   <label className="text-[13px] text-gray-700 font-semibold block mb-2">Middle Name</label>
                   <input
                     type="text"
-                    value={residentData.middleName}
+                    value={residentProfile?.MiddleName ?? ''}
                     disabled
                     className="w-full border-2 border-gray-200 bg-gray-50 rounded-lg px-4 py-3 text-[14px] text-gray-600"
                   />
                 </div>
                 <div>
-                  <label className="text-[13px] text-gray-700 font-semibold block mb-2">Suffix</label>
+                  <label className="text-[13px] text-gray-700 font-semibold block mb-2">Resident ID</label>
                   <input
                     type="text"
-                    value={residentData.suffix || 'N/A'}
+                    value={residentProfile?.ResidentID ?? getLoggedInResidentId()}
                     disabled
                     className="w-full border-2 border-gray-200 bg-gray-50 rounded-lg px-4 py-3 text-[14px] text-gray-600"
                   />
@@ -279,22 +337,22 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
               </div>
             </div>
 
-            {/* Demographics Section - Read Only */}
+            {/* Demographics */}
             <div>
               <h3 className="text-[18px] font-bold text-[#2957a1] mb-4 flex items-center gap-2">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+                  <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
                 </svg>
                 Demographics
                 <span className="text-[12px] text-gray-500 font-normal ml-2">(Auto-filled)</span>
               </h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div>
                   <label className="text-[13px] text-gray-700 font-semibold block mb-2">Age</label>
                   <input
                     type="text"
-                    value={residentData.age}
+                    value={residentProfile?.Age ?? ''}
                     disabled
                     className="w-full border-2 border-gray-200 bg-gray-50 rounded-lg px-4 py-3 text-[14px] text-gray-600"
                   />
@@ -303,7 +361,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                   <label className="text-[13px] text-gray-700 font-semibold block mb-2">Sex</label>
                   <input
                     type="text"
-                    value={residentData.sex}
+                    value={residentProfile?.Gender ?? ''}
                     disabled
                     className="w-full border-2 border-gray-200 bg-gray-50 rounded-lg px-4 py-3 text-[14px] text-gray-600"
                   />
@@ -312,7 +370,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                   <label className="text-[13px] text-gray-700 font-semibold block mb-2">Civil Status</label>
                   <input
                     type="text"
-                    value={residentData.civilStatus}
+                    value={residentProfile?.CivilStatus ?? ''}
                     disabled
                     className="w-full border-2 border-gray-200 bg-gray-50 rounded-lg px-4 py-3 text-[14px] text-gray-600"
                   />
@@ -324,7 +382,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                   <label className="text-[13px] text-gray-700 font-semibold block mb-2">Birthday</label>
                   <input
                     type="date"
-                    value={residentData.birthday}
+                    value={(residentProfile?.Birthday ?? '').slice(0, 10)}
                     disabled
                     className="w-full border-2 border-gray-200 bg-gray-50 rounded-lg px-4 py-3 text-[14px] text-gray-600"
                   />
@@ -332,22 +390,22 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
               </div>
             </div>
 
-            {/* Address Section - Read Only */}
+            {/* Address */}
             <div>
               <h3 className="text-[18px] font-bold text-[#2957a1] mb-4 flex items-center gap-2">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                 </svg>
                 Address
                 <span className="text-[12px] text-gray-500 font-normal ml-2">(Auto-filled)</span>
               </h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="text-[13px] text-gray-700 font-semibold block mb-2">House No.</label>
                   <input
                     type="text"
-                    value={residentData.houseNo}
+                    value={residentProfile?.HouseNumber ?? ''}
                     disabled
                     className="w-full border-2 border-gray-200 bg-gray-50 rounded-lg px-4 py-3 text-[14px] text-gray-600"
                   />
@@ -356,7 +414,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                   <label className="text-[13px] text-gray-700 font-semibold block mb-2">Street Address</label>
                   <input
                     type="text"
-                    value={residentData.streetAddress}
+                    value={residentProfile?.StreetAddress ?? ''}
                     disabled
                     className="w-full border-2 border-gray-200 bg-gray-50 rounded-lg px-4 py-3 text-[14px] text-gray-600"
                   />
@@ -364,16 +422,16 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
               </div>
             </div>
 
-            {/* Document Request Section - Editable */}
+            {/* Document Details */}
             <div className="bg-blue-50 border-2 border-[#2957a1] rounded-xl p-6">
               <h3 className="text-[18px] font-bold text-[#2957a1] mb-6 flex items-center gap-2">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+                  <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
                 </svg>
                 Document Details
                 <span className="text-[12px] text-green-600 font-normal ml-2">(Required)</span>
               </h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="text-[13px] text-gray-900 font-bold block mb-2">
@@ -401,8 +459,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                     )}
                   </select>
                 </div>
-                
-                {/* Custom Document Type Input - Show only when "Others" is selected */}
+
                 {formData.documentType === 'Others' && (
                   <div>
                     <label className="text-[13px] text-gray-900 font-bold block mb-2">
@@ -417,7 +474,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                     />
                   </div>
                 )}
-                
+
                 <div className={formData.documentType === 'Others' ? 'md:col-span-2' : ''}>
                   <label className="text-[13px] text-gray-900 font-bold block mb-2">
                     Purpose <span className="text-red-500">*</span>
@@ -433,7 +490,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
               </div>
             </div>
 
-            {/* Submit Section */}
+            {/* Buttons */}
             <div className="flex justify-end gap-4 pt-6 border-t-2 border-gray-200">
               <button
                 onClick={handleCancelClick}
@@ -443,29 +500,30 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
               </button>
               <button
                 onClick={handleSubmitClick}
-                className="px-10 py-3 rounded-lg text-[14px] font-bold text-white bg-[#5CE36C] hover:bg-[#4bc95b] transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                disabled={isSubmitting || loadingProfile || !residentProfile}
+                className="px-10 py-3 rounded-lg text-[14px] font-bold text-white bg-[#5CE36C] hover:bg-[#4bc95b] transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Submit Request
+                {isSubmitting ? "Submitting..." : "Submit Request"}
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Confirm Submit Dialog */}
+      {/* Confirm Submit */}
       <ConfirmDialog
         isOpen={showSubmitConfirm}
         onClose={() => setShowSubmitConfirm(false)}
         onConfirm={handleConfirmSubmit}
         title="Confirm Document Request"
         message="Please review your request details before submitting:"
-        confirmText="Submit Request"
+        confirmText={isSubmitting ? "Submitting..." : "Submit Request"}
         cancelText="Cancel"
       >
         <div className="bg-blue-50 border-2 border-[#2957a1] rounded-lg p-4 space-y-2">
           <div className="flex justify-between">
             <span className="font-semibold text-gray-700">Name:</span>
-            <span className="text-gray-900">{residentData.firstName} {residentData.middleName} {residentData.lastName}</span>
+            <span className="text-gray-900">{nameText}</span>
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-gray-700">Document Type:</span>
@@ -482,7 +540,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
         </div>
       </ConfirmDialog>
 
-      {/* Confirm Cancel Dialog */}
+      {/* Confirm Cancel */}
       <ConfirmDialog
         isOpen={showCancelConfirm}
         onClose={() => setShowCancelConfirm(false)}

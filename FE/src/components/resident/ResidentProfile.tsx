@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Camera, Edit2, CreditCard } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { toast } from 'sonner';
@@ -8,28 +8,77 @@ export function ResidentProfile() {
   const [isEditing, setIsEditing] = useState(false);
   const [showBarangayID, setShowBarangayID] = useState(false);
   const [profileData, setProfileData] = useState({
-    firstName: 'Juan',
-    middleName: 'Campos',
-    lastName: 'Dela Cruz',
+    firstName: 'First Name',
+    middleName: 'Middle Name',
+    lastName: 'Last Name',
     suffix: '',
-    birthdate: '2004-10-30',
-    age: '20',
-    sex: 'Male',
+    birthdate: '1990-01-01',
+    age: '34',
+    sex: 'Sex',
     civilStatus: 'Single',
     nationality: 'Filipino',
     religion: 'Roman Catholic',
     contactNumber: '09123456789',
-    email: 'juan.delacruz@email.com',
+    email: 'example@email.com',
     houseNo: '15',
     street: 'Yuseco Street',
     barangay: 'Barangay 160',
     city: 'Manila',
     province: 'Metro Manila',
     zipCode: '1013',
-    emergencyContactName: 'Maria Dela Cruz',
+    emergencyContactName: 'Contact Name',
     emergencyContactRelation: 'Mother',
-    emergencyContactNumber: '09987654321'
+    emergencyContactNumber: '09123456789'
   });
+
+  useEffect(() => {
+    const userType = localStorage.getItem("userType");
+    const residentId = localStorage.getItem("residentId");
+
+    if (userType !== "resident" || !residentId) return;
+
+    (async () => {
+      try {
+        const res = await fetch(
+          `http://localhost:5001/residents/${residentId}`
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          toast.error(data?.error || "Failed to load profile.");
+          return;
+        }
+
+        setProfileData({
+          firstName: data.FirstName || '',
+          middleName: data.MiddleName || '',
+          lastName: data.LastName || '',
+          suffix: '',
+          birthdate: data.Birthday || '',
+          age: data.Age != null ? String(data.Age) : '',
+          sex: data.Gender || '',
+          civilStatus: data.CivilStatus || '',
+          nationality: 'Filipino',
+          religion: 'Roman Catholic',
+          contactNumber: data.ContactNumber || '',
+          email: data.Email || '',
+          houseNo: data.HouseNumber || '',
+          street: data.StreetAddress || '',
+          barangay: 'Barangay 160',
+          city: 'Manila',
+          province: 'Metro Manila',
+          zipCode: '',
+          emergencyContactName: data.ContactPerson || '',
+          emergencyContactRelation: '',
+          emergencyContactNumber: data.ContactPersonNo || ''
+        });
+      } catch (err) {
+        console.error(err);
+        toast.error("Could not connect to server.");
+      }
+    })();
+  }, []);
 
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
@@ -77,9 +126,9 @@ export function ResidentProfile() {
                 <div className="relative group">
                   <div className="w-[120px] h-[120px] md:w-[160px] md:h-[160px] rounded-full overflow-hidden border-4 border-white shadow-lg bg-white">
                     {profileImage ? (
-                      <img 
-                        src={profileImage} 
-                        alt="Profile" 
+                      <img
+                        src={profileImage}
+                        alt="Profile"
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -112,7 +161,7 @@ export function ResidentProfile() {
                     <p><strong>Civil Status:</strong> {profileData.civilStatus}</p>
                   </div>
                   <p className="mt-2 text-[14px] opacity-80">
-                    Resident ID: RES2026-0123
+                    Resident ID: {localStorage.getItem("residentId") || "-"}
                   </p>
                 </div>
               </div>

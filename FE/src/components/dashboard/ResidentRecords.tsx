@@ -11,6 +11,8 @@ import { Search, Eye, EyeOff, Upload, User, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatId } from '../../utils/formatId';
 
+type ResidentStatus = 'Active' | 'Inactive';
+
 interface Resident {
   id: string;
   residentNo: string;
@@ -39,7 +41,69 @@ interface Resident {
   emergencyContactNumber: string;
   emergencyContactAddress: string;
   dateRegistered: string;
-  status: 'Active' | 'Inactive';
+  status: ResidentStatus;
+}
+
+// shape coming from backend: SELECT * FROM resident (PascalCase + quoted columns)
+type ResidentRow = {
+  ResidentID: string;
+  FirstName: string;
+  MiddleName: string | null;
+  LastName: string;
+  Age: number | null;
+  Birthday: string | null;
+  Gender: 'Male' | 'Female' | null;
+  CivilStatus: string | null;
+  ResidentType: string | null;
+  VoterStatus: boolean | null;
+  HouseNumber: string | null;
+  StreetAddress: string | null;
+  ContactNumber: string | null;
+  Email: string | null;
+  FatherName: string | null;
+  MotherName: string | null;
+  SpouseName: string | null;
+  NoOfChildren: number | null;
+  ContactPerson: string | null;
+  ContactPersonNo: string | null;
+  ContactPersonAddress: string | null;
+  status: ResidentStatus | null;
+  dateRegistered?: string | null;
+};
+
+const API_BASE = "http://localhost:5001";
+
+function mapRowToResident(r: ResidentRow): Resident {
+  return {
+    id: r.ResidentID,
+    residentNo: r.ResidentID,
+    profileImage: undefined,
+    firstName: r.FirstName ?? '',
+    middleName: r.MiddleName ?? '',
+    lastName: r.LastName ?? '',
+    age: Number(r.Age ?? 0),
+    birthday: (r.Birthday as any) ?? '',
+    gender: (r.Gender as any) ?? 'Male',
+    civilStatus: r.CivilStatus ?? '',
+    residentType: r.ResidentType ?? '',
+    voterStatus: r.VoterStatus === true ? 'Yes' : 'No',
+    houseNo: r.HouseNumber ?? '',
+    streetAddress: r.StreetAddress ?? '',
+    city: 'Manila City',
+    postalCode: '1013',
+    country: 'Philippines',
+    contactNumber: r.ContactNumber ?? '',
+    email: r.Email ?? '',
+    fatherName: r.FatherName ?? '',
+    motherName: r.MotherName ?? '',
+    spouseName: r.SpouseName ?? undefined,
+    numberOfChildren: r.NoOfChildren ?? undefined,
+    emergencyContactName: r.ContactPerson ?? '',
+    emergencyContactNumber: r.ContactPersonNo ?? '',
+    emergencyContactAddress: r.ContactPersonAddress ?? '',
+    status: (r.status ?? 'Active') as ResidentStatus,
+    dateRegistered: r.dateRegistered ?? new Date().toISOString().split('T')[0],
+  };
 }
 
 export function ResidentRecords() {
@@ -50,16 +114,16 @@ export function ResidentRecords() {
   const [showDataPrivacyDialog, setShowDataPrivacyDialog] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState(''); // Added confirm password state
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [pendingResident, setPendingResident] = useState<Resident | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string>('');
-  
+
   const [formData, setFormData] = useState({
     profileImage: '', firstName: '', middleName: '', lastName: '',
     age: '', birthday: '', gender: 'Male' as 'Male' | 'Female',
     civilStatus: 'Single', residentType: 'Resident', voterStatus: 'No' as 'Yes' | 'No',
-    houseNo: '', streetAddress: '', city: 'Caloocan City', postalCode: '1400',
+    houseNo: '', streetAddress: '', city: 'Manila City', postalCode: '1013',
     country: 'Philippines', contactNumber: '', email: '', fatherName: '',
     motherName: '', spouseName: '', numberOfChildren: '',
     emergencyContactName: '', emergencyContactNumber: '', emergencyContactAddress: ''
@@ -67,39 +131,30 @@ export function ResidentRecords() {
 
   const loadResidents = async () => {
     try {
-      const response = await fetch("http://localhost:5001/residents");
-      if (response.ok) {
-        const data = await response.json();
-        const mappedData = data.map((r: any) => ({
-          id: r.ResidentID,
-          residentNo: r.ResidentID,
-          firstName: r.FirstName,
-          middleName: r.MiddleName,
-          lastName: r.LastName,
-          age: r.Age,
-          birthday: r.Birthday,
-          gender: r.Gender,
-          civilStatus: r.CivilStatus,
-          residentType: r.ResidentType,
-          voterStatus: r.VoterStatus,
-          houseNo: r.HouseNumber,
-          streetAddress: r.StreetAddress,
-          contactNumber: r.ContactNumber,
-          email: r.Email,
-          fatherName: r.FatherName,
-          motherName: r.MotherName,
-          spouseName: r.SpouseName,
-          numberOfChildren: r.NoOfChildren,
-          emergencyContactName: r.ContactPerson,
-          emergencyContactNumber: r.ContactPersonNo,
-          emergencyContactAddress: r.ContactPersonAddress,
-          status: r.status,
-          dateRegistered: r.dateRegistered
-        }));
-        setResidents(mappedData);
+      const response = await fetch(`${API_BASE}/residents`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data?.error || "Failed to load residents.");
+        return;
+      }
+
+      // backend returns { residents: [...] }
+      const rows: ResidentRow[] = Array.isArray(data) ? data : (data?.residents ?? []);
+      const mapped = rows.map(mapRowToResident);
+
+      // If resident user, filter to their own ResidentID (no /me endpoint needed)
+      const userType = localStorage.getItem("userType");
+      const residentId = localStorage.getItem("residentId");
+
+      if (userType === "resident" && residentId) {
+        setResidents(mapped.filter(r => r.residentNo === residentId));
+      } else {
+        setResidents(mapped);
       }
     } catch (err) {
-      toast.error("Could not connect to database server.");
+      toast.error("Could not reach backend server.");
+      console.error(err);
     }
   };
 
@@ -107,9 +162,9 @@ export function ResidentRecords() {
 
   const resetForm = () => {
     setFormData({
-      profileImage: '', firstName: '', middleName: '', lastName: '', age: '', birthday: '', 
+      profileImage: '', firstName: '', middleName: '', lastName: '', age: '', birthday: '',
       gender: 'Male', civilStatus: 'Single', residentType: 'Resident', voterStatus: 'No',
-      houseNo: '', streetAddress: '', city: 'Caloocan City', postalCode: '1400',
+      houseNo: '', streetAddress: '', city: 'Manila City', postalCode: '1013',
       country: 'Philippines', contactNumber: '', email: '', fatherName: '',
       motherName: '', spouseName: '', numberOfChildren: '',
       emergencyContactName: '', emergencyContactNumber: '', emergencyContactAddress: ''
@@ -138,9 +193,10 @@ export function ResidentRecords() {
       return;
     }
 
+    // local temporary object only; actual ID is generated by you in backend insert (ResidentID = residentNo)
     const newResident: Resident = {
-      id: `RS2026${String(residents.length + 1).padStart(4, '0')}`,
-      residentNo: `RS2026${String(residents.length + 1).padStart(4, '0')}`,
+      id: `TMP_${Date.now()}`,
+      residentNo: `TMP_${Date.now()}`,
       profileImage: formData.profileImage || undefined,
       firstName: formData.firstName,
       middleName: formData.middleName,
@@ -184,32 +240,64 @@ export function ResidentRecords() {
       toast.error("Please fill in both password fields.");
       return;
     }
-
     if (password !== confirmPassword) {
       toast.error("Passwords do not match!");
       return;
     }
+    if (!pendingResident) return;
 
-    if (pendingResident) {
-      try {
-        const response = await fetch("http://localhost:5001/residents/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...pendingResident, password }),
-        });
+    // Backend residents/register expects these exact keys:
+    // residentNo, firstName, middleName, lastName, age, birthday, gender, civilStatus, residentType,
+    // voterStatus, houseNo, streetAddress, contactNumber, email, fatherName, motherName, spouseName,
+    // numberOfChildren, emergencyContactName, emergencyContactNumber, emergencyContactAddress, password
+    try {
+      // You were generating RS id on frontend before; but your backend INSERT uses "ResidentID" = residentNo.
+      // So we must generate a real residentNo here.
+      const nextNo = `RS${new Date().getFullYear()}${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}`;
 
-        if (response.ok) {
-          toast.success('Resident and Account successfully saved!');
-          loadResidents();
-          setShowPasswordDialog(false);
-          setPendingResident(null);
-          resetForm();
-        } else {
-          toast.error('Database failed to save record.');
-        }
-      } catch (err) {
-        toast.error('Could not reach backend server.');
+      const response = await fetch(`${API_BASE}/residents/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          residentNo: nextNo,
+          firstName: pendingResident.firstName,
+          middleName: pendingResident.middleName,
+          lastName: pendingResident.lastName,
+          age: pendingResident.age,
+          birthday: pendingResident.birthday,
+          gender: pendingResident.gender,
+          civilStatus: pendingResident.civilStatus,
+          residentType: pendingResident.residentType,
+          voterStatus: pendingResident.voterStatus,
+          houseNo: pendingResident.houseNo,
+          streetAddress: pendingResident.streetAddress,
+          contactNumber: pendingResident.contactNumber,
+          email: pendingResident.email,
+          fatherName: pendingResident.fatherName,
+          motherName: pendingResident.motherName,
+          spouseName: pendingResident.spouseName ?? "",
+          numberOfChildren: pendingResident.numberOfChildren ?? "",
+          emergencyContactName: pendingResident.emergencyContactName,
+          emergencyContactNumber: pendingResident.emergencyContactNumber,
+          emergencyContactAddress: pendingResident.emergencyContactAddress,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Resident and Account successfully saved!');
+        await loadResidents();
+        setShowPasswordDialog(false);
+        setPendingResident(null);
+        resetForm();
+      } else {
+        toast.error(data?.error || 'Database failed to save record.');
       }
+    } catch (err) {
+      toast.error('Could not reach backend server.');
+      console.error(err);
     }
   };
 
@@ -221,30 +309,44 @@ export function ResidentRecords() {
 
   const handleInactivate = async (id: string) => {
     try {
-        const response = await fetch(`http://localhost:5001/residents/${id}/status`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'Inactive' })
-        });
-        if (response.ok) {
-            loadResidents();
-            toast.success('Record updated to Inactive');
-        }
-    } catch (err) { toast.error("Update failed."); }
+      const response = await fetch(`${API_BASE}/residents/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Inactive' })
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        await loadResidents();
+        toast.success('Record updated to Inactive');
+      } else {
+        toast.error(data?.error || "Update failed.");
+      }
+    } catch (err) {
+      toast.error("Update failed.");
+      console.error(err);
+    }
   };
 
   const handleReactivate = async (id: string) => {
     try {
-        const response = await fetch(`http://localhost:5001/residents/${id}/status`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'Active' })
-        });
-        if (response.ok) {
-            loadResidents();
-            toast.success('Record reactivated');
-        }
-    } catch (err) { toast.error("Reactivation failed."); }
+      const response = await fetch(`${API_BASE}/residents/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Active' })
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        await loadResidents();
+        toast.success('Record reactivated');
+      } else {
+        toast.error(data?.error || "Reactivation failed.");
+      }
+    } catch (err) {
+      toast.error("Reactivation failed.");
+      console.error(err);
+    }
   };
 
   const filteredResidents = residents.filter(resident =>
@@ -253,22 +355,66 @@ export function ResidentRecords() {
     resident.residentNo.includes(searchTerm)
   );
 
+  const normalizeDateOnly = (v: any): string => {
+    if (!v) return "";
+
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+
+    if (typeof v === "string" && v.includes("T")) return v.slice(0, 10);
+
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return "";
+
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const calculateAge = (birthdate: any) => {
+    const dateOnly = normalizeDateOnly(birthdate);
+    if (!dateOnly) return "";
+
+    const [year, month, day] = dateOnly.split("-").map(Number);
+
+    const today = new Date();
+    let age = today.getFullYear() - year;
+
+    if (
+      today.getMonth() + 1 < month ||
+      (today.getMonth() + 1 === month && today.getDate() < day)
+    ) {
+      age--;
+    }
+
+    return age < 0 ? "" : String(age);
+  };
+
+
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-full">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Resident Records ({residents.filter(r => r.status === 'Active').length})</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Resident Records ({residents.filter(r => r.status === 'Active').length})
+          </h1>
           <p className="text-gray-600 mt-1">Manage all registered residents</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setIsAddDialogOpen(open); }}>
+
+        <Dialog
+          open={isAddDialogOpen}
+          onOpenChange={(open) => { if (!open) resetForm(); setIsAddDialogOpen(open); }}
+        >
           <DialogTrigger asChild>
             <Button className="bg-[#2957a1] hover:bg-[#1e3f7a] text-white">ADD NEW RESIDENT</Button>
           </DialogTrigger>
+
           <DialogContent className="max-w-[1200px] w-[95vw] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-xl">Add New Resident</DialogTitle>
               <DialogDescription>Fill in the resident's information to register them in the system.</DialogDescription>
             </DialogHeader>
+
             <div className="space-y-6 py-4">
               <div className="flex justify-center">
                 <div className="space-y-2 text-center">
@@ -291,15 +437,75 @@ export function ResidentRecords() {
                   <div className="space-y-2"><Label>Middle Name</Label><Input value={formData.middleName} onChange={(e) => setFormData({ ...formData, middleName: e.target.value })} placeholder="Enter middle name" /></div>
                   <div className="space-y-2"><Label>Last Name *</Label><Input value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} placeholder="Enter last name" /></div>
                 </div>
+
                 <div className="grid grid-cols-4 gap-4">
-                  <div className="space-y-2"><Label>Age</Label><Input type="number" value={formData.age} onChange={(e) => setFormData({ ...formData, age: e.target.value })} placeholder="Age" /></div>
-                  <div className="space-y-2"><Label>Gender</Label><Select value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem></SelectContent></Select></div>
-                  <div className="space-y-2"><Label>Civil Status</Label><Select value={formData.civilStatus} onValueChange={(v) => setFormData({ ...formData, civilStatus: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Single">Single</SelectItem><SelectItem value="Married">Married</SelectItem><SelectItem value="Widowed">Widowed</SelectItem><SelectItem value="Separated">Separated</SelectItem></SelectContent></Select></div>
-                  <div className="space-y-2"><Label>Birthday *</Label><Input type="date" value={formData.birthday} onChange={(e) => setFormData({ ...formData, birthday: e.target.value })} /></div>
+                  <div className="space-y-2">
+                    <Label>Age</Label>
+                    <Input type="number" value={formData.age} readOnly placeholder="Auto-calculated" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Gender</Label>
+                    <Select value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v as any })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Civil Status</Label>
+                    <Select value={formData.civilStatus} onValueChange={(v) => setFormData({ ...formData, civilStatus: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Single">Single</SelectItem>
+                        <SelectItem value="Married">Married</SelectItem>
+                        <SelectItem value="Widowed">Widowed</SelectItem>
+                        <SelectItem value="Separated">Separated</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Birthday *</Label>
+                    <Input
+                      type="date"
+                      value={formData.birthday}
+                      onChange={(e) => {
+                        const birthday = e.target.value;
+                        setFormData({ ...formData, birthday, age: calculateAge(birthday) });
+                      }}
+                    />
+                  </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Resident Type</Label><Select value={formData.residentType} onValueChange={(v) => setFormData({ ...formData, residentType: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Resident">Resident</SelectItem><SelectItem value="Student">Student</SelectItem><SelectItem value="Senior Citizen">Senior Citizen</SelectItem><SelectItem value="PWD">PWD</SelectItem><SelectItem value="Indigenous">Indigenous</SelectItem></SelectContent></Select></div>
-                  <div className="space-y-2"><Label>Voter Status</Label><Select value={formData.voterStatus} onValueChange={(v) => setFormData({ ...formData, voterStatus: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Yes">Yes</SelectItem><SelectItem value="No">No</SelectItem></SelectContent></Select></div>
+                  <div className="space-y-2">
+                    <Label>Resident Type</Label>
+                    <Select value={formData.residentType} onValueChange={(v) => setFormData({ ...formData, residentType: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Resident">Resident</SelectItem>
+                        <SelectItem value="Student">Student</SelectItem>
+                        <SelectItem value="Senior Citizen">Senior Citizen</SelectItem>
+                        <SelectItem value="PWD">PWD</SelectItem>
+                        <SelectItem value="Indigenous">Indigenous</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Voter Status</Label>
+                    <Select value={formData.voterStatus} onValueChange={(v) => setFormData({ ...formData, voterStatus: v as any })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Yes">Yes</SelectItem>
+                        <SelectItem value="No">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 
@@ -309,14 +515,38 @@ export function ResidentRecords() {
                   <div className="space-y-2"><Label>House No.</Label><Input value={formData.houseNo} onChange={(e) => setFormData({ ...formData, houseNo: e.target.value })} placeholder="House number" /></div>
                   <div className="space-y-2"><Label>Street Address</Label><Input value={formData.streetAddress} onChange={(e) => setFormData({ ...formData, streetAddress: e.target.value })} placeholder="Street address" /></div>
                 </div>
+
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2"><Label>City</Label><Input value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Postal Code</Label><Input value={formData.postalCode} onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Country</Label><Input value={formData.country} onChange={(e) => setFormData({ ...formData, country: e.target.value })} /></div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Contact Number *</Label><Input value={formData.contactNumber} onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })} placeholder="09XX XXX XXXX" /></div>
-                  <div className="space-y-2"><Label>Email</Label><Input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="email@example.com" /></div>
+                  <div className="space-y-2">
+                    <Label>Contact Number *</Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={formData.contactNumber}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "");
+                        setFormData({ ...formData, contactNumber: value });
+                      }}
+                      className={`${formData.contactNumber.length >= 12 ? "border-red-500 ring-red-500" : ""}`}
+                      placeholder="09XXXXXXXXX"
+                    />
+                    {formData.contactNumber.length >= 12 && (
+                      <p className="text-xs text-red-500 mt-1">
+                        Contact number must not exceed 11 digits.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Email</Label>
+                    <Input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="email@example.com" />
+                  </div>
                 </div>
               </div>
 
@@ -326,6 +556,7 @@ export function ResidentRecords() {
                   <div className="space-y-2"><Label>Father's Name</Label><Input value={formData.fatherName} onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })} placeholder="Father's full name" /></div>
                   <div className="space-y-2"><Label>Mother's Name</Label><Input value={formData.motherName} onChange={(e) => setFormData({ ...formData, motherName: e.target.value })} placeholder="Mother's full name" /></div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>Spouse's Name</Label><Input value={formData.spouseName} onChange={(e) => setFormData({ ...formData, spouseName: e.target.value })} placeholder="Spouse's full name" /></div>
                   <div className="space-y-2"><Label>No. of Children</Label><Input type="number" value={formData.numberOfChildren} onChange={(e) => setFormData({ ...formData, numberOfChildren: e.target.value })} placeholder="0" /></div>
@@ -336,11 +567,30 @@ export function ResidentRecords() {
                 <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">Person to Contact in Case of Emergency</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>Name</Label><Input value={formData.emergencyContactName} onChange={(e) => setFormData({ ...formData, emergencyContactName: e.target.value })} placeholder="Emergency contact name" /></div>
-                  <div className="space-y-2"><Label>Contact No.</Label><Input value={formData.emergencyContactNumber} onChange={(e) => setFormData({ ...formData, emergencyContactNumber: e.target.value })} placeholder="09XX XXX XXXX" /></div>
+                  <div className="space-y-2">
+                    <Label>Contact No.</Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={formData.emergencyContactNumber}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "");
+                        setFormData({ ...formData, emergencyContactNumber: value });
+                      }}
+                      className={`${formData.emergencyContactNumber.length > 11 ? "border-red-500 ring-red-500" : ""}`}
+                      placeholder="09XXXXXXXXX"
+                    />
+                    {formData.emergencyContactNumber.length > 11 && (
+                      <p className="text-xs text-red-500 mt-1">
+                        Contact number must not exceed 11 digits.
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2"><Label>Address</Label><Input value={formData.emergencyContactAddress} onChange={(e) => setFormData({ ...formData, emergencyContactAddress: e.target.value })} placeholder="Emergency contact address" /></div>
               </div>
             </div>
+
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
               <Button onClick={handleSaveResident} className="bg-[#2957a1] hover:bg-[#1e3f7a]">Save Resident</Button>
@@ -358,6 +608,7 @@ export function ResidentRecords() {
               <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             </div>
           </div>
+
           <Table>
             <TableHeader className="bg-[#2957a1]">
               <TableRow className="hover:bg-[#2957a1] border-b-0">
@@ -372,9 +623,10 @@ export function ResidentRecords() {
                 <TableHead className="text-white font-bold text-xs h-10">ACTION</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {filteredResidents.map((resident, index) => (
-                <TableRow key={resident.id} className={`hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                <TableRow key={resident.residentNo} className={`hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                   <TableCell className="font-medium text-xs py-3">{formatId(resident.residentNo)}</TableCell>
                   <TableCell className="text-xs py-3">{resident.firstName}</TableCell>
                   <TableCell className="text-xs py-3">{resident.middleName}</TableCell>
@@ -382,8 +634,42 @@ export function ResidentRecords() {
                   <TableCell className="text-xs py-3">{resident.residentType}</TableCell>
                   <TableCell className="text-xs py-3">{resident.gender}</TableCell>
                   <TableCell className="text-xs py-3">{resident.voterStatus}</TableCell>
-                  <TableCell className="text-xs py-3"><span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${resident.status === 'Active' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-700 border border-gray-300'}`}>{resident.status}</span></TableCell>
-                  <TableCell className="py-3"><div className="flex items-center gap-1"><Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setViewingResident(resident)}><Eye className="w-3.5 h-3.5 text-blue-600" /></Button>{resident.status === 'Active' ? <AlertDialog><AlertDialogTrigger asChild><Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] h-7 px-2">INACTIVATE</Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Inactivate?</AlertDialogTitle><AlertDialogDescription>Mark {resident.firstName} {resident.lastName} as inactive?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleInactivate(resident.residentNo)} className="bg-orange-600">Inactivate</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog> : <Button size="sm" onClick={() => handleReactivate(resident.residentNo)} className="bg-green-500 hover:bg-green-600 text-white text-[10px] h-7 px-2">REACTIVATE</Button>}</div></TableCell>
+                  <TableCell className="text-xs py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${resident.status === 'Active'
+                      ? 'bg-green-100 text-green-700 border border-green-300'
+                      : 'bg-red-100 text-red-700 border border-red-300'
+                      }`}>
+                      {resident.status}
+                    </span>
+                  </TableCell>
+
+                  <TableCell className="py-3">
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setViewingResident(resident)}>
+                        <Eye className="w-3.5 h-3.5 text-blue-600" />
+                      </Button>
+
+                      {resident.status === 'Active' ? (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] h-7 px-2">INACTIVATE</Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Inactivate?</AlertDialogTitle>
+                              <AlertDialogDescription>Mark {resident.firstName} {resident.lastName} as inactive?</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleInactivate(resident.residentNo)} className="bg-orange-600">Inactivate</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      ) : (
+                        <Button size="sm" onClick={() => handleReactivate(resident.residentNo)} className="bg-green-500 hover:bg-green-600 text-white text-[10px] h-7 px-2">REACTIVATE</Button>
+                      )}
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -405,7 +691,7 @@ export function ResidentRecords() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* STEP 3: MINI SQUARED PASSWORD POP-UP */}
+      {/* STEP 3: PASSWORD POP-UP */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
         <DialogContent className="max-w-[400px] p-6 bg-white rounded-lg shadow-xl border-none">
           <DialogHeader className="text-left mb-4">
@@ -423,13 +709,12 @@ export function ResidentRecords() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Box 1: Initial Password */}
             <div className="space-y-2">
               <Label className="text-sm font-bold text-gray-700">Initial Password *</Label>
               <div className="relative">
-                <Input 
-                  type={showPassword ? "text" : "password"} 
-                  maxLength={50} 
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  maxLength={50}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
@@ -445,12 +730,11 @@ export function ResidentRecords() {
               </div>
             </div>
 
-            {/* Box 2: Confirm Password */}
             <div className="space-y-2">
               <Label className="text-sm font-bold text-gray-700">Confirm Password *</Label>
-              <Input 
-                type={showPassword ? "text" : "password"} 
-                maxLength={50} 
+              <Input
+                type={showPassword ? "text" : "password"}
+                maxLength={50}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-type password"
@@ -463,15 +747,15 @@ export function ResidentRecords() {
           </div>
 
           <DialogFooter className="mt-6 flex justify-end gap-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => { setShowPasswordDialog(false); setConfirmPassword(''); }}
               className="h-9 px-4 text-xs font-semibold text-gray-600"
             >
               Cancel
             </Button>
-            <Button 
-              onClick={handleFinalSubmit} 
+            <Button
+              onClick={handleFinalSubmit}
               className="h-9 px-4 bg-[#2957a1] text-white text-xs font-bold rounded-md hover:bg-[#1e3f7a]"
             >
               Create Account & Save
@@ -488,7 +772,7 @@ export function ResidentRecords() {
           </DialogHeader>
           {viewingResident && (
             <div className="space-y-4">
-               <div className="flex gap-4">
+              <div className="flex gap-4">
                 {viewingResident.profileImage && <img src={viewingResident.profileImage} alt="Profile" className="w-32 h-32 rounded-full object-cover" />}
                 <div className="flex-1 space-y-2">
                   <p><strong>Name:</strong> {viewingResident.firstName} {viewingResident.middleName} {viewingResident.lastName}</p>
@@ -497,7 +781,7 @@ export function ResidentRecords() {
                   <p><strong>Gender:</strong> {viewingResident.gender}</p>
                   <p><strong>Contact:</strong> {viewingResident.contactNumber}</p>
                   <p><strong>Email:</strong> {viewingResident.email}</p>
-                  <p><strong>Address:</strong> {viewingResident.houseNo} {viewingResident.streetAddress}, {viewingResident.city}</p>
+                  <p><strong>Address:</strong> {viewingResident.houseNo} {viewingResident.streetAddress} {viewingResident.city}</p>
                 </div>
               </div>
             </div>
