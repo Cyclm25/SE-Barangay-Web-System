@@ -59,7 +59,15 @@ app.get("/_dbinfo", async (req, res) => {
    API ROUTES
 ================================ */
 
-app.use("/api/barangayadmins", require("./routes/barangayadmins"));
+/* ================================
+   API ROUTES
+================================ */
+
+console.log("Loading route '/api/officials' from:", require.resolve("./routes/officials"));
+app.use("/api/officials", require("./routes/officials"));
+
+console.log("Loading route '/api/announcements' from:", require.resolve("./routes/announcements"));
+app.use("/api/announcements", require("./routes/announcements"));
 
 try {
   const authRoutes = require("./routes/auth");
@@ -70,6 +78,7 @@ try {
 
 app.use("/residents", require("./routes/residents"));
 app.use("/requests", require("./routes/requests"));
+app.use("/api/otp", require("./routes/otp"));
 
 
 /* ================================

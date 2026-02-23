@@ -14,9 +14,7 @@ router.post("/login", async (req, res) => {
     const { residentId, password } = req.body;
 
     if (!residentId || !password) {
-      return res
-        .status(400)
-        .json({ error: "residentId and password are required" });
+      return res.status(400).json({ error: "residentId and password are required" });
     }
 
     if (!process.env.JWT_SECRET) {
@@ -54,9 +52,7 @@ router.post("/login", async (req, res) => {
 
     const row = result.rows[0];
 
-    // pg can lowercase keys; normalize
-    const ResidentAccountID =
-      row.ResidentAccountID ?? row.residentaccountid ?? null;
+    const ResidentAccountID = row.ResidentAccountID ?? row.residentaccountid ?? null;
     const PasswordValue = row.PasswordValue ?? row.passwordvalue ?? null;
     const Role = row.Role ?? row.role ?? null;
 
@@ -72,16 +68,15 @@ router.post("/login", async (req, res) => {
       return res.status(403).json({ error: "Account is deactivated." });
     }
 
-    const isResident = ResidentID != null;
-    const isAdminOrSuper = BarangayAdminID != null || SuperAdminID != null;
+    if (!PasswordValue) {
+      return res.status(401).json({ error: "Invalid ID or Password" });
+    }
 
+    // ✅ FIX: validate password for ALL roles (supports old plaintext + new bcrypt)
     let isMatch = false;
-
-    if (isResident) {
+    if (typeof PasswordValue === "string" && PasswordValue.startsWith("$2")) {
       isMatch = await bcrypt.compare(password, PasswordValue);
-    } else if (isAdminOrSuper) {
-      // NOTE: Your admin/super passwords are currently plaintext in DB based on your original logic.
-      // If you later hash them too, change this to bcrypt.compare.
+    } else {
       isMatch = password === PasswordValue;
     }
 
@@ -90,9 +85,7 @@ router.post("/login", async (req, res) => {
     }
 
     if (!ResidentAccountID) {
-      return res
-        .status(500)
-        .json({ error: "Login error: missing ResidentAccountID" });
+      return res.status(500).json({ error: "Login error: missing ResidentAccountID" });
     }
 
     const userType = SuperAdminID
@@ -101,7 +94,6 @@ router.post("/login", async (req, res) => {
         ? "barangayadmin"
         : "resident";
 
-    // ✅ Issue JWT token (used for autofill + secure request submission)
     const token = jwt.sign(
       {
         accountId: ResidentAccountID,
@@ -119,7 +111,7 @@ router.post("/login", async (req, res) => {
       message: "Login Successful",
       token,
       user: {
-        id: ResidentAccountID, // stable PK for all accounts
+        id: ResidentAccountID,
         type: userType,
         role: Role,
         displayName: DisplayName,

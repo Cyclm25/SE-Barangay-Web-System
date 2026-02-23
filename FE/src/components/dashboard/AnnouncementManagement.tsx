@@ -1,29 +1,53 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Textarea } from '../ui/textarea';
-import { Badge } from '../ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '../ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
-import { 
-  Megaphone, 
-  Plus, 
-  Trash2, 
-  Edit, 
-  Eye, 
-  Archive, 
+import React, { useEffect, useState } from "react";
+import { Card, CardContent } from "../ui/card";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Textarea } from "../ui/textarea";
+import { Badge } from "../ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogDescription,
+} from "../ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../ui/alert-dialog";
+import {
+  Megaphone,
+  Plus,
+  Edit,
+  Eye,
+  Archive,
   Clock,
   User,
   Calendar,
   Send,
   ImageIcon,
-  Upload
-} from 'lucide-react';
-import { toast } from 'sonner';
+  Upload,
+} from "lucide-react";
+import { toast } from "sonner";
+import { api } from "../../utils/api";
 
 interface Announcement {
   id: string;
@@ -34,146 +58,184 @@ interface Announcement {
   dateCreated: string;
   datePosted?: string;
   postedBy: string;
-  status: 'draft' | 'posted' | 'archived';
+  status: "draft" | "posted" | "archived";
   tags: string[];
 }
 
+/**
+ * Robust mapper:
+ * - supports DB shapes with either Status or IsPublished
+ * - supports Body/content naming
+ */
+function mapApiAnnouncementToUI(a: any): Announcement {
+  const rawStatus = (a.Status ?? a.status ?? "").toString().toLowerCase();
+
+  let status: Announcement["status"] = "posted";
+
+if (rawStatus === "archived") status = "archived";
+else if (rawStatus === "draft" || rawStatus === "drafts") status = "draft";
+else if (rawStatus === "posted" || rawStatus === "active") status = "posted";
+  else {
+    // fallback if your DB uses IsPublished boolean
+    if (typeof a.IsPublished === "boolean") {
+      status = a.IsPublished ? "posted" : "draft";
+    }
+  }
+
+  return {
+    id: String(a.AnnouncementID ?? a.announcementid ?? a.id),
+    title: a.Title ?? a.title ?? "",
+    content: a.Body ?? a.body ?? a.Content ?? a.content ?? "",
+    images: Array.isArray(a.Images ?? a.images) ? (a.Images ?? a.images) : [],
+    targetAudience: a.TargetAudience ?? a.targetAudience ?? a.Category ?? a.category ?? "all",
+    dateCreated: a.CreatedAt ?? a.createdat ?? new Date().toISOString(),
+    datePosted:
+      a.PostedAt ??
+      a.postedat ??
+      a.DatePosted ??
+      a.datePosted ??
+      a.CreatedAt ??
+      a.createdat ??
+      undefined,
+    postedBy:
+      a.PostedByName ??
+      a.postedBy ??
+      a.PostedByRole ??
+      a.postedByRole ??
+      "Admin",
+    status,
+    tags: Array.isArray(a.Tags ?? a.tags) ? (a.Tags ?? a.tags) : [],
+  };
+}
+
 export function AnnouncementManagement() {
-  // State for custom target audiences (can be saved to database)
+  // State for custom target audiences (can be saved to database later)
   const [customTargetAudiences, setCustomTargetAudiences] = useState<string[]>([
-    'Primary 4A',
-    'Primary 4B',
-    'Primary 5A',
-    'Primary 5B',
-    'SS1',
-    'SS2',
-    'SS3'
+    "Primary 4A",
+    "Primary 4B",
+    "Primary 5A",
+    "Primary 5B",
+    "SS1",
+    "SS2",
+    "SS3",
   ]);
 
-  const [announcements, setAnnouncements] = useState<Announcement[]>([
-    {
-      id: '1',
-      title: 'Community Clean-Up Drive',
-      content: 'All residents are invited to join our monthly community clean-up drive this Saturday, January 27, 2025, at 7:00 AM. Meeting point: Barangay Hall. Let\'s work together to keep our community clean and green!',
-      images: ['https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=400'],
-      targetAudience: 'all',
-      dateCreated: '2025-01-20T10:30:00',
-      datePosted: '2025-01-20T11:00:00',
-      postedBy: 'Admin Office',
-      status: 'posted',
-      tags: ['community', 'clean-up', 'drive']
-    },
-    {
-      id: '2',
-      title: 'Barangay Assembly Meeting',
-      content: 'A mandatory barangay assembly will be held on January 30, 2025, at 3:00 PM at the Barangay Covered Court. Agenda includes budget presentation and community projects for 2025. All household representatives are required to attend.',
-      images: [],
-      targetAudience: 'all',
-      dateCreated: '2025-01-18T14:20:00',
-      datePosted: '2025-01-18T15:00:00',
-      postedBy: 'Barangay Captain',
-      status: 'posted',
-      tags: ['assembly', 'budget', 'projects']
-    },
-    {
-      id: '3',
-      title: 'Free Medical Mission',
-      content: 'Free medical and dental check-up for all residents on February 5, 2025, from 8:00 AM to 2:00 PM. Bring your barangay ID. Senior citizens and PWDs will be given priority.',
-      images: ['https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=400'],
-      targetAudience: 'all',
-      dateCreated: '2025-01-15T09:15:00',
-      status: 'draft',
-      postedBy: 'Maria Santos',
-      tags: ['medical', 'dental', 'check-up']
-    },
-    {
-      id: '4',
-      title: 'Fiesta Celebration 2025',
-      content: 'Save the date! Our annual barangay fiesta will be celebrated on March 15-17, 2025. Various activities including sports fest, cultural shows, and community dinner. More details to follow.',
-      images: [],
-      targetAudience: 'all',
-      dateCreated: '2024-12-20T08:00:00',
-      datePosted: '2024-12-20T09:00:00',
-      postedBy: 'Events Committee',
-      status: 'archived',
-      tags: ['fiesta', 'sports', 'cultural', 'dinner']
-    }
-  ]);
+  // NOW: announcements come from DB/API (not hardcoded)
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
-  const [viewingAnnouncement, setViewingAnnouncement] = useState<Announcement | null>(null);
+  const [editingAnnouncement, setEditingAnnouncement] =
+    useState<Announcement | null>(null);
+  const [viewingAnnouncement, setViewingAnnouncement] =
+    useState<Announcement | null>(null);
+
   const [formData, setFormData] = useState({
-    title: '',
-    content: '',
+    title: "",
+    content: "",
     images: [] as string[],
-    targetAudience: 'all' as Announcement['targetAudience'],
-    tags: [] as string[]
+    targetAudience: "all" as Announcement["targetAudience"],
+    tags: [] as string[],
   });
-  const [newCustomAudience, setNewCustomAudience] = useState('');
+
+  const [newCustomAudience, setNewCustomAudience] = useState("");
 
   const resetForm = () => {
     setFormData({
-      title: '',
-      content: '',
+      title: "",
+      content: "",
       images: [],
-      targetAudience: 'all',
-      tags: []
+      targetAudience: "all",
+      tags: [],
     });
     setEditingAnnouncement(null);
-    setNewCustomAudience('');
+    setNewCustomAudience("");
   };
+
+  // ✅ Reusable fetch so we can refresh after archive/post
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await api.get("/api/announcements");
+      const mapped: Announcement[] = (Array.isArray(res.data) ? res.data : []).map(
+        mapApiAnnouncementToUI
+      );
+      setAnnouncements(mapped);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load announcements");
+      setAnnouncements([]);
+    }
+  };
+
+  // ✅ FETCH announcements on load
+  useEffect(() => {
+    fetchAnnouncements();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAddCustomAudience = () => {
     if (!newCustomAudience.trim()) {
-      toast.error('Please enter a custom target audience');
+      toast.error("Please enter a custom target audience");
       return;
     }
-    
-    // Check if already exists
+
     if (customTargetAudiences.includes(newCustomAudience.trim())) {
-      toast.error('This target audience already exists');
+      toast.error("This target audience already exists");
       return;
     }
-    
-    // Add to custom audiences
+
     setCustomTargetAudiences([...customTargetAudiences, newCustomAudience.trim()]);
     setFormData({ ...formData, targetAudience: newCustomAudience.trim() });
     toast.success(`Added "${newCustomAudience.trim()}" to target audiences`);
-    setNewCustomAudience('');
+    setNewCustomAudience("");
   };
 
-  const handleCreateOrUpdate = (saveAsDraft: boolean = false) => {
-    if (!formData.title || !formData.content) {
-      toast.error('Please fill in all required fields');
+  // ✅ CREATE/UPDATE announcement via API (POST)
+  const handleCreateOrUpdate = async (saveAsDraft: boolean = false) => {
+    if (!formData.title.trim() || !formData.content.trim()) {
+      toast.error("Please fill in all required fields");
       return;
     }
 
-    const newAnnouncement: Announcement = {
-      id: editingAnnouncement?.id || Date.now().toString(),
-      title: formData.title,
-      content: formData.content,
-      images: formData.images,
-      targetAudience: formData.targetAudience,
-      dateCreated: editingAnnouncement?.dateCreated || new Date().toISOString(),
-      datePosted: saveAsDraft ? undefined : new Date().toISOString(),
-      postedBy: 'John Adebayo',
-      status: saveAsDraft ? 'draft' : 'posted',
-      tags: formData.tags
-    };
+    try {
+      const raw = localStorage.getItem("app_user");
+      const user = raw ? JSON.parse(raw) : null;
 
-    if (editingAnnouncement) {
-      setAnnouncements(announcements.map(a => 
-        a.id === editingAnnouncement.id ? newAnnouncement : a
-      ));
-      toast.success('Announcement updated successfully');
-    } else {
-      setAnnouncements([newAnnouncement, ...announcements]);
-      toast.success(saveAsDraft ? 'Announcement saved as draft' : 'Announcement posted successfully');
+      const postedByRole = user?.role; // expect: "BarangayAdmin" or "SuperAdmin"
+      const postedById = user?.id;
+
+      if (!postedByRole || !postedById) {
+        toast.error("Missing user session. Please log in again.");
+        return;
+      }
+
+      const payload = {
+        title: formData.title.trim(),
+        body: formData.content.trim(),
+        images: formData.images,
+        targetAudience: formData.targetAudience,
+        tags: formData.tags,
+        status: saveAsDraft ? "draft" : "posted",
+        postedByRole,
+        postedById,
+      };
+
+      await api.post("/api/announcements", payload);
+
+      toast.success(
+        saveAsDraft ? "Announcement saved as draft" : "Announcement posted successfully"
+      );
+
+      setIsDialogOpen(false);
+      resetForm();
+
+      // ✅ refresh from DB (so tabs are correct + persistent)
+      await fetchAnnouncements();
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Failed to save announcement", {
+        description: err?.response?.data?.error || err?.message || "Check backend /api/announcements",
+      });
     }
-
-    setIsDialogOpen(false);
-    resetForm();
   };
 
   const handleEdit = (announcement: Announcement) => {
@@ -183,52 +245,60 @@ export function AnnouncementManagement() {
       content: announcement.content,
       images: announcement.images,
       targetAudience: announcement.targetAudience,
-      tags: announcement.tags
+      tags: announcement.tags,
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setAnnouncements(announcements.filter(a => a.id !== id));
-    toast.success('Announcement deleted successfully');
-  };
-
-  const handleArchive = (id: string) => {
-    setAnnouncements(announcements.map(a =>
-      a.id === id ? { ...a, status: 'archived' as const } : a
-    ));
-    toast.success('Announcement archived successfully');
-  };
-
-  const handlePublish = (id: string) => {
-    setAnnouncements(announcements.map(a =>
-      a.id === id ? { ...a, status: 'posted' as const, datePosted: new Date().toISOString() } : a
-    ));
-    toast.success('Announcement published successfully');
-  };
-
-  const postedAnnouncements = announcements.filter(a => a.status === 'posted');
-  const draftAnnouncements = announcements.filter(a => a.status === 'draft');
-  const archivedAnnouncements = announcements.filter(a => a.status === 'archived');
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'urgent': return 'destructive';
-      case 'important': return 'default';
-      case 'normal': return 'secondary';
-      default: return 'secondary';
+  /**
+   * ✅ ARCHIVE (PERSISTENT)
+   * Calls backend PATCH /api/announcements/:id/archive
+   * then refreshes list from DB
+   */
+  const handleArchive = async (id: string) => {
+    try {
+      await api.patch(`/api/announcements/${id}/archive`);
+      toast.success("Announcement archived");
+      await fetchAnnouncements();
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to archive announcement");
     }
   };
 
+  /**
+   * NOTE: publish is still UI-only unless you add backend route for it.
+   * (You can add PATCH /api/announcements/:id/publish later.)
+   */
+  const handlePublish = (id: string) => {
+    setAnnouncements((prev) =>
+      prev.map((a) =>
+        a.id === id ? { ...a, status: "posted", datePosted: new Date().toISOString() } : a
+      )
+    );
+    toast.success("Announcement published (UI only)");
+  };
+
+  const postedAnnouncements = announcements.filter((a) => a.status === "posted");
+  const draftAnnouncements = announcements.filter((a) => a.status === "draft");
+  const archivedAnnouncements = announcements.filter((a) => a.status === "archived");
+
   const getTargetAudienceBadge = (targetAudience: string) => {
     switch (targetAudience) {
-      case 'all': return 'All';
-      case 'students': return 'Students';
-      case 'senior-citizens': return 'Senior Citizens';
-      case 'pwd': return 'PWD';
-      case 'events': return 'Events';
-      case 'health': return 'Health';
-      default: return targetAudience;
+      case "all":
+        return "All";
+      case "students":
+        return "Students";
+      case "senior-citizens":
+        return "Senior Citizens";
+      case "pwd":
+        return "PWD";
+      case "events":
+        return "Events";
+      case "health":
+        return "Health";
+      default:
+        return targetAudience;
     }
   };
 
@@ -261,7 +331,9 @@ export function AnnouncementManagement() {
           {/* Content */}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2 mb-2">
-              <h3 className="font-semibold text-gray-900 line-clamp-1">{announcement.title}</h3>
+              <h3 className="font-semibold text-gray-900 line-clamp-1">
+                {announcement.title}
+              </h3>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <Badge variant="outline" className="text-xs">
                   {getTargetAudienceBadge(announcement.targetAudience)}
@@ -269,23 +341,26 @@ export function AnnouncementManagement() {
               </div>
             </div>
 
-            <p className="text-sm text-gray-600 line-clamp-2 mb-3">{announcement.content}</p>
+            <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+              {announcement.content}
+            </p>
 
             <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
               <div className="flex items-center gap-1">
                 <User className="w-3 h-3" />
                 <span>Posted by: {announcement.postedBy}</span>
               </div>
-              {announcement.datePosted && (
+              {announcement.datePosted ? (
                 <div className="flex items-center gap-1">
                   <Calendar className="w-3 h-3" />
                   <span>{new Date(announcement.datePosted).toLocaleDateString()}</span>
                 </div>
-              )}
-              {!announcement.datePosted && (
+              ) : (
                 <div className="flex items-center gap-1">
                   <Clock className="w-3 h-3" />
-                  <span>Created: {new Date(announcement.dateCreated).toLocaleDateString()}</span>
+                  <span>
+                    Created: {new Date(announcement.dateCreated).toLocaleDateString()}
+                  </span>
                 </div>
               )}
             </div>
@@ -301,6 +376,7 @@ export function AnnouncementManagement() {
                 <Eye className="w-3 h-3" />
                 View
               </Button>
+
               <Button
                 variant="outline"
                 size="sm"
@@ -310,7 +386,8 @@ export function AnnouncementManagement() {
                 <Edit className="w-3 h-3" />
                 Edit
               </Button>
-              {announcement.status === 'draft' && (
+
+              {announcement.status === "draft" && (
                 <Button
                   variant="default"
                   size="sm"
@@ -321,39 +398,35 @@ export function AnnouncementManagement() {
                   Publish
                 </Button>
               )}
-              {announcement.status === 'posted' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleArchive(announcement.id)}
-                  className="gap-1"
-                >
-                  <Archive className="w-3 h-3" />
-                  Archive
-                </Button>
+
+              {/* ✅ Archive only (no delete) + confirmation */}
+              {announcement.status === "posted" && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1">
+                      <Archive className="w-3 h-3" />
+                      Archive
+                    </Button>
+                  </AlertDialogTrigger>
+
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Archive Announcement?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to archive this announcement? Residents will no longer see it.
+                      </AlertDialogDescription>
+                      
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => void handleArchive(announcement.id)}
+                      > Yes, archive it
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               )}
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1 text-red-600 hover:text-red-700">
-                    <Trash2 className="w-3 h-3" />
-                    Delete
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Announcement?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete the announcement.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => handleDelete(announcement.id)} className="bg-red-600 hover:bg-red-700">
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
             </div>
           </div>
         </div>
@@ -372,25 +445,33 @@ export function AnnouncementManagement() {
           </h1>
           <p className="text-gray-600 mt-1">Create and manage school announcements</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) resetForm();
-        }}>
+
+        <Dialog
+          open={isDialogOpen}
+          onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) resetForm();
+          }}
+        >
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="w-4 h-4" />
               Add New Announcement
             </Button>
           </DialogTrigger>
+
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
-                {editingAnnouncement ? 'Edit Announcement' : 'Create New Announcement'}
+                {editingAnnouncement ? "Edit Announcement" : "Create New Announcement"}
               </DialogTitle>
               <DialogDescription>
-                {editingAnnouncement ? 'Update the announcement details below.' : 'Fill in the details to create a new announcement for the community.'}
+                {editingAnnouncement
+                  ? "Update the announcement details below."
+                  : "Fill in the details to create a new announcement for the community."}
               </DialogDescription>
             </DialogHeader>
+
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="title">Title *</Label>
@@ -419,15 +500,12 @@ export function AnnouncementManagement() {
                   {[0, 1, 2, 3, 4].map((index) => (
                     <div key={index} className="flex gap-2">
                       <Input
-                        value={formData.images[index] || ''}
+                        value={formData.images[index] || ""}
                         onChange={(e) => {
                           const newImages = [...formData.images];
-                          if (e.target.value) {
-                            newImages[index] = e.target.value;
-                          } else {
-                            newImages.splice(index, 1);
-                          }
-                          setFormData({ ...formData, images: newImages.filter(img => img) });
+                          if (e.target.value) newImages[index] = e.target.value;
+                          else newImages.splice(index, 1);
+                          setFormData({ ...formData, images: newImages.filter((img) => img) });
                         }}
                         placeholder={`Image ${index + 1} URL`}
                       />
@@ -439,6 +517,7 @@ export function AnnouncementManagement() {
                     </div>
                   ))}
                 </div>
+
                 {formData.images.length > 0 && (
                   <div className="grid grid-cols-3 gap-2 mt-2">
                     {formData.images.map((img, idx) => (
@@ -457,7 +536,12 @@ export function AnnouncementManagement() {
                 <Label htmlFor="targetAudience">Target Audience</Label>
                 <Select
                   value={formData.targetAudience}
-                  onValueChange={(value) => setFormData({ ...formData, targetAudience: value as Announcement['targetAudience'] })}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      targetAudience: value as Announcement["targetAudience"],
+                    })
+                  }
                 >
                   <SelectTrigger id="targetAudience">
                     <SelectValue />
@@ -469,8 +553,10 @@ export function AnnouncementManagement() {
                     <SelectItem value="pwd">PWD</SelectItem>
                     <SelectItem value="events">Events</SelectItem>
                     <SelectItem value="health">Health</SelectItem>
-                    {customTargetAudiences.map(audience => (
-                      <SelectItem key={audience} value={audience}>{audience}</SelectItem>
+                    {customTargetAudiences.map((audience) => (
+                      <SelectItem key={audience} value={audience}>
+                        {audience}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -484,16 +570,13 @@ export function AnnouncementManagement() {
                     onChange={(e) => setNewCustomAudience(e.target.value)}
                     placeholder="Enter new target audience"
                   />
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={handleAddCustomAudience}
-                  >
+                  <Button variant="default" size="sm" onClick={handleAddCustomAudience}>
                     Add
                   </Button>
                 </div>
               </div>
             </div>
+
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancel
@@ -502,7 +585,7 @@ export function AnnouncementManagement() {
                 Save as Draft
               </Button>
               <Button onClick={() => handleCreateOrUpdate(false)}>
-                {editingAnnouncement ? 'Update & Publish' : 'Post Announcement'}
+                {editingAnnouncement ? "Update & Publish" : "Post Announcement"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -516,7 +599,9 @@ export function AnnouncementManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Posted Announcements</p>
-                <p className="text-2xl font-semibold text-gray-900">{postedAnnouncements.length}</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {postedAnnouncements.length}
+                </p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                 <Send className="w-6 h-6 text-green-600" />
@@ -530,7 +615,9 @@ export function AnnouncementManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Draft Announcements</p>
-                <p className="text-2xl font-semibold text-gray-900">{draftAnnouncements.length}</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {draftAnnouncements.length}
+                </p>
               </div>
               <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
                 <Edit className="w-6 h-6 text-yellow-600" />
@@ -544,7 +631,9 @@ export function AnnouncementManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Archived</p>
-                <p className="text-2xl font-semibold text-gray-900">{archivedAnnouncements.length}</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {archivedAnnouncements.length}
+                </p>
               </div>
               <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Archive className="w-6 h-6 text-gray-600" />
@@ -571,7 +660,7 @@ export function AnnouncementManagement() {
               </CardContent>
             </Card>
           ) : (
-            postedAnnouncements.map(announcement => (
+            postedAnnouncements.map((announcement) => (
               <AnnouncementCard key={announcement.id} announcement={announcement} />
             ))
           )}
@@ -586,7 +675,7 @@ export function AnnouncementManagement() {
               </CardContent>
             </Card>
           ) : (
-            draftAnnouncements.map(announcement => (
+            draftAnnouncements.map((announcement) => (
               <AnnouncementCard key={announcement.id} announcement={announcement} />
             ))
           )}
@@ -601,7 +690,7 @@ export function AnnouncementManagement() {
               </CardContent>
             </Card>
           ) : (
-            archivedAnnouncements.map(announcement => (
+            archivedAnnouncements.map((announcement) => (
               <AnnouncementCard key={announcement.id} announcement={announcement} />
             ))
           )}
@@ -609,22 +698,25 @@ export function AnnouncementManagement() {
       </Tabs>
 
       {/* View Announcement Dialog */}
-      <Dialog open={!!viewingAnnouncement} onOpenChange={(open) => !open && setViewingAnnouncement(null)}>
+      <Dialog
+        open={!!viewingAnnouncement}
+        onOpenChange={(open) => !open && setViewingAnnouncement(null)}
+      >
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           {viewingAnnouncement && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-2xl">
-                  {viewingAnnouncement.title}
-                </DialogTitle>
-                <DialogDescription>
-                  View announcement details and content
-                </DialogDescription>
+                <DialogTitle className="text-2xl">{viewingAnnouncement.title}</DialogTitle>
+                <DialogDescription>View announcement details and content</DialogDescription>
               </DialogHeader>
+
               <div className="space-y-6 py-4">
-                {/* Display all images if there are multiple */}
                 {viewingAnnouncement.images && viewingAnnouncement.images.length > 0 && (
-                  <div className={`grid ${viewingAnnouncement.images.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                  <div
+                    className={`grid ${
+                      viewingAnnouncement.images.length > 1 ? "grid-cols-2" : "grid-cols-1"
+                    } gap-2`}
+                  >
                     {viewingAnnouncement.images.map((img, idx) => (
                       <img
                         key={idx}
@@ -635,8 +727,7 @@ export function AnnouncementManagement() {
                     ))}
                   </div>
                 )}
-                
-                {/* Tags */}
+
                 {viewingAnnouncement.tags && viewingAnnouncement.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {viewingAnnouncement.tags.map((tag, index) => (
@@ -646,25 +737,42 @@ export function AnnouncementManagement() {
                     ))}
                   </div>
                 )}
-                
+
                 <div className="prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap text-base leading-relaxed">{viewingAnnouncement.content}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap text-base leading-relaxed">
+                    {viewingAnnouncement.content}
+                  </p>
                 </div>
-                
+
                 <div className="border-t pt-4 space-y-3 bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <User className="w-4 h-4" />
                     <span className="font-medium">Posted by:</span> {viewingAnnouncement.postedBy}
                   </div>
+
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Calendar className="w-4 h-4" />
                     <span className="font-medium">
-                      {viewingAnnouncement.datePosted 
-                        ? `Posted: ${new Date(viewingAnnouncement.datePosted).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`
-                        : `Created: ${new Date(viewingAnnouncement.dateCreated).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`
-                      }
+                      {viewingAnnouncement.datePosted
+                        ? `Posted: ${new Date(viewingAnnouncement.datePosted).toLocaleDateString(
+                            "en-US",
+                            {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            }
+                          )}`
+                        : `Created: ${new Date(viewingAnnouncement.dateCreated).toLocaleDateString(
+                            "en-US",
+                            {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            }
+                          )}`}
                     </span>
                   </div>
+
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Megaphone className="w-4 h-4" />
                     <span className="font-medium">Target Audience:</span>

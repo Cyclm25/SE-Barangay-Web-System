@@ -101,7 +101,7 @@ export function Sidebar({ activeTab, onTabChange, onLogout, adminName, adminId, 
         </div>
         <Button
           variant="ghost"
-          className="w-full justify-start gap-2 h-10 text-white hover:bg-white/10 text-[14px]"
+          className="w-full justify-start gap-2 h-10 text-white hover:bg-red/10 text-[14px], "
           onClick={handleLogoutClick}
         >
           <LogOut className="w-4 h-4" />

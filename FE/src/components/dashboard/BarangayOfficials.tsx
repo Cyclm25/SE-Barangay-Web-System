@@ -129,7 +129,7 @@ export function BarangayOfficials() {
     const fetchOfficials = async () => {
       try {
         setLoading(true);
-        const res = await api.get("/api/barangayadmins");
+        const res = await api.get("/api/officials");
         setOfficials(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         console.error("Fetch error:", err);
@@ -222,7 +222,7 @@ export function BarangayOfficials() {
         superadminid: superAdminId,
       };
 
-      const res = await api.post("/api/barangayadmins", payload);
+      const res = await api.post("/api/officials", payload);
       const created = res.data as Official;
 
       setOfficials((prev) => [created, ...prev]);
@@ -239,7 +239,7 @@ export function BarangayOfficials() {
     } catch (err: any) {
       console.error(err);
       toast.error("Failed to add official", {
-        description: err?.response?.data?.message || "Check backend /api/barangayadmins",
+        description: err?.response?.data?.message || "Check backend /api/officials",
       });
     } finally {
       setLoading(false);
@@ -250,7 +250,7 @@ export function BarangayOfficials() {
     try {
       setLoading(true);
 
-      const res = await api.patch(`/api/barangayadmins/${id}/status`, { status: nextStatus });
+      const res = await api.patch(`/api/officials/${id}/status`, { status: nextStatus });
       const updated = res.data as Official;
 
       setOfficials((prev) => prev.map((o) => (o.barangayadminid === id ? updated : o)));

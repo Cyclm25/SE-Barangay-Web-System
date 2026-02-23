@@ -12,7 +12,6 @@ import { SetNewPasswordPage } from './components/auth/SetNewPasswordPage';
 import { ResidentPortal } from './components/resident/ResidentPortal';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
-
 // 1. User Interface definition matching your DB User data [cite: 462-479]
 interface User {
   id: string;

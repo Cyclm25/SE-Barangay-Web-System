@@ -44,9 +44,11 @@
             "react-hook-form": "^7.55.0",
             "react-resizable-panels": "^2.1.7",
             "react-router-dom": "^7.13.0",
+            "react-webcam": "^7.2.0",
             "recharts": "^2.15.2",
             "sonner": "^2.0.3",
             "tailwind-merge": "*",
+            "tesseract.js": "^7.0.0",
             "vaul": "^1.1.2"
       },
       "devDependencies": {
