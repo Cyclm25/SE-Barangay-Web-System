@@ -1,3 +1,4 @@
+// admin/index.js
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
@@ -8,7 +9,6 @@ const pool = require("./db");
 /* ================================
    MIDDLEWARE
 ================================ */
-
 app.use(cors({
   origin: "http://localhost:3000",
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
@@ -18,11 +18,34 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+/* ================================
+   API ROUTES
+================================ */
+const dashboardRoutes = require("./routes/dashboard");
+
+  // Frontend is calling /api/dashboard/stats
+app.use("/api/dashboard", dashboardRoutes);
+
+console.log("Loading route '/api/officials' from:", require.resolve("./routes/officials"));
+app.use("/api/officials", require("./routes/officials"));
+
+console.log("Loading route '/api/announcements' from:", require.resolve("./routes/announcements"));
+app.use("/api/announcements", require("./routes/announcements"));
+
+try {
+  const authRoutes = require("./routes/auth");
+  app.use("/auth", authRoutes);
+} catch (err) {
+  console.error("Failed to load auth routes:", err.message);
+}
+
+app.use("/residents", require("./routes/residents"));
+app.use("/requests", require("./routes/requests"));
+app.use("/api/otp", require("./routes/otp"));
 
 /* ================================
    HEALTH CHECK ROUTES
 ================================ */
-
 app.get("/", (req, res) => {
   res.send("Backend is running");
 });
@@ -54,39 +77,15 @@ app.get("/_dbinfo", async (req, res) => {
   }
 });
 
-
-/* ================================
-   API ROUTES
-================================ */
-
-/* ================================
-   API ROUTES
-================================ */
-
-console.log("Loading route '/api/officials' from:", require.resolve("./routes/officials"));
-app.use("/api/officials", require("./routes/officials"));
-
-console.log("Loading route '/api/announcements' from:", require.resolve("./routes/announcements"));
-app.use("/api/announcements", require("./routes/announcements"));
-
-try {
-  const authRoutes = require("./routes/auth");
-  app.use("/auth", authRoutes);
-} catch (err) {
-  console.error("Failed to load auth routes:", err.message);
-}
-
-app.use("/residents", require("./routes/residents"));
-app.use("/requests", require("./routes/requests"));
-app.use("/api/otp", require("./routes/otp"));
-
-
 /* ================================
    START SERVER
 ================================ */
-
 const PORT = 5001;
 
 app.listen(PORT, () => {
   console.log(`Server started on http://localhost:${PORT}`);
 });
+
+// TRANSACTION ROUTES
+app.use("/api/transactions", require("./routes/transactions"));
+console.log("Loading route '/api/transactions' from:", require.resolve("./routes/transactions"));

@@ -12,9 +12,7 @@ import { toast } from 'sonner';
 import { formatId } from '../../utils/formatId';
 import OcrScanner from '../../OcrScanner';
 
-
 type ResidentStatus = 'Active' | 'Inactive';
-
 
 interface Resident {
   id: string;
@@ -47,7 +45,6 @@ interface Resident {
   status: ResidentStatus;
 }
 
-
 type ResidentRow = {
   ResidentID: string;
   FirstName: string;
@@ -74,9 +71,7 @@ type ResidentRow = {
   dateRegistered?: string | null;
 };
 
-
 const API_BASE = "http://localhost:5001";
-
 
 function mapRowToResident(r: ResidentRow): Resident {
   return {
@@ -111,7 +106,6 @@ function mapRowToResident(r: ResidentRow): Resident {
   };
 }
 
-
 export function ResidentRecords() {
   const [residents, setResidents] = useState<Resident[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -126,6 +120,9 @@ export function ResidentRecords() {
   const [profileImagePreview, setProfileImagePreview] = useState<string>('');
 
 
+  // ✅ NEW: tracks if user clicked "Save Resident"
+  const [saveAttempted, setSaveAttempted] = useState(false);
+
   const [formData, setFormData] = useState({
     profileImage: '', firstName: '', middleName: '', lastName: '',
     age: '', birthday: '', gender: 'Male' as 'Male' | 'Female',
@@ -136,26 +133,45 @@ export function ResidentRecords() {
     emergencyContactName: '', emergencyContactNumber: '', emergencyContactAddress: ''
   });
 
+  // required-field helpers
+  const isBlank = (v: string) => !v || !v.trim();
+  const invalidEmail = (v: string) => isBlank(v) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  const invalidContact = (v: string) => isBlank(v) || v.length !== 11;
+  const contactTooLong = formData.contactNumber.length > 11;
+  const contactComplete = formData.contactNumber.length === 11;
+
+  const gmailRegex =
+    /^[a-z0-9](\.?[a-z0-9]){5,29}@gmail\.com$/i;
+
+  const emailInvalidFormat =
+    formData.email.trim().length > 0 &&
+    !gmailRegex.test(formData.email.trim());
+
+  const emailValidFormat =
+    formData.email.trim().length > 0 &&
+    gmailRegex.test(formData.email.trim());
+
+  const firstNameError = saveAttempted && isBlank(formData.firstName);
+  const lastNameError = saveAttempted && isBlank(formData.lastName);
+  const birthdayError = saveAttempted && isBlank(formData.birthday);
+  const contactError = saveAttempted && invalidContact(formData.contactNumber);
+  const emailError = saveAttempted && invalidEmail(formData.email);
 
   const loadResidents = async () => {
     try {
       const response = await fetch(`${API_BASE}/residents`);
       const data = await response.json();
 
-
       if (!response.ok) {
         toast.error(data?.error || "Failed to load residents.");
         return;
       }
 
-
       const rows: ResidentRow[] = Array.isArray(data) ? data : (data?.residents ?? []);
       const mapped = rows.map(mapRowToResident);
 
-
       const userType = localStorage.getItem("userType");
       const residentId = localStorage.getItem("residentId");
-
 
       if (userType === "resident" && residentId) {
         setResidents(mapped.filter(r => r.residentNo === residentId));
@@ -168,9 +184,7 @@ export function ResidentRecords() {
     }
   };
 
-
   useEffect(() => { loadResidents(); }, []);
-
 
   const resetForm = () => {
     setFormData({
@@ -184,8 +198,9 @@ export function ResidentRecords() {
     setProfileImagePreview('');
     setPassword('');
     setConfirmPassword('');
+    // ✅ NEW: clear validation UI
+    setSaveAttempted(false);
   };
-
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -200,13 +215,21 @@ export function ResidentRecords() {
     }
   };
 
-
   const handleSaveResident = () => {
-    if (!formData.firstName || !formData.lastName || !formData.birthday || !formData.contactNumber) {
-      toast.error('Please fill in all required fields');
+    // ✅ NEW: turn on red highlights for required fields
+    setSaveAttempted(true);
+
+    // ✅ NEW: block if required invalid
+    if (
+      isBlank(formData.firstName) ||
+      isBlank(formData.lastName) ||
+      isBlank(formData.birthday) ||
+      invalidContact(formData.contactNumber) ||
+      invalidEmail(formData.email)
+    ) {
+      toast.error('Please fill in all required fields correctly.');
       return;
     }
-
 
     const newResident: Resident = {
       id: `TMP_${Date.now()}`,
@@ -239,18 +262,15 @@ export function ResidentRecords() {
       status: 'Active'
     };
 
-
     setPendingResident(newResident);
     setIsAddDialogOpen(false);
     setShowDataPrivacyDialog(true);
   };
 
-
   const handleConfirmPrivacy = () => {
     setShowDataPrivacyDialog(false);
     setShowPasswordDialog(true);
   };
-
 
   const handleFinalSubmit = async () => {
     if (!password || !confirmPassword) {
@@ -263,14 +283,26 @@ export function ResidentRecords() {
     }
     if (!pendingResident) return;
 
-
     try {
       const nextNo = `RS${new Date().getFullYear()}${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}`;
 
+      const token =
+        localStorage.getItem("token") ||
+        localStorage.getItem("authToken") ||
+        localStorage.getItem("jwt") ||
+        null;
+
+      if (!token) {
+        toast.error("Missing login token. Please log in again.");
+        return;
+      }
 
       const response = await fetch(`${API_BASE}/residents/register`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           residentNo: nextNo,
           firstName: pendingResident.firstName,
@@ -297,9 +329,7 @@ export function ResidentRecords() {
         }),
       });
 
-
       const data = await response.json();
-
 
       if (response.ok) {
         toast.success('Resident and Account successfully saved!');
@@ -316,13 +346,11 @@ export function ResidentRecords() {
     }
   };
 
-
   const handleCancelDataPrivacy = () => {
     setShowDataPrivacyDialog(false);
     setPendingResident(null);
     resetForm();
   };
-
 
   const handleInactivate = async (id: string) => {
     try {
@@ -332,7 +360,6 @@ export function ResidentRecords() {
         body: JSON.stringify({ status: 'Inactive' })
       });
       const data = await response.json();
-
 
       if (response.ok) {
         await loadResidents();
@@ -346,7 +373,6 @@ export function ResidentRecords() {
     }
   };
 
-
   const handleReactivate = async (id: string) => {
     try {
       const response = await fetch(`${API_BASE}/residents/${id}/status`, {
@@ -355,7 +381,6 @@ export function ResidentRecords() {
         body: JSON.stringify({ status: 'Active' })
       });
       const data = await response.json();
-
 
       if (response.ok) {
         await loadResidents();
@@ -369,13 +394,11 @@ export function ResidentRecords() {
     }
   };
 
-
   const filteredResidents = residents.filter(resident =>
     resident.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     resident.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     resident.residentNo.includes(searchTerm)
   );
-
 
   const normalizeDateOnly = (v: any): string => {
     if (!v) return "";
@@ -388,7 +411,6 @@ export function ResidentRecords() {
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
   };
-
 
   const calculateAge = (birthdate: any) => {
     const dateOnly = normalizeDateOnly(birthdate);
@@ -405,22 +427,15 @@ export function ResidentRecords() {
     return age < 0 ? "" : String(age);
   };
 
-
   const handleOcrData = (extractedText: string) => {
-  // Convert to Uppercase
-  const text = extractedText.toUpperCase();
+    const text = extractedText.toUpperCase();
+    setFormData(prev => ({
+      ...prev,
+      firstName: text.substring(0, 20)
+    }));
+    toast.success("Check the First Name box!");
+  };
 
-
-  // For now, let's just put EVERYTHING into the First Name
-  // so you can see that it's working.
-  setFormData(prev => ({
-    ...prev,
-    firstName: text.substring(0, 20) // Takes first 20 letters found
-  }));
-
-
-  toast.success("Check the First Name box!");
-};
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-full">
       <div className="flex items-center justify-between">
@@ -431,7 +446,6 @@ export function ResidentRecords() {
           <p className="text-gray-600 mt-1">Manage all registered residents</p>
         </div>
 
-
         <Dialog
           open={isAddDialogOpen}
           onOpenChange={(open) => { if (!open) resetForm(); setIsAddDialogOpen(open); }}
@@ -440,22 +454,16 @@ export function ResidentRecords() {
             <Button className="bg-[#2957a1] hover:bg-[#1e3f7a] text-white">ADD NEW RESIDENT</Button>
           </DialogTrigger>
 
-
           <DialogContent className="max-w-[1200px] w-[95vw] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-xl">Add New Resident</DialogTitle>
               <DialogDescription>Fill in the resident's information to register them in the system.</DialogDescription>
             </DialogHeader>
 
-
             <div className="space-y-6 py-4">
-
-
-              {/* 📷 OCR SCANNER BUTTON PLACED HERE */}
               <div className="flex justify-center mb-2">
-                 <OcrScanner onDataExtracted={handleOcrData} />
+                <OcrScanner onDataExtracted={handleOcrData} />
               </div>
-
 
               <div className="flex justify-center">
                 <div className="space-y-2 text-center">
@@ -471,22 +479,42 @@ export function ResidentRecords() {
                 </div>
               </div>
 
-
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">Personal Information</h3>
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2"><Label>First Name *</Label><Input value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} placeholder="Enter first name" /></div>
-                  <div className="space-y-2"><Label>Middle Name</Label><Input value={formData.middleName} onChange={(e) => setFormData({ ...formData, middleName: e.target.value })} placeholder="Enter middle name" /></div>
-                  <div className="space-y-2"><Label>Last Name *</Label><Input value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} placeholder="Enter last name" /></div>
-                </div>
+                  <div className="space-y-2">
+                    <Label>First Name *</Label>
+                    <Input
+                      value={formData.firstName}
+                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                      placeholder="Enter first name"
+                      className={firstNameError ? "border-red-500 ring-red-500" : ""}
+                    />
+                    {firstNameError && <p className="text-xs text-red-500 mt-1">First name is required.</p>}
+                  </div>
 
+                  <div className="space-y-2">
+                    <Label>Middle Name</Label>
+                    <Input value={formData.middleName} onChange={(e) => setFormData({ ...formData, middleName: e.target.value })} placeholder="Enter middle name" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Last Name *</Label>
+                    <Input
+                      value={formData.lastName}
+                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                      placeholder="Enter last name"
+                      className={lastNameError ? "border-red-500 ring-red-500" : ""}
+                    />
+                    {lastNameError && <p className="text-xs text-red-500 mt-1">Last name is required.</p>}
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label>Age</Label>
                     <Input type="number" value={formData.age} readOnly placeholder="Auto-calculated" />
                   </div>
-
 
                   <div className="space-y-2">
                     <Label>Gender</Label>
@@ -498,7 +526,6 @@ export function ResidentRecords() {
                       </SelectContent>
                     </Select>
                   </div>
-
 
                   <div className="space-y-2">
                     <Label>Civil Status</Label>
@@ -513,7 +540,6 @@ export function ResidentRecords() {
                     </Select>
                   </div>
 
-
                   <div className="space-y-2">
                     <Label>Birthday *</Label>
                     <Input
@@ -523,10 +549,11 @@ export function ResidentRecords() {
                         const birthday = e.target.value;
                         setFormData({ ...formData, birthday, age: calculateAge(birthday) });
                       }}
+                      className={birthdayError ? "border-red-500 ring-red-500" : ""}
                     />
+                    {birthdayError && <p className="text-xs text-red-500 mt-1">Birthday is required.</p>}
                   </div>
                 </div>
-
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -543,7 +570,6 @@ export function ResidentRecords() {
                     </Select>
                   </div>
 
-
                   <div className="space-y-2">
                     <Label>Voter Status</Label>
                     <Select value={formData.voterStatus} onValueChange={(v) => setFormData({ ...formData, voterStatus: v as any })}>
@@ -557,14 +583,13 @@ export function ResidentRecords() {
                 </div>
               </div>
 
-
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">Address & Contact</h3>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>House No.</Label><Input value={formData.houseNo} onChange={(e) => setFormData({ ...formData, houseNo: e.target.value })} placeholder="House number" /></div>
                   <div className="space-y-2"><Label>Street Address</Label><Input value={formData.streetAddress} onChange={(e) => setFormData({ ...formData, streetAddress: e.target.value })} placeholder="Street address" /></div>
                 </div>
-
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2"><Label>City</Label><Input value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} /></div>
@@ -572,36 +597,72 @@ export function ResidentRecords() {
                   <div className="space-y-2"><Label>Country</Label><Input value={formData.country} onChange={(e) => setFormData({ ...formData, country: e.target.value })} /></div>
                 </div>
 
-
                 <div className="grid grid-cols-2 gap-4">
+
+                  {/* CONTACT NUMBER */}
                   <div className="space-y-2">
                     <Label>Contact Number *</Label>
                     <Input
                       type="text"
                       inputMode="numeric"
+                      maxLength={12}
                       value={formData.contactNumber}
                       onChange={(e) => {
                         const value = e.target.value.replace(/\D/g, "");
                         setFormData({ ...formData, contactNumber: value });
                       }}
-                      className={`${formData.contactNumber.length >= 12 ? "border-red-500 ring-red-500" : ""}`}
-                      placeholder="09XXXXXXXXX"
+                      className={
+                        contactTooLong
+                          ? "border-red-500 ring-red-500"
+                          : contactComplete
+                            ? "border- green-500 ring-green-500"
+                            : ""
+                      }
+                      placeholder="09XX XXX XXXX"
                     />
-                    {formData.contactNumber.length >= 12 && (
+
+                    {contactTooLong && (
                       <p className="text-xs text-red-500 mt-1">
-                        Contact number must not exceed 11 digits.
+                        Contact number must not exceed 12 digits.❌
+                      </p>
+                    )}
+
+                    {contactComplete && !contactTooLong && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Contact number complete (11 digits)✅
                       </p>
                     )}
                   </div>
 
 
+                  {/* EMAIL */}
                   <div className="space-y-2">
-                    <Label>Email</Label>
-                    <Input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="email@example.com" />
+                    <Label>Email (Gmail only) *</Label>
+                    <Input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
+                      placeholder="example@gmail.com"
+                      className={emailInvalidFormat ? "border-red-500 ring-red-500" : ""}
+                    />
+
+                    {emailInvalidFormat && (
+                      <p className="text-xs text-red-500 mt-1">
+                        Only Gmail addresses are allowed (example@gmail.com).
+                      </p>
+                    )}
+
+                    {emailValidFormat && !emailInvalidFormat && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Valid email format
+                      </p>
+                    )}
                   </div>
+
                 </div>
               </div>
-
 
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">Family Background</h3>
@@ -610,13 +671,11 @@ export function ResidentRecords() {
                   <div className="space-y-2"><Label>Mother's Name</Label><Input value={formData.motherName} onChange={(e) => setFormData({ ...formData, motherName: e.target.value })} placeholder="Mother's full name" /></div>
                 </div>
 
-
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>Spouse's Name</Label><Input value={formData.spouseName} onChange={(e) => setFormData({ ...formData, spouseName: e.target.value })} placeholder="Spouse's full name" /></div>
                   <div className="space-y-2"><Label>No. of Children</Label><Input type="number" value={formData.numberOfChildren} onChange={(e) => setFormData({ ...formData, numberOfChildren: e.target.value })} placeholder="0" /></div>
                 </div>
               </div>
-
 
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">Person to Contact in Case of Emergency</h3>
@@ -632,8 +691,8 @@ export function ResidentRecords() {
                         const value = e.target.value.replace(/\D/g, "");
                         setFormData({ ...formData, emergencyContactNumber: value });
                       }}
-                      className={`${formData.emergencyContactNumber.length > 11 ? "border-red-500 ring-red-500" : ""}`}
-                      placeholder="09XXXXXXXXX"
+                      className={`${formData.emergencyContactNumber.length >= 11 ? "border-red-500 ring-red-500" : ""}`}
+                      placeholder="09XX XXX XXXX"
                     />
                     {formData.emergencyContactNumber.length > 11 && (
                       <p className="text-xs text-red-500 mt-1">
@@ -646,7 +705,6 @@ export function ResidentRecords() {
               </div>
             </div>
 
-
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
               <Button onClick={handleSaveResident} className="bg-[#2957a1] hover:bg-[#1e3f7a]">Save Resident</Button>
@@ -655,7 +713,7 @@ export function ResidentRecords() {
         </Dialog>
       </div>
 
-
+      {/* ... REST OF YOUR COMPONENT BELOW IS UNCHANGED ... */}
       <Card className="border border-gray-300 shadow-sm">
         <CardContent className="p-4">
           <div className="p-4 flex justify-end items-center gap-2 border-b bg-gray-50 -m-4 mb-4">
@@ -665,7 +723,6 @@ export function ResidentRecords() {
               <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             </div>
           </div>
-
 
           <Table>
             <TableHeader className="bg-[#2957a1]">
@@ -681,7 +738,6 @@ export function ResidentRecords() {
                 <TableHead className="text-white font-bold text-xs h-10">ACTION</TableHead>
               </TableRow>
             </TableHeader>
-
 
             <TableBody>
               {filteredResidents.map((resident, index) => (
@@ -702,13 +758,11 @@ export function ResidentRecords() {
                     </span>
                   </TableCell>
 
-
                   <TableCell className="py-3">
                     <div className="flex items-center gap-1">
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setViewingResident(resident)}>
                         <Eye className="w-3.5 h-3.5 text-blue-600" />
                       </Button>
-
 
                       {resident.status === 'Active' ? (
                         <AlertDialog>
@@ -738,7 +792,6 @@ export function ResidentRecords() {
         </CardContent>
       </Card>
 
-
       {/* STEP 2: DATA PRIVACY DIALOG */}
       <AlertDialog open={showDataPrivacyDialog} onOpenChange={setShowDataPrivacyDialog}>
         <AlertDialogContent className="max-w-[400px]">
@@ -752,7 +805,6 @@ export function ResidentRecords() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
 
       {/* STEP 3: PASSWORD POP-UP */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
@@ -770,7 +822,6 @@ export function ResidentRecords() {
               Create and confirm the password for this resident account.
             </DialogDescription>
           </DialogHeader>
-
 
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -794,7 +845,6 @@ export function ResidentRecords() {
               </div>
             </div>
 
-
             <div className="space-y-2">
               <Label className="text-sm font-bold text-gray-700">Confirm Password *</Label>
               <Input
@@ -810,7 +860,6 @@ export function ResidentRecords() {
               )}
             </div>
           </div>
-
 
           <DialogFooter className="mt-6 flex justify-end gap-2">
             <Button
@@ -829,7 +878,6 @@ export function ResidentRecords() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
 
       {/* VIEW RESIDENT DETAILS */}
       <Dialog open={!!viewingResident} onOpenChange={(open) => { if (!open) setViewingResident(null); }}>

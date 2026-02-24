@@ -267,3 +267,24 @@ router.get("/admin/all", async (req, res) => {
 });
 
 module.exports = router;
+// GET requests of a specific resident (for Track My Requests)
+router.get("/resident/:residentId", async (req, res) => {
+  try {
+    const { residentId } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT "RequestID","ResidentID","RequestDate","RequestType","RequestStatus","RequestPurpose"
+      FROM request
+      WHERE "ResidentID" = $1
+      ORDER BY "RequestDate" DESC, "RequestID" DESC
+      `,
+      [residentId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Fetch Resident Requests Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});

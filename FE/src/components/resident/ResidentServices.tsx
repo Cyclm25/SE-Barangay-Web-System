@@ -147,24 +147,26 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const getLoggedInResidentId = () =>
-    localStorage.getItem("residentId") ||
-    localStorage.getItem("loggedInId") ||
-    localStorage.getItem("residentId") ||
-    "";
 
   useEffect(() => {
     const loadProfile = async () => {
-      const residentId = getLoggedInResidentId();
-      if (!residentId) {
-        setLoadingProfile(false);
-        setResidentProfile(null);
-        return;
-      }
-
       try {
-        // ✅ Fetch ONE resident only (fast, correct, supports proper Birthday format from backend)
-        const res = await fetch(`${API_BASE}/residents/${residentId}`);
+        const token =
+          localStorage.getItem("token") ||
+          localStorage.getItem("authToken") ||
+          "";
+
+        if (!token) {
+          setResidentProfile(null);
+          return;
+        }
+
+        const res = await fetch(`${API_BASE}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
         const data = await res.json();
 
         if (!res.ok) {
@@ -196,18 +198,26 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
     setShowSubmitConfirm(true);
   };
 
-  // ✅ This is the real submit to DB + notifications
+  //  real submit to DB + notifications
   const handleConfirmSubmit = async () => {
-    const residentId = getLoggedInResidentId();
+    const residentId = residentProfile?.ResidentID;
     if (!residentId) return;
 
     if (!finalDocumentType || !formData.purpose) return;
+
+    const token =
+      localStorage.getItem("token") ||
+      localStorage.getItem("authToken") ||
+      "";
 
     setIsSubmitting(true);
     try {
       const res = await fetch(`${API_BASE}/requests`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           residentId,
           requestType: finalDocumentType,
@@ -219,6 +229,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
 
       if (!res.ok) {
         // backend sends {error, detail, code}
+        console.error("Request submit failed:", data);
         return;
       }
 
@@ -226,7 +237,9 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
       if (onRequestSubmit && residentProfile) {
         onRequestSubmit({
           residentId,
-          name: `${residentProfile.FirstName} ${residentProfile.MiddleName} ${residentProfile.LastName}`,
+          name: `${residentProfile.FirstName} ${residentProfile.MiddleName} ${residentProfile.LastName}`
+            .replace(/\s+/g, " ")
+            .trim(),
           documentType: finalDocumentType,
           purpose: formData.purpose,
           serviceType,
@@ -236,7 +249,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
       }
 
       // reset form
-      setFormData({ documentType: '', customDocumentType: '', purpose: '' });
+      setFormData({ documentType: "", customDocumentType: "", purpose: "" });
       setShowSubmitConfirm(false);
     } finally {
       setIsSubmitting(false);
@@ -329,7 +342,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                   <label className="text-[13px] text-gray-700 font-semibold block mb-2">Resident ID</label>
                   <input
                     type="text"
-                    value={residentProfile?.ResidentID ?? getLoggedInResidentId()}
+                    value={residentProfile?.ResidentID ?? ''}
                     disabled
                     className="w-full border-2 border-gray-200 bg-gray-50 rounded-lg px-4 py-3 text-[14px] text-gray-600"
                   />

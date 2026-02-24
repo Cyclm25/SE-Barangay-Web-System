@@ -75,11 +75,11 @@ router.post("/", async (req, res) => {
     const uiStatus = (status || "posted").toLowerCase();
     const dbStatus =
       uiStatus === "posted" ? "Active" :
-      uiStatus === "draft" ? "Drafts" :
-      uiStatus === "archived" ? "Archived" :
-      // if someone already sends Active/Drafts/Archived, keep it safe:
-      (status === "Active" || status === "Drafts" || status === "Archived") ? status :
-      "Active";
+        uiStatus === "draft" ? "Drafts" :
+          uiStatus === "archived" ? "Archived" :
+            // if someone already sends Active/Drafts/Archived, keep it safe:
+            (status === "Active" || status === "Drafts" || status === "Archived") ? status :
+              "Active";
 
     const result = await pool.query(
       `
@@ -98,7 +98,31 @@ router.post("/", async (req, res) => {
       ]
     );
 
-    res.status(201).json(result.rows[0]);
+    const newAnnouncement = result.rows[0];
+
+    // ==============================
+    // ✅ INSERT TRANSACTION LOG HERE
+    // ==============================
+
+    await pool.query(
+      `
+  INSERT INTO transaction_history
+    ("RequestID","ResidentID","Action","RequestStatus","RequestType","RequestPurpose","CreatedAt")
+  VALUES
+    ($1,$2,$3,$4,$5,$6,NOW())
+  `,
+      [
+        null,                  // not tied to request
+        postedById,            // this is the admin/superadmin ID
+        "Posted Announcement", // action
+        dbStatus,              // Active/Drafts/Archived
+        "Announcements",       // module
+        title                  // store title as detail
+      ]
+    );
+
+    // return response AFTER logging
+    res.status(201).json(newAnnouncement);
   } catch (err) {
     console.error("Create Announcement Error:", err);
     res.status(500).json({ error: err.message });

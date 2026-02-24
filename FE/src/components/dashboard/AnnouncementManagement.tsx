@@ -72,9 +72,9 @@ function mapApiAnnouncementToUI(a: any): Announcement {
 
   let status: Announcement["status"] = "posted";
 
-if (rawStatus === "archived") status = "archived";
-else if (rawStatus === "draft" || rawStatus === "drafts") status = "draft";
-else if (rawStatus === "posted" || rawStatus === "active") status = "posted";
+  if (rawStatus === "archived") status = "archived";
+  else if (rawStatus === "draft" || rawStatus === "drafts") status = "draft";
+  else if (rawStatus === "posted" || rawStatus === "active") status = "posted";
   else {
     // fallback if your DB uses IsPublished boolean
     if (typeof a.IsPublished === "boolean") {
@@ -110,6 +110,8 @@ else if (rawStatus === "posted" || rawStatus === "active") status = "posted";
 
 export function AnnouncementManagement() {
   // State for custom target audiences (can be saved to database later)
+  const [isSaving, setIsSaving] = useState(false);
+
   const [customTargetAudiences, setCustomTargetAudiences] = useState<string[]>([
     "Primary 4A",
     "Primary 4B",
@@ -190,6 +192,7 @@ export function AnnouncementManagement() {
   };
 
   // ✅ CREATE/UPDATE announcement via API (POST)
+  if (isSaving) return;
   const handleCreateOrUpdate = async (saveAsDraft: boolean = false) => {
     if (!formData.title.trim() || !formData.content.trim()) {
       toast.error("Please fill in all required fields");
@@ -219,17 +222,20 @@ export function AnnouncementManagement() {
         postedById,
       };
 
-      await api.post("/api/announcements", payload);
+      setIsSaving(true);
+      try {
+        await api.post("/api/announcements", payload);
 
-      toast.success(
-        saveAsDraft ? "Announcement saved as draft" : "Announcement posted successfully"
-      );
+        toast.success(
+          saveAsDraft ? "Announcement saved as draft" : "Announcement posted successfully"
+        );
 
-      setIsDialogOpen(false);
-      resetForm();
-
-      // ✅ refresh from DB (so tabs are correct + persistent)
-      await fetchAnnouncements();
+        setIsDialogOpen(false);
+        resetForm();
+        await fetchAnnouncements();
+      } finally {
+        setIsSaving(false);
+      }
     } catch (err: any) {
       console.error(err);
       toast.error("Failed to save announcement", {
@@ -415,7 +421,7 @@ export function AnnouncementManagement() {
                       <AlertDialogDescription>
                         Are you sure you want to archive this announcement? Residents will no longer see it.
                       </AlertDialogDescription>
-                      
+
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -443,7 +449,7 @@ export function AnnouncementManagement() {
             <Megaphone className="w-6 h-6" />
             Announcements
           </h1>
-          <p className="text-gray-600 mt-1">Create and manage school announcements</p>
+          <p className="text-gray-600 mt-1">Create and manage barangay announcements</p>
         </div>
 
         <Dialog
@@ -578,14 +584,16 @@ export function AnnouncementManagement() {
             </div>
 
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>
                 Cancel
               </Button>
-              <Button variant="outline" onClick={() => handleCreateOrUpdate(true)}>
-                Save as Draft
+
+              <Button variant="outline" onClick={() => handleCreateOrUpdate(true)} disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save as Draft"}
               </Button>
-              <Button onClick={() => handleCreateOrUpdate(false)}>
-                {editingAnnouncement ? "Update & Publish" : "Post Announcement"}
+
+              <Button onClick={() => handleCreateOrUpdate(false)} disabled={isSaving}>
+                {isSaving ? "Posting..." : (editingAnnouncement ? "Update & Publish" : "Post Announcement")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -713,9 +721,8 @@ export function AnnouncementManagement() {
               <div className="space-y-6 py-4">
                 {viewingAnnouncement.images && viewingAnnouncement.images.length > 0 && (
                   <div
-                    className={`grid ${
-                      viewingAnnouncement.images.length > 1 ? "grid-cols-2" : "grid-cols-1"
-                    } gap-2`}
+                    className={`grid ${viewingAnnouncement.images.length > 1 ? "grid-cols-2" : "grid-cols-1"
+                      } gap-2`}
                   >
                     {viewingAnnouncement.images.map((img, idx) => (
                       <img
@@ -755,21 +762,21 @@ export function AnnouncementManagement() {
                     <span className="font-medium">
                       {viewingAnnouncement.datePosted
                         ? `Posted: ${new Date(viewingAnnouncement.datePosted).toLocaleDateString(
-                            "en-US",
-                            {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            }
-                          )}`
+                          "en-US",
+                          {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          }
+                        )}`
                         : `Created: ${new Date(viewingAnnouncement.dateCreated).toLocaleDateString(
-                            "en-US",
-                            {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            }
-                          )}`}
+                          "en-US",
+                          {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          }
+                        )}`}
                     </span>
                   </div>
 
