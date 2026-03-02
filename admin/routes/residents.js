@@ -29,12 +29,42 @@ router.get("/", async (req, res) => {
    GET RESIDENT STATUS
    IMPORTANT: must come BEFORE /:id
 ========================= */
-router.get("/:id/status", async (req, res) => {
+router.get("/:id", async (req, res) => {
+  console.log("HIT /residents/:id =", req.params.id);
   try {
     const { id } = req.params;
 
     const result = await pool.query(
-      'SELECT "status" FROM resident WHERE TRIM("ResidentID") = TRIM($1)',
+      `
+      SELECT
+        "ResidentID",
+        "FirstName",
+        "MiddleName",
+        "LastName",
+        "Age",
+        to_char("Birthday", 'YYYY-MM-DD') AS "Birthday",
+        "Gender",
+        "CivilStatus",
+        "ResidentType",
+        "VoterStatus",
+        "HouseNumber",
+        "StreetAddress",
+        "ContactNumber",
+        "Email",
+        "FatherName",
+        "MotherName",
+        "SpouseName",
+        "NoOfChildren",
+        "ContactPerson",
+        "ContactPersonNo",
+        "ContactPersonAddress",
+        "BarangayCard",
+        "ResidentAccountID",
+        "status"
+      FROM resident
+      WHERE TRIM("ResidentID") = TRIM($1)
+      LIMIT 1
+      `,
       [id]
     );
 
@@ -42,12 +72,10 @@ router.get("/:id/status", async (req, res) => {
       return res.status(404).json({ error: "Resident not found" });
     }
 
-    return res.json({
-      ResidentID: id,
-      status: result.rows[0].status,
-    });
+    // ✅ Matches frontend usage: data.FirstName, data.MiddleName, data.LastName, etc.
+    return res.json(result.rows[0]);
   } catch (err) {
-    console.error("GET /residents/:id/status Error:", err.message);
+    console.error("GET /residents/:id Error:", err.message);
     return res.status(500).json({ error: err.message });
   }
 });
@@ -190,7 +218,7 @@ router.post("/register", verifyToken, async (req, res) => {
   } catch (err) {
     try {
       await client.query("ROLLBACK");
-    } catch {}
+    } catch { }
     console.error("REGISTER ERROR:", err);
     return res.status(500).json({ error: err.message || "Database failed to save record." });
   } finally {

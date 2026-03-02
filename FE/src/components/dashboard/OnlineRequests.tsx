@@ -144,12 +144,11 @@ export function OnlineRequests() {
           )
       ).length;
 
+      const certificateTypes = ['Barangay Clearance', 'Certificate of Indigency', 'Barangay ID', 'Barangay Certificate', 'Certificate'];
       const others = (data as any[]).filter(
         (r) =>
           r.RequestStatus === "Pending" &&
-          (
-            r.RequestType === "Cedula"
-          )
+          !certificateTypes.includes(r.RequestType)
       ).length;
 
       setCertificateCount(certificates);
@@ -171,11 +170,6 @@ export function OnlineRequests() {
   };
 
 
-
-  /**
-   * ✅ AUTO-REFLECT ON ADMIN/SUPERADMIN
-   * Poll inbox every 4 seconds so new resident requests appear without manual refresh.
-   */
   useEffect(() => {
     loadInbox(false);
 
@@ -186,10 +180,37 @@ export function OnlineRequests() {
     return () => clearInterval(interval);
   }, []);
 
+  // Update counts whenever requests or statusFilter change
+  useEffect(() => {
+    const certificateTypes = ['Barangay Clearance', 'Certificate of Indigency', 'Barangay ID', 'Barangay Certificate', 'Certificate'];
+    
+    const filterStatus = statusFilter === 'all' ? undefined : statusFilter;
+    
+    const newCertificateCount = requests.filter(
+      (r) =>
+        (filterStatus ? r.status === filterStatus : true) &&
+        certificateTypes.includes(r.documentType)
+    ).length;
 
+    const newOtherCount = requests.filter(
+      (r) =>
+        (filterStatus ? r.status === filterStatus : true) &&
+        !certificateTypes.includes(r.documentType)
+    ).length;
+
+    setCertificateCount(newCertificateCount);
+    setOtherCount(newOtherCount);
+  }, [requests, statusFilter]);
 
   const handleStatusChange = async (id: string, newStatus: RequestStatus) => {
     try {
+      // Optimistic update
+      setRequests(prev =>
+        prev.map(req =>
+          req.id === id ? { ...req, status: newStatus } : req
+        )
+      );
+
       const res = await fetch(`${API_BASE}/requests/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -200,6 +221,7 @@ export function OnlineRequests() {
 
       if (!res.ok) {
         toast.error(data.error || "Failed to update status");
+        await loadInbox(false); // Revert on error
         return;
       }
 
@@ -209,26 +231,50 @@ export function OnlineRequests() {
 
     } catch {
       toast.error("Server error while updating.");
+      await loadInbox(false); // Revert on error
     }
   };
-  const handleDenyRequest = () => {
+  const handleDenyRequest = async () => {
     if (!denyingRequest || !denyReason.trim()) {
       toast.error('Please provide a reason for denying this request');
       return;
     }
 
-    setRequests(prev =>
-      prev.map(req =>
-        req.id === denyingRequest.id
-          ? { ...req, status: 'Rejected', rejectionReason: denyReason, dateCompleted: new Date().toISOString() }
-          : req
-      )
-    );
+    try {
+      // Optimistic update
+      setRequests(prev =>
+        prev.map(req =>
+          req.id === denyingRequest.id
+            ? { ...req, status: 'Rejected', rejectionReason: denyReason, dateCompleted: new Date().toISOString() }
+            : req
+        )
+      );
 
-    toast.success(`Request denied. (UI only)`, { duration: 4000 });
+      const res = await fetch(`${API_BASE}/requests/${denyingRequest.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: 'Rejected', reason: denyReason })
+      });
 
-    setDenyingRequest(null);
-    setDenyReason('');
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || "Failed to deny request");
+        await loadInbox(false); // Revert on error
+        return;
+      }
+
+      await loadInbox(false);
+
+      toast.success(`Request denied.`, { duration: 4000 });
+
+      setDenyingRequest(null);
+      setDenyReason('');
+
+    } catch {
+      toast.error("Server error while denying request.");
+      await loadInbox(false); // Revert on error
+    }
   };
 
   const handleSendAppointment = () => {
@@ -286,6 +332,7 @@ export function OnlineRequests() {
   const processingRequests = requests.filter(r => r.status === 'Processing');
   const readyRequests = requests.filter(r => r.status === 'Ready for Pickup');
   const completedRequests = requests.filter(r => r.status === 'Completed');
+  const deniedRequests = requests.filter(r => r.status === 'Rejected');
 
   const getCurrentTabRequests = () => {
     const base = activeTab === 'certificates' ? certificateRequests : otherDocumentsRequests;
@@ -438,10 +485,10 @@ export function OnlineRequests() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card
-          className={`border-yellow-400 cursor-pointer transition-all hover:shadow-md ${statusFilter === 'Pending' ? 'ring-2 ring-yellow-400' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'Pending' ? 'all' : 'Pending')}
+          className={`border-yellow-400 transition-all ${statusFilter === 'Pending' ? 'ring-2 ring-yellow-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          onClick={() => statusFilter !== 'Pending' && setStatusFilter('Pending')}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -457,8 +504,8 @@ export function OnlineRequests() {
         </Card>
 
         <Card
-          className={`border-blue-400 cursor-pointer transition-all hover:shadow-md ${statusFilter === 'Processing' ? 'ring-2 ring-blue-400' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'Processing' ? 'all' : 'Processing')}
+          className={`border-blue-400 transition-all ${statusFilter === 'Processing' ? 'ring-2 ring-blue-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          onClick={() => statusFilter !== 'Processing' && setStatusFilter('Processing')}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -474,8 +521,8 @@ export function OnlineRequests() {
         </Card>
 
         <Card
-          className={`border-green-400 cursor-pointer transition-all hover:shadow-md ${statusFilter === 'Ready for Pickup' ? 'ring-2 ring-green-400' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'Ready for Pickup' ? 'all' : 'Ready for Pickup')}
+          className={`border-green-400 transition-all ${statusFilter === 'Ready for Pickup' ? 'ring-2 ring-green-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          onClick={() => statusFilter !== 'Ready for Pickup' && setStatusFilter('Ready for Pickup')}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -491,8 +538,8 @@ export function OnlineRequests() {
         </Card>
 
         <Card
-          className={`border-gray-400 cursor-pointer transition-all hover:shadow-md ${statusFilter === 'Completed' ? 'ring-2 ring-gray-400' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'Completed' ? 'all' : 'Completed')}
+          className={`border-gray-400 transition-all ${statusFilter === 'Completed' ? 'ring-2 ring-gray-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          onClick={() => statusFilter !== 'Completed' && setStatusFilter('Completed')}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -502,6 +549,24 @@ export function OnlineRequests() {
               </div>
               <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
                 <CheckCircle className="w-6 h-6 text-gray-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card
+          className={`border-2 border-red-500 transition-all ${statusFilter === 'Rejected' ? 'border-red-500 ring-2 ring-red-500 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          onClick={() =>
+            statusFilter !== 'Rejected' && setStatusFilter('Rejected')
+          }
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Denied</p>
+                <p className="text-2xl font-semibold text-gray-900">{deniedRequests.length}</p>
+              </div>
+              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                <XCircle className="w-6 h-6 text-red-600" />
               </div>
             </div>
           </CardContent>
@@ -777,3 +842,4 @@ export function OnlineRequests() {
     </div>
   );
 }
+

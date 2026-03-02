@@ -165,6 +165,17 @@ export function BarangayOfficials() {
       toast.error("Email is required");
       return;
     }
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email.trim())) {
+      toast.error("Invalid email format");
+      return;
+    }
+    if (!formData.position) {
+      toast.error("Position is required");
+      return;
+    }
+    console.log("Form data validated, showing privacy dialog");
     setShowDataPrivacyDialog(true);
   };
 
@@ -182,10 +193,15 @@ export function BarangayOfficials() {
       toast.error("Password is required");
       return;
     }
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
     if (password !== confirmPassword) {
       toast.error("Passwords do not match");
       return;
     }
+    console.log("Passwords validated, calling handleAddOfficial");
     await handleAddOfficial(password);
   };
 
@@ -218,12 +234,22 @@ export function BarangayOfficials() {
         adminname: formData.name.trim(),
         position: formData.position || null,
         email: formData.email.trim(),
+        contactnumber: formData.contactNumber.trim() || "",
         password: finalPassword,
         superadminid: superAdminId,
       };
 
+      console.log("Sending payload:", payload);
       const res = await api.post("/api/officials", payload);
-      const created = res.data as Official;
+      console.log("API response:", res.data);
+      
+      // Backend returns { official: {...}, residentaccount: {...} }
+      const created = (res.data?.official || res.data) as Official;
+      console.log("Created official:", created);
+      
+      if (!created || !created.barangayadminid) {
+        throw new Error("Invalid response from server");
+      }
 
       setOfficials((prev) => [created, ...prev]);
 
@@ -237,9 +263,16 @@ export function BarangayOfficials() {
         description: `${created.adminname} has been registered as ${created.position ?? "Official"}.`,
       });
     } catch (err: any) {
-      console.error(err);
+      console.error("Error adding official:", err);
+      console.error('Error response data:', err?.response?.data);
+      console.error('Error status:', err?.response?.status);
+      const errorMessage = err?.response?.data?.message || 
+                          err?.response?.data?.error || 
+                          err?.message || 
+                          'Unknown error';
+      console.error('Final error message:', errorMessage);
       toast.error("Failed to add official", {
-        description: err?.response?.data?.message || "Check backend /api/officials",
+        description: errorMessage,
       });
     } finally {
       setLoading(false);

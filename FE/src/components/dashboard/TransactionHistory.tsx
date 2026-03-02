@@ -9,7 +9,7 @@ interface Transaction {
   id: string;
   timestamp: string;
   account: string;
-  accountType: string; // loosen type for safety
+  accountType: string;
   action: string;
   details: string;
   module: string;
@@ -228,9 +228,8 @@ export function TransactionHistory() {
                     return (
                       <TableRow
                         key={transaction.id}
-                        className={`hover:bg-gray-50 ${
-                          index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
-                        }`}
+                        className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
+                          }`}
                       >
                         <TableCell className="text-xs py-3 font-mono">
                           <div className="flex items-center gap-1">
@@ -267,11 +266,10 @@ export function TransactionHistory() {
 
                         <TableCell className="text-xs py-3">
                           <span
-                            className={`px-2 py-1 rounded-full text-[10px] font-semibold ${
-                              isAdmin
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-green-100 text-green-700"
-                            }`}
+                            className={`px-2 py-1 rounded-full text-[10px] font-semibold ${isAdmin
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-green-100 text-green-700"
+                              }`}
                           >
                             {transaction.module}
                           </span>
@@ -292,6 +290,6 @@ export function TransactionHistory() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </div >
   );
 }

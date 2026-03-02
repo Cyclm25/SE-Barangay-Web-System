@@ -302,6 +302,10 @@
     border-radius: 0;
   }
 
+  button {
+    cursor: pointer;
+  }
+
   ::file-selector-button {
     font: inherit;
     font-feature-settings: inherit;
@@ -2892,6 +2896,10 @@
 
   .ring-yellow-400 {
     --tw-ring-color: var(--color-yellow-400);
+  }
+
+  .ring-red-500 {
+    --tw-ring-color: var(--color-red-500);
   }
 
   .ring-offset-background {

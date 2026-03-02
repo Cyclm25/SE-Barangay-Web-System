@@ -66,6 +66,7 @@ interface Announcement {
  * Robust mapper:
  * - supports DB shapes with either Status or IsPublished
  * - supports Body/content naming
+ * - constructs full name from FirstName and LastName
  */
 function mapApiAnnouncementToUI(a: any): Announcement {
   const rawStatus = (a.Status ?? a.status ?? "").toString().toLowerCase();
@@ -82,6 +83,15 @@ function mapApiAnnouncementToUI(a: any): Announcement {
     }
   }
 
+  // Build full name from FirstName and LastName
+  const buildFullName = () => {
+    const firstName = a.FirstName ?? a.firstName ?? "";
+    const lastName = a.LastName ?? a.lastName ?? "";
+    const fullName = `${firstName} ${lastName}`.trim();
+    
+    return fullName || (a.PostedByName ?? a.postedBy ?? "Admin");
+  };
+
   return {
     id: String(a.AnnouncementID ?? a.announcementid ?? a.id),
     title: a.Title ?? a.title ?? "",
@@ -97,19 +107,13 @@ function mapApiAnnouncementToUI(a: any): Announcement {
       a.CreatedAt ??
       a.createdat ??
       undefined,
-    postedBy:
-      a.PostedByName ??
-      a.postedBy ??
-      a.PostedByRole ??
-      a.postedByRole ??
-      "Admin",
+    postedBy: buildFullName(),
     status,
     tags: Array.isArray(a.Tags ?? a.tags) ? (a.Tags ?? a.tags) : [],
   };
 }
 
 export function AnnouncementManagement() {
-  // State for custom target audiences (can be saved to database later)
   const [isSaving, setIsSaving] = useState(false);
 
   const [customTargetAudiences, setCustomTargetAudiences] = useState<string[]>([
