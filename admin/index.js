@@ -1,4 +1,3 @@
-// admin/index.js
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
@@ -9,12 +8,11 @@ const pool = require("./db");
 /* ================================
    MIDDLEWARE
 ================================ */
+// Find this in your backend index.js/server.js
 app.use(cors({
-  origin: "http://localhost:3000",
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  origin: ["http://localhost:3000", "http://localhost:3001"],  // add 3001
   credentials: true
 }));
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

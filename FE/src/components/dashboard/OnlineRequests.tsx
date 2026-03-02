@@ -106,20 +106,20 @@ export function OnlineRequests() {
     };
   };
 
-  /**
-   * ✅ loadInbox(silent?)
-   * - silent=false: shows toast errors
-   * - silent=true: used by polling (prevents toast spam)
-   */
-  const loadInbox = async (silent = false) => {
-    const loggedInId = localStorage.getItem("loggedInId");
-
-    if (!loggedInId) {
-      if (!silent) toast.error("No logged in ID found. Please login again.");
-      setIsLoading(false);
-      return;
-    }
-
+/**
+ * ✅ loadInbox(silent?)
+ * - silent=false: shows toast errors
+ * - silent=true: used by polling (prevents toast spam)
+ */
+const loadInbox = async (silent: boolean = false) => {
+  const raw = localStorage.getItem("app_user");
+  const user = raw ? JSON.parse(raw) : null;
+  const loggedInId = user?.superAdminId || user?.barangayAdminId || user?.residentId;
+  if (!loggedInId) {
+    if (!silent) toast.error("No logged in ID found. Please login again.");
+  setIsLoading(false);
+  return;
+}
     setIsLoading(true);
     try {
       const res = await fetch(`${API_BASE}/requests/admin/all`);
