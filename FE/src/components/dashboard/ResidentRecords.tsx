@@ -38,15 +38,27 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { Search, Eye, EyeOff, Upload, User, Lock } from "lucide-react";
+import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X } from "lucide-react";
 import { toast } from "sonner";
 import { formatId } from "../../utils/formatId";
 import OcrScanner from "../../OcrScanner";
 import { LocalizationProvider } from "@mui/x-date-pickers";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs"; ``
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs, { Dayjs } from "dayjs";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 
+// Helper: Get default cutoff date (30 days ago)
+const getDefaultCutoffDate = () => {
+  const date = new Date();
+  date.setDate(date.getDate() - 30);
+  return date.toISOString().split('T')[0];
+};
+
+interface ResidentRecordsProps {
+  initialFilter?: 'all' | 'new';
+  registrationCutoffDate?: string;
+  onUpdateCutoffDate?: (date: string) => void;
+}
 
 type ResidentStatus = "Active" | "Inactive";
 
@@ -169,7 +181,11 @@ const calculateAge = (birthdate: any) => {
   return age < 0 ? "" : String(age);
 };
 
-export function ResidentRecords() {
+export function ResidentRecords({
+  initialFilter = 'all',
+  registrationCutoffDate = getDefaultCutoffDate(),
+  onUpdateCutoffDate,
+}: ResidentRecordsProps) {
   const [residents, setResidents] = useState<Resident[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -184,6 +200,9 @@ export function ResidentRecords() {
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [sortBy, setSortBy] = useState<"residentNo" | "firstName" | "lastName" | "residentType" | "status">("residentNo");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [activeFilter, setActiveFilter] = useState<'all' | 'new'>(initialFilter);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [tempCutoffDate, setTempCutoffDate] = useState(registrationCutoffDate);
 
   const [formData, setFormData] = useState({
     profileImage: "",
@@ -235,6 +254,13 @@ export function ResidentRecords() {
   const contactError = saveAttempted && invalidContact(formData.contactNumber);
   const emailError = saveAttempted && invalidEmail(formData.email);
 
+  // ADDED FEATURE: SETTINGS HANDLER
+  const handleSaveSettings = () => {
+    onUpdateCutoffDate?.(tempCutoffDate);
+    setShowSettingsDialog(false);
+    toast.success("Settings updated");
+  };
+
   const loadResidents = async () => {
     try {
       const response = await fetch(`${API_BASE}/residents`);
@@ -267,6 +293,11 @@ export function ResidentRecords() {
   useEffect(() => {
     loadResidents();
   }, []);
+
+  // Sync activeFilter with initialFilter prop changes
+  useEffect(() => {
+    setActiveFilter(initialFilter);
+  }, [initialFilter]);
 
   const resetForm = () => {
     setFormData({
@@ -496,12 +527,21 @@ export function ResidentRecords() {
   };
 
   const filteredResidents = residents
-    .filter(
-      (resident) =>
+    .filter((resident) => {
+      const matchesSearch =
         resident.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         resident.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resident.residentNo.includes(searchTerm)
-    )
+        resident.residentNo.includes(searchTerm);
+
+      // ADDED LOGIC: FILTER BY DATE CUTOFF
+      if (activeFilter === 'new') {
+        return (
+          matchesSearch &&
+          dayjs(resident.dateRegistered).isAfter(dayjs(registrationCutoffDate))
+        );
+      }
+      return matchesSearch;
+    })
     .sort((a, b) => {
       let comparison = 0;
 
@@ -539,24 +579,57 @@ export function ResidentRecords() {
       <div className="p-6 space-y-6 bg-gray-50 min-h-full">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Resident Records ({residents.filter((r) => r.status === "Active").length})
-            </h1>
-            <p className="text-gray-600 mt-1">Manage all registered residents</p>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900">
+                Resident Records ({residents.filter((r) => r.status === "Active").length})
+              </h1>
+              {activeFilter === 'new' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
+                  <span>New Since: {dayjs(registrationCutoffDate).format('MM/DD/YYYY')}</span>
+                  <button
+                    onClick={() => setActiveFilter('all')}
+                    className="hover:bg-green-200 rounded-full p-0.5 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="text-gray-600 mt-1">
+              {activeFilter === 'new' 
+                ? `Showing residents registered after ${dayjs(registrationCutoffDate).format('MM/DD/YYYY')}`
+                : 'Manage all registered residents'
+              }
+            </p>
           </div>
 
-          <Dialog
-            open={isAddDialogOpen}
-            onOpenChange={(open) => {
-              if (!open) resetForm();
-              setIsAddDialogOpen(open);
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button className="bg-[#2957a1] hover:bg-[#1e3f7a] text-white">
-                ADD NEW RESIDENT
-              </Button>
-            </DialogTrigger>
+          <div className="flex items-center gap-2">
+            {/* Settings Button */}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTempCutoffDate(registrationCutoffDate);
+                setShowSettingsDialog(true);
+              }}
+              className="flex items-center gap-2 border-gray-300"
+            >
+              <Settings className="w-4 h-4" />
+              <span>Settings</span>
+            </Button>
+
+            {/* Add New Resident Dialog */}
+            <Dialog
+              open={isAddDialogOpen}
+              onOpenChange={(open) => {
+                if (!open) resetForm();
+                setIsAddDialogOpen(open);
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button className="bg-[#2957a1] hover:bg-[#1e3f7a] text-white">
+                  ADD NEW RESIDENT
+                </Button>
+              </DialogTrigger>
 
             <DialogContent className="max-w-[1200px] w-[95vw] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
@@ -1014,6 +1087,7 @@ export function ResidentRecords() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {/* TABLE */}
@@ -1286,6 +1360,50 @@ export function ResidentRecords() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setViewingResident(null)}>
                 Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Settings Dialog */}
+        <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Resident Records Settings</DialogTitle>
+              <DialogDescription>
+                Configure the cutoff date for identifying new residents
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>New Resident Cutoff Date</Label>
+                <DatePicker
+                  value={dayjs(tempCutoffDate)}
+                  onChange={(date) => {
+                    if (date) {
+                      setTempCutoffDate(date.format('YYYY-MM-DD'));
+                    }
+                  }}
+                  slotProps={{
+                    textField: {
+                      size: 'small',
+                      fullWidth: true,
+                    }
+                  }}
+                />
+                <p className="text-xs text-gray-500">
+                  Residents registered after this date will be considered &quot;new residents&quot;
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowSettingsDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveSettings} className="bg-[#2957a1]">
+                Save Changes
               </Button>
             </DialogFooter>
           </DialogContent>

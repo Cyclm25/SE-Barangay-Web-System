@@ -12,6 +12,20 @@ import { SetNewPasswordPage } from './components/auth/SetNewPasswordPage';
 import { ResidentPortal } from './components/resident/ResidentPortal';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
+
+// Helper: Get default cutoff date (30 days ago)
+const getDefaultCutoffDate = () => {
+  const date = new Date();
+  date.setDate(date.getDate() - 30);
+  return date.toISOString().split('T')[0];
+};
+
+// Helper: Load cutoff date from localStorage or use default
+const loadCutoffDate = () => {
+  const saved = localStorage.getItem('registrationCutoffDate');
+  return saved || getDefaultCutoffDate();
+};
+
 // 1. User Interface definition matching your DB User data [cite: 462-479]
 interface User {
   id: string;
@@ -27,6 +41,17 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [user, setUser] = useState<User | null>(null);
+
+  // SHARED STATE: Filter and cutoff date management
+  const [residentFilter, setResidentFilter] = useState<'all' | 'new'>('all');
+  const [requestFilter, setRequestFilter] = useState<'all' | 'pending' | 'pickup'>('all');
+  const [requestTab, setRequestTab] = useState<'certificates' | 'other'>('certificates');
+  const [registrationCutoffDate, setRegistrationCutoffDate] = useState(loadCutoffDate);
+
+  // Save cutoff date to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('registrationCutoffDate', registrationCutoffDate);
+  }, [registrationCutoffDate]);
 
   // Persistence logic to keep user logged in on refresh [cite: 293-295]
   useEffect(() => {
@@ -77,27 +102,63 @@ export default function App() {
     toast.success('Logged out successfully.');
   };
 
+  // HANDLER: Integrated Dashboard Navigation Logic
+  const handleDashboardNavigate = (tab: string, filter?: string) => {
+    setActiveTab(tab as ActiveTab);
+    
+    if (tab === 'residents') {
+      setResidentFilter((filter as 'all' | 'new') || 'all');
+    } else if (tab === 'requests') {
+      if (filter === 'pending') {
+        setRequestTab('certificates');
+        setRequestFilter('pending');
+      } else if (filter === 'pickup') {
+        setRequestTab('certificates');
+        setRequestFilter('pickup');
+      }
+    }
+  };
+
   // 3. Routing Logic: Gates features based on authorized roles 
   const renderMainContent = () => {
     if (!user) return null;
 
     switch (activeTab) {
       case 'dashboard': 
-        return <DashboardHome adminName={user.name} />;
+        return (
+          <DashboardHome 
+            adminName={user.name}
+            onNavigate={handleDashboardNavigate}
+            registrationCutoffDate={registrationCutoffDate}
+          />
+        );
       case 'residents': 
-        return <ResidentRecords />;
+        return (
+          <ResidentRecords 
+            initialFilter={residentFilter}
+            registrationCutoffDate={registrationCutoffDate}
+            onUpdateCutoffDate={(date) => setRegistrationCutoffDate(date)}
+          />
+        );
       case 'officials': 
         // Only the Super Admin ('admin') can manage officials [cite: 319-320]
-        return user.role === 'admin' ? <BarangayOfficials /> : <DashboardHome adminName={user.name} />;
+        return user.role === 'admin' ? <BarangayOfficials /> : <DashboardHome adminName={user.name} onNavigate={handleDashboardNavigate} registrationCutoffDate={registrationCutoffDate} />;
       case 'requests': 
-        return <OnlineRequests />;
+        return (
+          <OnlineRequests 
+            initialFilter={requestFilter}
+            initialTab={requestTab}
+            onFilterChange={(filter) => setRequestFilter(filter as any)}
+            onTabChange={(tab) => setRequestTab(tab)}
+          />
+        );
       case 'announcements': 
         return <AnnouncementManagement />;
       case 'transactions': 
         // Only the Super Admin ('admin') sees full transaction summaries [cite: 325]
-        return user.role === 'admin' ? <TransactionHistory /> : <DashboardHome adminName={user.name} />;
+        return user.role === 'admin' ? <TransactionHistory /> : <DashboardHome adminName={user.name} onNavigate={handleDashboardNavigate} registrationCutoffDate={registrationCutoffDate} />;
       default: 
-        return <DashboardHome adminName={user.name} />;
+        return <DashboardHome adminName={user.name} onNavigate={handleDashboardNavigate} registrationCutoffDate={registrationCutoffDate} />;
     }
   };
 
@@ -137,10 +198,18 @@ export default function App() {
     <div className="h-screen flex bg-gray-50">
       <Sidebar
         activeTab={activeTab}
-        onTabChange={(tab) => setActiveTab(tab as ActiveTab)}
+        onTabChange={(tab) => {
+          setActiveTab(tab as ActiveTab);
+          // Reset filters when manually changing tabs via sidebar
+          if (tab === 'residents') setResidentFilter('all');
+          if (tab === 'requests') {
+            setRequestFilter('all');
+            setRequestTab('certificates');
+          }
+        }}
         onLogout={handleLogout}
         adminName={user.name}
-        adminId={user.id} // Correct ID (e.g., SA20260001) for sidebar display
+        adminId={user.id}
         userRole={user.role} 
       />
       <div className="flex-1 overflow-auto">{renderMainContent()}</div>
