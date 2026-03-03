@@ -84,7 +84,7 @@ router.post("/send", async (req, res) => {
         await transporter.sendMail({
             from: process.env.SMTP_USER,
             to: trimmedEmail,
-            subject: "Your OTP Code",
+            subject: "Barangay 160 Password Reset",
             text: `Your OTP is ${otp}. Do not share this code with anyone. If you didn’t request this, please ignore this message.`,
         });
 

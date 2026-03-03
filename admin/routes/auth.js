@@ -72,14 +72,14 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid ID or Password" });
     }
 
-    // ✅ FIX: validate password for ALL roles (supports old plaintext + new bcrypt)
-    let isMatch = false;
-    if (typeof PasswordValue === "string" && PasswordValue.startsWith("$2")) {
-      isMatch = await bcrypt.compare(password, PasswordValue);
-    } else {
-      isMatch = password === PasswordValue;
+    // ✅ Enforce bcrypt-only login (old plaintext passwords will NOT be accepted anymore)
+    if (typeof PasswordValue !== "string" || !PasswordValue.startsWith("$2")) {
+      return res.status(403).json({
+        error: "Password must be reset. Please use 'Forgot Password' to set a new one.",
+      });
     }
 
+    const isMatch = await bcrypt.compare(password, PasswordValue);
     if (!isMatch) {
       return res.status(401).json({ error: "Invalid ID or Password" });
     }
@@ -164,58 +164,96 @@ router.get("/me", verifyToken, async (req, res) => {
 ========================= */
 router.post("/forgot-password", async (req, res) => {
   try {
-    const { residentId } = req.body;
+    const { email } = req.body;
+    const e = String(email || "").trim().toLowerCase();
 
-    if (!residentId) {
-      return res.status(400).json({ error: "Resident ID is required" });
+    if (!e) return res.status(400).json({ error: "Gmail address is required" });
+    if (!/^[^\s@]+@gmail\.com$/i.test(e)) {
+      return res.status(400).json({ error: "Only Gmail addresses are allowed" });
     }
 
-    const userResult = await pool.query(
+    // ✅ Find the residentaccount row linked to this Gmail (Resident OR BarangayAdmin)
+    const q = await pool.query(
       `
-      SELECT r."Email"
+      SELECT
+        ra."ResidentAccountID" AS "ResidentAccountID",
+        ra."ResidentID"        AS "ResidentID",
+        ra."BarangayAdminID"   AS "BarangayAdminID",
+        ra."SuperAdminID"      AS "SuperAdminID",
+        LOWER(COALESCE(r."Email", ba."Email")) AS "Email",
+        COALESCE(r."FirstName", ba."AdminName") AS "DisplayName"
       FROM residentaccount ra
-      JOIN resident r ON ra."ResidentID" = r."ResidentID"
-      WHERE ra."ResidentID" = $1
+      LEFT JOIN resident r ON ra."ResidentID" = r."ResidentID"
+      LEFT JOIN barangayadmin ba ON ra."BarangayAdminID" = ba."BarangayAdminID"
+      WHERE LOWER(r."Email") = $1 OR LOWER(ba."Email") = $1
       LIMIT 1
       `,
-      [residentId]
+      [e]
     );
 
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: "Resident not found" });
+    if (q.rows.length === 0) {
+      return res.status(404).json({ error: "No Gmail address linked to it" });
     }
 
-    const email = userResult.rows[0].Email ?? userResult.rows[0].email;
+    const row = q.rows[0];
+
+    // ❌ Block Super Admin
+    if (row.SuperAdminID) {
+      return res.status(403).json({ error: "Super Admin password reset is not allowed." });
+    }
+
+    // must be either resident or barangay admin
+    const isResident = !!row.ResidentID;
+    const isAdmin = !!row.BarangayAdminID;
+
+    if (!isResident && !isAdmin) {
+      return res.status(400).json({ error: "Account type not supported for password reset" });
+    }
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiry = new Date(Date.now() + 10 * 60 * 1000);
 
+    // ✅ Store OTP in THIS residentaccount row
     await pool.query(
       `
       UPDATE residentaccount
       SET "OtpCode" = $1,
           "OtpExpiry" = $2
-      WHERE "ResidentID" = $3
+      WHERE "ResidentAccountID" = $3
       `,
-      [otpCode, expiry, residentId]
+      [otpCode, expiry, row.ResidentAccountID]
     );
 
     const transporter = nodemailer.createTransport({
       service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
     });
 
     await transporter.sendMail({
       from: `"Barangay 160" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "Your Password Reset Code",
-      text: `Your OTP code is ${otpCode}. It will expire in 10 minutes.`,
+      to: row.Email,
+      subject: "Barangay 160 Password Reset",
+      text: `Your OTP code is ${otpCode}. Do not share this code with anyone.`,
     });
 
-    return res.json({ message: "OTP sent to registered email" });
+    // ✅ Identity for UI
+    const identity = isResident
+      ? {
+        type: "resident",
+        email: row.Email,
+        firstName: row.DisplayName || "",
+        username: row.ResidentID, // show as ResidentID
+        residentAccountId: row.ResidentAccountID, // internal id for reset
+      }
+      : {
+        type: "barangayadmin",
+        email: row.Email,
+        firstName: row.DisplayName || "", // admin name
+        username: row.BarangayAdminID, // show as BarangayAdminID
+        residentAccountId: row.ResidentAccountID, // internal id for reset
+      };
+
+    return res.json({ message: "OTP sent", identity });
   } catch (err) {
     console.error("Forgot Password Error:", err.message);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -223,48 +261,155 @@ router.post("/forgot-password", async (req, res) => {
 });
 
 /* =========================
-   VERIFY OTP
+   VERIFY OTP (GMAIL ONLY, NO residentId)
+   POST /auth/verify-otp
+   body: { email, otpCode }
 ========================= */
 router.post("/verify-otp", async (req, res) => {
   try {
-    const { residentId, otpCode } = req.body;
+    const { email, otpCode } = req.body;
+    const e = String(email || "").trim().toLowerCase();
+    const code = String(otpCode || "").trim();
 
-    if (!residentId || !otpCode) {
-      return res
-        .status(400)
-        .json({ error: "Resident ID and OTP are required" });
-    }
+    if (!e || !code) return res.status(400).json({ error: "Email and OTP are required" });
+    if (!/^[^\s@]+@gmail\.com$/i.test(e)) return res.status(400).json({ error: "Only Gmail addresses are allowed" });
+    if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: "OTP must be 6 digits" });
 
-    const result = await pool.query(
+    const q = await pool.query(
       `
-      SELECT "OtpCode", "OtpExpiry"
-      FROM residentaccount
-      WHERE "ResidentID" = $1
+      SELECT
+        ra."ResidentAccountID" AS "ResidentAccountID",
+        ra."ResidentID"        AS "ResidentID",
+        ra."BarangayAdminID"   AS "BarangayAdminID",
+        ra."SuperAdminID"      AS "SuperAdminID",
+        ra."OtpCode"           AS "OtpCode",
+        ra."OtpExpiry"         AS "OtpExpiry",
+        LOWER(COALESCE(r."Email", ba."Email")) AS "Email",
+        COALESCE(r."FirstName", ba."AdminName") AS "DisplayName"
+      FROM residentaccount ra
+      LEFT JOIN resident r ON ra."ResidentID" = r."ResidentID"
+      LEFT JOIN barangayadmin ba ON ra."BarangayAdminID" = ba."BarangayAdminID"
+      WHERE LOWER(r."Email") = $1 OR LOWER(ba."Email") = $1
       LIMIT 1
       `,
-      [residentId]
+      [e]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Resident not found" });
+    if (q.rows.length === 0) return res.status(404).json({ error: "No Gmail address linked to it" });
+
+    const row = q.rows[0];
+
+    if (row.SuperAdminID) {
+      return res.status(403).json({ error: "Super Admin password reset is not allowed." });
     }
 
-    const storedOtp = result.rows[0].OtpCode ?? result.rows[0].otpcode;
-    const expiry = result.rows[0].OtpExpiry ?? result.rows[0].otpexpiry;
+    if (!row.OtpCode || String(row.OtpCode) !== code) return res.status(400).json({ error: "Invalid OTP" });
+    if (!row.OtpExpiry || new Date() > new Date(row.OtpExpiry)) return res.status(400).json({ error: "OTP has expired" });
 
-    if (!storedOtp || storedOtp !== otpCode) {
-      return res.status(400).json({ error: "Invalid OTP" });
-    }
+    const isResident = !!row.ResidentID;
+    const identity = isResident
+      ? { type: "resident", firstName: row.DisplayName || "", username: row.ResidentID, email: row.Email }
+      : { type: "barangayadmin", firstName: row.DisplayName || "", username: row.BarangayAdminID, email: row.Email };
 
-    if (new Date() > new Date(expiry)) {
-      return res.status(400).json({ error: "OTP has expired" });
-    }
-
-    return res.json({ message: "OTP verified successfully" });
+    return res.json({
+      message: "OTP verified successfully",
+      residentAccountId: row.ResidentAccountID,
+      identity,
+    });
   } catch (err) {
     console.error("Verify OTP Error:", err.message);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
+/* =========================
+   RESET PASSWORD (EMAIL + OTP)
+   POST /auth/reset-password
+   body: { email, otpCode, newPassword }
+========================= */
+router.post("/reset-password", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { residentAccountId, otpCode, newPassword } = req.body;
+
+    const accId = Number(residentAccountId);
+    const code = String(otpCode || "").trim();
+    const pw = String(newPassword || "").trim();
+
+    if (!Number.isInteger(accId) || accId <= 0 || !code || !pw) {
+      return res.status(400).json({ error: "residentAccountId, otpCode, and newPassword are required" });
+    }
+
+    // keep your rule; change if you want stronger
+    if (!/^[A-Za-z0-9]{8,}$/.test(pw)) {
+      return res.status(400).json({ error: "Password must be at least 8 characters and contain letters/numbers only" });
+    }
+
+    await client.query("BEGIN");
+
+    const q = await client.query(
+      `
+      SELECT "ResidentAccountID","Password","OtpCode","OtpExpiry","SuperAdminID"
+      FROM residentaccount
+      WHERE "ResidentAccountID" = $1
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [accId]
+    );
+
+    if (q.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Account not found" });
+    }
+
+    const row = q.rows[0];
+
+    if (row.SuperAdminID) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "Super Admin password reset is not allowed." });
+    }
+
+    if (!row.OtpCode) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "No OTP found. Request OTP again." });
+    }
+    if (String(row.OtpCode) !== code) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Invalid OTP" });
+    }
+    if (!row.OtpExpiry || new Date() > new Date(row.OtpExpiry)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "OTP has expired" });
+    }
+
+    const hashed = await bcrypt.hash(pw, 10);
+
+    const upd = await client.query(
+      `
+      UPDATE residentaccount
+      SET "Password" = $1,
+          "OtpCode" = NULL,
+          "OtpExpiry" = NULL
+      WHERE "ResidentAccountID" = $2
+      RETURNING "ResidentAccountID","Password"
+      `,
+      [hashed, accId]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({
+      message: "Password updated successfully",
+      residentAccountId: upd.rows[0]?.ResidentAccountID,
+      newHashPrefix: String(upd.rows[0]?.Password || "").slice(0, 25),
+    });
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch { }
+    console.error("Reset Password Error:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
+  }
+});
 module.exports = router;

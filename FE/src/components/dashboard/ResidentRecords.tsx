@@ -43,10 +43,9 @@ import { toast } from "sonner";
 import { formatId } from "../../utils/formatId";
 import OcrScanner from "../../OcrScanner";
 import { LocalizationProvider } from "@mui/x-date-pickers";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs"; ``
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs, { Dayjs } from "dayjs";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-
 
 type ResidentStatus = "Active" | "Inactive";
 
@@ -182,8 +181,68 @@ export function ResidentRecords() {
   const [pendingResident, setPendingResident] = useState<Resident | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string>("");
   const [saveAttempted, setSaveAttempted] = useState(false);
-  const [sortBy, setSortBy] = useState<"residentNo" | "firstName" | "lastName" | "residentType" | "status">("residentNo");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+  type SortField =
+    | "residentNo"
+    | "firstName"
+    | "lastName"
+    | "residentType"
+    | "status";
+  type SortDirection = "asc" | "desc";
+
+  type SortMenuValue =
+    | "dir:asc"
+    | "dir:desc"
+    | "field:residentNo:asc"
+    | "field:residentNo:desc"
+    | "field:firstName"
+    | "field:lastName"
+    | "field:residentType"
+    | "field:status";
+
+  const [sortBy, setSortBy] = useState<SortField>("residentNo");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  // single source of truth for the dropdown selection
+  const [sortMenuValue, setSortMenuValue] = useState<SortMenuValue>(
+    "field:residentNo:asc"
+  );
+
+  const handleSortMenuChange = (v: SortMenuValue) => {
+    setSortMenuValue(v);
+
+    // A–Z / Z–A must ALWAYS sort by First Name
+    if (v === "dir:asc") {
+      setSortBy("firstName");
+      setSortDirection("asc");
+      return;
+    }
+    if (v === "dir:desc") {
+      setSortBy("firstName");
+      setSortDirection("desc");
+      return;
+    }
+
+    // Resident No needs explicit Asc/Desc
+    if (v === "field:residentNo:asc") {
+      setSortBy("residentNo");
+      setSortDirection("asc");
+      return;
+    }
+    if (v === "field:residentNo:desc") {
+      setSortBy("residentNo");
+      setSortDirection("desc");
+      return;
+    }
+
+    // Other fields: default to Asc when selected
+    if (v.startsWith("field:")) {
+      const field = v.replace("field:", "") as SortField;
+      setSortBy(field);
+      setSortDirection("asc");
+      return;
+    }
+  };
 
   const [formData, setFormData] = useState({
     profileImage: "",
@@ -540,7 +599,8 @@ export function ResidentRecords() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              Resident Records ({residents.filter((r) => r.status === "Active").length})
+              Resident Records (
+              {residents.filter((r) => r.status === "Active").length})
             </h1>
             <p className="text-gray-600 mt-1">Manage all registered residents</p>
           </div>
@@ -562,7 +622,8 @@ export function ResidentRecords() {
               <DialogHeader>
                 <DialogTitle className="text-xl">Add New Resident</DialogTitle>
                 <DialogDescription>
-                  Fill in the resident's information to register them in the system.
+                  Fill in the resident's information to register them in the
+                  system.
                 </DialogDescription>
               </DialogHeader>
 
@@ -612,13 +673,20 @@ export function ResidentRecords() {
                       <Input
                         value={formData.firstName}
                         onChange={(e) =>
-                          setFormData({ ...formData, firstName: e.target.value })
+                          setFormData({
+                            ...formData,
+                            firstName: e.target.value,
+                          })
                         }
                         placeholder="Enter first name"
-                        className={firstNameError ? "border-red-500 ring-red-500" : ""}
+                        className={
+                          firstNameError ? "border-red-500 ring-red-500" : ""
+                        }
                       />
                       {firstNameError && (
-                        <p className="text-xs text-red-500 mt-1">First name is required.</p>
+                        <p className="text-xs text-red-500 mt-1">
+                          First name is required.
+                        </p>
                       )}
                     </div>
 
@@ -627,7 +695,10 @@ export function ResidentRecords() {
                       <Input
                         value={formData.middleName}
                         onChange={(e) =>
-                          setFormData({ ...formData, middleName: e.target.value })
+                          setFormData({
+                            ...formData,
+                            middleName: e.target.value,
+                          })
                         }
                         placeholder="Enter middle name"
                       />
@@ -641,10 +712,14 @@ export function ResidentRecords() {
                           setFormData({ ...formData, lastName: e.target.value })
                         }
                         placeholder="Enter last name"
-                        className={lastNameError ? "border-red-500 ring-red-500" : ""}
+                        className={
+                          lastNameError ? "border-red-500 ring-red-500" : ""
+                        }
                       />
                       {lastNameError && (
-                        <p className="text-xs text-red-500 mt-1">Last name is required.</p>
+                        <p className="text-xs text-red-500 mt-1">
+                          Last name is required.
+                        </p>
                       )}
                     </div>
                   </div>
@@ -652,14 +727,21 @@ export function ResidentRecords() {
                   <div className="grid grid-cols-4 gap-4">
                     <div className="space-y-2">
                       <Label>Age</Label>
-                      <Input type="number" value={formData.age} readOnly placeholder="Auto-calculated" />
+                      <Input
+                        type="number"
+                        value={formData.age}
+                        readOnly
+                        placeholder="Auto-calculated"
+                      />
                     </div>
 
                     <div className="space-y-2">
                       <Label>Gender</Label>
                       <Select
                         value={formData.gender}
-                        onValueChange={(v) => setFormData({ ...formData, gender: v as any })}
+                        onValueChange={(v) =>
+                          setFormData({ ...formData, gender: v as any })
+                        }
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -691,7 +773,7 @@ export function ResidentRecords() {
                       </Select>
                     </div>
 
-                    {/* ✅ BIRTHDAY (MUI year grid like your screenshot) */}
+                    {/* ✅ BIRTHDAY */}
                     <div className="space-y-2">
                       <Label>Birthday *</Label>
 
@@ -703,7 +785,11 @@ export function ResidentRecords() {
                             return;
                           }
                           const ymd = newValue.format("YYYY-MM-DD");
-                          setFormData({ ...formData, birthday: ymd, age: calculateAge(ymd) });
+                          setFormData({
+                            ...formData,
+                            birthday: ymd,
+                            age: calculateAge(ymd),
+                          });
                         }}
                         openTo="year"
                         views={["year", "month", "day"]}
@@ -737,7 +823,9 @@ export function ResidentRecords() {
                         <SelectContent>
                           <SelectItem value="Resident">Resident</SelectItem>
                           <SelectItem value="Student">Student</SelectItem>
-                          <SelectItem value="Senior Citizen">Senior Citizen</SelectItem>
+                          <SelectItem value="Senior Citizen">
+                            Senior Citizen
+                          </SelectItem>
                           <SelectItem value="PWD">PWD</SelectItem>
                           <SelectItem value="Indigenous">Indigenous</SelectItem>
                         </SelectContent>
@@ -775,7 +863,9 @@ export function ResidentRecords() {
                       <Label>House No.</Label>
                       <Input
                         value={formData.houseNo}
-                        onChange={(e) => setFormData({ ...formData, houseNo: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, houseNo: e.target.value })
+                        }
                         placeholder="House number"
                       />
                     </div>
@@ -784,7 +874,10 @@ export function ResidentRecords() {
                       <Input
                         value={formData.streetAddress}
                         onChange={(e) =>
-                          setFormData({ ...formData, streetAddress: e.target.value })
+                          setFormData({
+                            ...formData,
+                            streetAddress: e.target.value,
+                          })
                         }
                         placeholder="Street address"
                       />
@@ -796,7 +889,9 @@ export function ResidentRecords() {
                       <Label>City</Label>
                       <Input
                         value={formData.city}
-                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, city: e.target.value })
+                        }
                       />
                     </div>
                     <div className="space-y-2">
@@ -867,9 +962,13 @@ export function ResidentRecords() {
                       <Input
                         type="email"
                         value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, email: e.target.value })
+                        }
                         placeholder="example@gmail.com"
-                        className={emailInvalidFormat ? "border-red-500 ring-red-500" : ""}
+                        className={
+                          emailInvalidFormat ? "border-red-500 ring-red-500" : ""
+                        }
                       />
 
                       {emailInvalidFormat && (
@@ -879,11 +978,15 @@ export function ResidentRecords() {
                       )}
 
                       {emailValidFormat && !emailInvalidFormat && (
-                        <p className="text-xs text-green-600 mt-1">Valid email format</p>
+                        <p className="text-xs text-green-600 mt-1">
+                          Valid email format
+                        </p>
                       )}
 
                       {emailError && (
-                        <p className="text-xs text-red-500 mt-1">Email is required.</p>
+                        <p className="text-xs text-red-500 mt-1">
+                          Email is required.
+                        </p>
                       )}
                     </div>
                   </div>
@@ -934,7 +1037,10 @@ export function ResidentRecords() {
                         type="number"
                         value={formData.numberOfChildren}
                         onChange={(e) =>
-                          setFormData({ ...formData, numberOfChildren: e.target.value })
+                          setFormData({
+                            ...formData,
+                            numberOfChildren: e.target.value,
+                          })
                         }
                         placeholder="0"
                       />
@@ -969,7 +1075,10 @@ export function ResidentRecords() {
                         value={formData.emergencyContactNumber}
                         onChange={(e) => {
                           const value = e.target.value.replace(/\D/g, "");
-                          setFormData({ ...formData, emergencyContactNumber: value });
+                          setFormData({
+                            ...formData,
+                            emergencyContactNumber: value,
+                          });
                         }}
                         className={
                           formData.emergencyContactNumber.length > 11
@@ -1022,27 +1131,24 @@ export function ResidentRecords() {
             <div className="p-4 flex justify-between items-center gap-4 border-b bg-gray-50 -m-4 mb-4">
               <div className="flex items-center gap-2">
                 <Label className="font-semibold text-sm">Sort by:</Label>
-
-                <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-                  <SelectTrigger className="w-40 h-9">
-                    <SelectValue />
+                <Select value={sortMenuValue} onValueChange={(v) => handleSortMenuChange(v as SortMenuValue)}>
+                  <SelectTrigger className="w-64 h-9">
+                    <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="residentNo">Resident No</SelectItem>
-                    <SelectItem value="firstName">First Name</SelectItem>
-                    <SelectItem value="lastName">Last Name</SelectItem>
-                    <SelectItem value="residentType">Resident Type</SelectItem>
-                    <SelectItem value="status">Status</SelectItem>
-                  </SelectContent>
-                </Select>
 
-                <Select value={sortDirection} onValueChange={(v) => setSortDirection(v as any)}>
-                  <SelectTrigger className="w-28 h-9">
-                    <SelectValue />
-                  </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="asc">A–Z</SelectItem>
-                    <SelectItem value="desc">Z–A</SelectItem>
+                    {/* MUST be 1st & 2nd: direction for FIRST NAME */}
+                    <SelectItem value="dir:asc">A–Z (First Name)</SelectItem>
+                    <SelectItem value="dir:desc">Z–A (First Name)</SelectItem>
+
+                    {/* Resident No has its own Asc/Desc */}
+                    <SelectItem value="field:residentNo:asc">Resident No (Ascending)</SelectItem>
+                    <SelectItem value="field:residentNo:desc">Resident No (Descending)</SelectItem>
+
+                    {/* Other fields (default Asc) */}
+                    <SelectItem value="field:lastName">Last Name</SelectItem>
+                    <SelectItem value="field:residentType">Resident Type</SelectItem>
+                    <SelectItem value="field:status">Status</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1064,15 +1170,33 @@ export function ResidentRecords() {
             <Table>
               <TableHeader className="bg-[#2957a1]">
                 <TableRow className="hover:bg-[#2957a1] border-b-0">
-                  <TableHead className="text-white font-bold text-xs h-10">RESIDENT NO.</TableHead>
-                  <TableHead className="text-white font-bold text-xs h-10">FIRST NAME</TableHead>
-                  <TableHead className="text-white font-bold text-xs h-10">MIDDLE NAME</TableHead>
-                  <TableHead className="text-white font-bold text-xs h-10">LAST NAME</TableHead>
-                  <TableHead className="text-white font-bold text-xs h-10">RESIDENT TYPE</TableHead>
-                  <TableHead className="text-white font-bold text-xs h-10">GENDER</TableHead>
-                  <TableHead className="text-white font-bold text-xs h-10">VOTER STATUS</TableHead>
-                  <TableHead className="text-white font-bold text-xs h-10">STATUS</TableHead>
-                  <TableHead className="text-white font-bold text-xs h-10">ACTION</TableHead>
+                  <TableHead className="text-white font-bold text-xs h-10">
+                    RESIDENT NO.
+                  </TableHead>
+                  <TableHead className="text-white font-bold text-xs h-10">
+                    FIRST NAME
+                  </TableHead>
+                  <TableHead className="text-white font-bold text-xs h-10">
+                    MIDDLE NAME
+                  </TableHead>
+                  <TableHead className="text-white font-bold text-xs h-10">
+                    LAST NAME
+                  </TableHead>
+                  <TableHead className="text-white font-bold text-xs h-10">
+                    RESIDENT TYPE
+                  </TableHead>
+                  <TableHead className="text-white font-bold text-xs h-10">
+                    GENDER
+                  </TableHead>
+                  <TableHead className="text-white font-bold text-xs h-10">
+                    VOTER STATUS
+                  </TableHead>
+                  <TableHead className="text-white font-bold text-xs h-10">
+                    STATUS
+                  </TableHead>
+                  <TableHead className="text-white font-bold text-xs h-10">
+                    ACTION
+                  </TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -1080,15 +1204,30 @@ export function ResidentRecords() {
                 {filteredResidents.map((resident, index) => (
                   <TableRow
                     key={resident.residentNo}
-                    className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"}`}
+                    className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
+                      }`}
                   >
-                    <TableCell className="font-medium text-xs py-3">{String(resident.residentNo).replace(/-/g, "")}</TableCell>
-                    <TableCell className="text-xs py-3">{resident.firstName}</TableCell>
-                    <TableCell className="text-xs py-3">{resident.middleName}</TableCell>
-                    <TableCell className="text-xs py-3">{resident.lastName}</TableCell>
-                    <TableCell className="text-xs py-3">{resident.residentType}</TableCell>
-                    <TableCell className="text-xs py-3">{resident.gender}</TableCell>
-                    <TableCell className="text-xs py-3">{resident.voterStatus}</TableCell>
+                    <TableCell className="font-medium text-xs py-3">
+                      {String(resident.residentNo).replace(/-/g, "")}
+                    </TableCell>
+                    <TableCell className="text-xs py-3">
+                      {resident.firstName}
+                    </TableCell>
+                    <TableCell className="text-xs py-3">
+                      {resident.middleName}
+                    </TableCell>
+                    <TableCell className="text-xs py-3">
+                      {resident.lastName}
+                    </TableCell>
+                    <TableCell className="text-xs py-3">
+                      {resident.residentType}
+                    </TableCell>
+                    <TableCell className="text-xs py-3">
+                      {resident.gender}
+                    </TableCell>
+                    <TableCell className="text-xs py-3">
+                      {resident.voterStatus}
+                    </TableCell>
                     <TableCell className="text-xs py-3">
                       <span
                         className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${resident.status === "Active"
@@ -1114,21 +1253,29 @@ export function ResidentRecords() {
                         {resident.status === "Active" ? (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] h-7 px-2">
+                              <Button
+                                size="sm"
+                                className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] h-7 px-2"
+                              >
                                 DEACTIVATE
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Deactivate Account?</AlertDialogTitle>
+                                <AlertDialogTitle>
+                                  Deactivate Account?
+                                </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Mark {resident.firstName} {resident.lastName} as inactive?
+                                  Mark {resident.firstName} {resident.lastName}{" "}
+                                  as inactive?
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => handleInactivate(resident.residentNo)}
+                                  onClick={() =>
+                                    handleInactivate(resident.residentNo)
+                                  }
                                   className="bg-orange-600"
                                 >
                                   Deactivate
@@ -1155,7 +1302,10 @@ export function ResidentRecords() {
         </Card>
 
         {/* STEP 2: DATA PRIVACY DIALOG */}
-        <AlertDialog open={showDataPrivacyDialog} onOpenChange={setShowDataPrivacyDialog}>
+        <AlertDialog
+          open={showDataPrivacyDialog}
+          onOpenChange={setShowDataPrivacyDialog}
+        >
           <AlertDialogContent className="max-w-[400px]">
             <AlertDialogHeader>
               <AlertDialogTitle>Data Privacy Agreement</AlertDialogTitle>
@@ -1164,8 +1314,13 @@ export function ResidentRecords() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={handleCancelDataPrivacy}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmPrivacy} className="bg-[#2957a1]">
+              <AlertDialogCancel onClick={handleCancelDataPrivacy}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmPrivacy}
+                className="bg-[#2957a1]"
+              >
                 Agree and Continue
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -1180,7 +1335,9 @@ export function ResidentRecords() {
                 <div className="p-2 bg-blue-50 rounded-lg">
                   <Lock className="w-5 h-5 text-[#2957a1]" />
                 </div>
-                <DialogTitle className="text-lg font-bold text-gray-900">Set Account Password</DialogTitle>
+                <DialogTitle className="text-lg font-bold text-gray-900">
+                  Set Account Password
+                </DialogTitle>
               </div>
               <DialogDescription className="text-xs text-gray-500">
                 Create and confirm the password for this resident account.
@@ -1189,7 +1346,9 @@ export function ResidentRecords() {
 
             <div className="space-y-4 py-2">
               <div className="space-y-2">
-                <Label className="text-sm font-bold text-gray-700">Initial Password *</Label>
+                <Label className="text-sm font-bold text-gray-700">
+                  Initial Password *
+                </Label>
                 <div className="relative">
                   <Input
                     type={showPassword ? "text" : "password"}
@@ -1210,18 +1369,24 @@ export function ResidentRecords() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sm font-bold text-gray-700">Confirm Password *</Label>
+                <Label className="text-sm font-bold text-gray-700">
+                  Confirm Password *
+                </Label>
                 <Input
                   type={showPassword ? "text" : "password"}
                   maxLength={50}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-type password"
-                  className={`h-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1] ${confirmPassword && password !== confirmPassword ? "border-red-500 ring-red-500" : ""
+                  className={`h-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1] ${confirmPassword && password !== confirmPassword
+                    ? "border-red-500 ring-red-500"
+                    : ""
                     }`}
                 />
                 {confirmPassword && password !== confirmPassword && (
-                  <p className="text-[10px] text-red-500 mt-1">Passwords do not match</p>
+                  <p className="text-[10px] text-red-500 mt-1">
+                    Passwords do not match
+                  </p>
                 )}
               </div>
             </div>
@@ -1248,7 +1413,12 @@ export function ResidentRecords() {
         </Dialog>
 
         {/* VIEW RESIDENT DETAILS */}
-        <Dialog open={!!viewingResident} onOpenChange={(open) => { if (!open) setViewingResident(null); }}>
+        <Dialog
+          open={!!viewingResident}
+          onOpenChange={(open) => {
+            if (!open) setViewingResident(null);
+          }}
+        >
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Resident Details</DialogTitle>
@@ -1266,17 +1436,28 @@ export function ResidentRecords() {
                   )}
                   <div className="flex-1 space-y-2">
                     <p>
-                      <strong>Name:</strong> {viewingResident.firstName} {viewingResident.middleName} {viewingResident.lastName}
+                      <strong>Name:</strong> {viewingResident.firstName}{" "}
+                      {viewingResident.middleName} {viewingResident.lastName}
                     </p>
                     <p>
-                      <strong>Resident No:</strong> {formatId(viewingResident.residentNo)}
+                      <strong>Resident No:</strong>{" "}
+                      {formatId(viewingResident.residentNo)}
                     </p>
-                    <p><strong>Age:</strong> {viewingResident.age}</p>
-                    <p><strong>Gender:</strong> {viewingResident.gender}</p>
-                    <p><strong>Contact:</strong> {viewingResident.contactNumber}</p>
-                    <p><strong>Email:</strong> {viewingResident.email}</p>
                     <p>
-                      <strong>Address:</strong> {viewingResident.houseNo} {viewingResident.streetAddress} {viewingResident.city}
+                      <strong>Age:</strong> {viewingResident.age}
+                    </p>
+                    <p>
+                      <strong>Gender:</strong> {viewingResident.gender}
+                    </p>
+                    <p>
+                      <strong>Contact:</strong> {viewingResident.contactNumber}
+                    </p>
+                    <p>
+                      <strong>Email:</strong> {viewingResident.email}
+                    </p>
+                    <p>
+                      <strong>Address:</strong> {viewingResident.houseNo}{" "}
+                      {viewingResident.streetAddress} {viewingResident.city}
                     </p>
                   </div>
                 </div>
