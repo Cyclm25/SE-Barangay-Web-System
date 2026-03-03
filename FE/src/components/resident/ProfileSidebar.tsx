@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface ProfileSidebarProps {
@@ -10,9 +10,37 @@ interface ProfileSidebarProps {
   residentName: string;
 }
 
-export function ProfileSidebar({ isOpen, onClose, onNavigate, onLogout, residentName }: ProfileSidebarProps) {
+export function ProfileSidebar({
+  isOpen,
+  onClose,
+  onNavigate,
+  onLogout,
+  residentName
+}: ProfileSidebarProps) {
+
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  
+  const [residentId, setResidentId] = useState<string>("");
+
+  useEffect(() => {
+    const id = localStorage.getItem("residentId");
+    if (!id) return;
+
+    const fetchResident = async () => {
+      try {
+        const res = await fetch(`http://localhost:5001/residents/${id}`);
+        const data = await res.json();
+
+        if (!res.ok) return;
+
+        setResidentId(data.ResidentID);
+      } catch (err) {
+        console.error("Failed to load resident:", err);
+      }
+    };
+
+    fetchResident();
+  }, []);
+
   if (!isOpen) return null;
 
   const handleLogoutClick = () => {
@@ -26,21 +54,18 @@ export function ProfileSidebar({ isOpen, onClose, onNavigate, onLogout, resident
 
   return (
     <>
-      {/* Overlay */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/50 z-50"
         onClick={onClose}
       />
-      
-      {/* Sidebar */}
+
       <div className="fixed right-0 top-0 bottom-0 w-[350px] bg-white shadow-2xl z-50 flex flex-col">
-        {/* Header */}
         <div className="bg-gradient-to-r from-[#2957a1] to-[#1e4380] px-6 py-8 flex items-center justify-between">
           <div>
             <h2 className="text-white text-[22px] font-bold">Profile Menu</h2>
             <p className="text-white/80 text-[13px] mt-1">Manage your account</p>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
           >
@@ -53,12 +78,14 @@ export function ProfileSidebar({ isOpen, onClose, onNavigate, onLogout, resident
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-gradient-to-br from-[#2957a1] to-[#1e4380] rounded-full flex items-center justify-center shadow-lg">
               <span className="text-white font-bold text-[22px]">
-                {residentName.charAt(0)}
+                {residentName?.charAt(0)}
               </span>
             </div>
             <div>
               <p className="font-bold text-gray-900 text-[16px]">{residentName}</p>
-              <p className="text-[13px] text-gray-600 mt-0.5">Resident ID: RES2026-0123</p>
+              <p className="text-[13px] text-gray-600 mt-0.5">
+                Resident ID: {residentId}
+              </p>
             </div>
           </div>
         </div>
@@ -102,27 +129,25 @@ export function ProfileSidebar({ isOpen, onClose, onNavigate, onLogout, resident
           </button>
         </div>
 
-        {/* Logout Button */}
         <div className="p-6 border-t border-gray-200 bg-gray-50">
           <button
-            onClick={handleLogoutClick}
-            className="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white py-4 px-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-3 shadow-md hover:shadow-lg"
+            onClick={() => setShowLogoutConfirm(true)}
+            className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white py-4 px-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-3 shadow-md"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
             Log Out
           </button>
         </div>
       </div>
 
-      {/* Logout Confirmation Dialog */}
       <ConfirmDialog
         isOpen={showLogoutConfirm}
         onClose={() => setShowLogoutConfirm(false)}
-        onConfirm={handleConfirmLogout}
+        onConfirm={() => {
+          onLogout();
+          onClose();
+        }}
         title="Confirm Logout"
-        message="Are you sure you want to log out? You will be redirected to the login page."
+        message="Are you sure you want to log out?"
         confirmText="Log Out"
         cancelText="Cancel"
         type="danger"

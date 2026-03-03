@@ -1,4 +1,5 @@
-import { useState } from 'react';
+// OnlineRequests.tsx
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -8,96 +9,51 @@ import { Textarea } from '../ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { FileText, Clock, CheckCircle, XCircle, Eye, Download, Search, AlertCircle, Mail } from 'lucide-react';
+import { FileText, Clock, CheckCircle, XCircle, Eye, Search, AlertCircle, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
+type RequestStatus = 'Pending' | 'Processing' | 'Ready for Pickup' | 'Completed' | 'Rejected';
+
 interface Request {
-  id: string;
-  requestNo: string;
-  residentName: string;
-  documentType: string;
-  purpose: string;
-  dateRequested: string;
-  dateCompleted?: string;
-  status: 'Pending' | 'Processing' | 'Ready for Pickup' | 'Completed' | 'Rejected';
-  contactNumber: string;
-  email?: string;
-  rejectionReason?: string;
+  id: string;                 // NotificationID
+  requestNo: string;          // RequestID formatted
+  residentName: string;       // now full name (from JOIN resident)
+  residentId: string;         // ResidentID
+  documentType: string;       // RequestType
+  purpose: string;            // RequestPurpose
+  dateRequested: string;      // RequestDate
+  dateCompleted?: string;     // not in DB yet
+  status: RequestStatus;      // RequestStatus
+  contactNumber: string;      // from resident table (JOIN)
+  email?: string;             // from resident table (JOIN)
+  rejectionReason?: string;   // UI only
+}
+
+interface InboxRow {
+  RequestID: number;
+  RequestDate: string;
+  RequestType: string;
+  RequestStatus: string;
+  RequestPurpose: string;
+  ResidentID: string;
+
+  FirstName: string;
+  MiddleName?: string;
+  LastName: string;
+  ContactNumber?: string;
+  Email?: string;
 }
 
 export function OnlineRequests() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'certificates' | 'other'>('certificates');
-  const [statusFilter, setStatusFilter] = useState<Request['status'] | 'all'>('all');
-  const [requests, setRequests] = useState<Request[]>([
-    {
-      id: '1',
-      requestNo: 'REQ-2025-001',
-      residentName: 'Gabriel Siang Chua',
-      documentType: 'Barangay Clearance',
-      purpose: 'Employment',
-      dateRequested: '2025-01-20',
-      status: 'Pending',
-      contactNumber: '09171234567',
-      email: 'gabriel.chua@email.com'
-    },
-    {
-      id: '2',
-      requestNo: 'REQ-2025-002',
-      residentName: 'Robert Wey Poresa',
-      documentType: 'Barangay Certificate',
-      purpose: 'School Requirement',
-      dateRequested: '2025-01-19',
-      status: 'Processing',
-      contactNumber: '09181234567',
-      email: 'robert.poresa@email.com'
-    },
-    {
-      id: '3',
-      requestNo: 'REQ-2025-003',
-      residentName: 'Rain Tirpo Talaum',
-      documentType: 'Barangay ID',
-      purpose: 'Personal Use',
-      dateRequested: '2025-01-18',
-      status: 'Ready for Pickup',
-      contactNumber: '09191234567',
-      email: 'rain.talaum@email.com'
-    },
-    {
-      id: '4',
-      requestNo: 'REQ-2025-004',
-      residentName: 'Fred Rollan Dizon',
-      documentType: 'Certificate of Indigency',
-      purpose: 'Medical Assistance',
-      dateRequested: '2025-01-17',
-      status: 'Ready for Pickup',
-      contactNumber: '09201234567',
-      email: 'fred.dizon@email.com'
-    },
-    {
-      id: '5',
-      requestNo: 'REQ-2025-005',
-      residentName: 'Dany Rey Dizon',
-      documentType: 'Business Permit',
-      purpose: 'Business Registration',
-      dateRequested: '2025-01-15',
-      dateCompleted: '2025-01-22',
-      status: 'Completed',
-      contactNumber: '09211234567',
-      email: 'dany.dizon@email.com'
-    },
-    {
-      id: '6',
-      requestNo: 'REQ-2025-006',
-      residentName: 'Maria Santos Cruz',
-      documentType: 'Community Tax Certificate',
-      purpose: 'Business Requirements',
-      dateRequested: '2025-01-24',
-      status: 'Pending',
-      contactNumber: '09221234567',
-      email: 'maria.cruz@email.com'
-    },
-  ]);
+  const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('Pending');
+
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [certificateCount, setCertificateCount] = useState(0);
+  const [otherCount, setOtherCount] = useState(0);
 
   const [viewingRequest, setViewingRequest] = useState<Request | null>(null);
   const [denyingRequest, setDenyingRequest] = useState<Request | null>(null);
@@ -110,37 +66,215 @@ export function OnlineRequests() {
     additionalNotes: ''
   });
 
-  const handleStatusChange = (id: string, newStatus: Request['status']) => {
-    setRequests(requests.map(req =>
-      req.id === id ? { 
-        ...req, 
-        status: newStatus,
-        dateCompleted: (newStatus === 'Completed' || newStatus === 'Rejected') ? new Date().toISOString() : req.dateCompleted
-      } : req
-    ));
-    toast.success(`Request status updated to ${newStatus}`);
+  const API_BASE = "http://localhost:5001";
+
+  const isKnownStatus = (s: string): s is RequestStatus => {
+    return ['Pending', 'Processing', 'Ready for Pickup', 'Completed', 'Rejected'].includes(s);
   };
 
-  const handleDenyRequest = () => {
+  const buildResidentName = (row: InboxRow) => {
+    const full = `${row.FirstName ?? ''} ${row.MiddleName ?? ''} ${row.LastName ?? ''}`.replace(/\s+/g, ' ').trim();
+    return full || row.ResidentID; // fallback to ID if name missing
+  };
+
+  const normalizeStatus = (status: string): RequestStatus => {
+    const s = status?.trim().toLowerCase();
+
+    if (s === "pending") return "Pending";
+    if (s === "processing") return "Processing";
+    if (s === "ready for pickup") return "Ready for Pickup";
+    if (s === "completed") return "Completed";
+    if (s === "rejected") return "Rejected";
+
+    return "Pending"; // safe fallback
+  };
+
+  const toUIRequest = (row: InboxRow): Request => {
+    console.log("DB STATUS:", row.RequestStatus);
+
+    return {
+      id: String(row.RequestID),
+      requestNo: `REQ-${row.RequestID}`,
+      residentName: buildResidentName(row),
+      residentId: row.ResidentID,
+      documentType: row.RequestType,
+      purpose: row.RequestPurpose,
+      dateRequested: row.RequestDate,
+      status: normalizeStatus(row.RequestStatus),
+      contactNumber: row.ContactNumber || 'N/A',
+      email: row.Email || 'N/A',
+    };
+  };
+
+/**
+ * ✅ loadInbox(silent?)
+ * - silent=false: shows toast errors
+ * - silent=true: used by polling (prevents toast spam)
+ */
+const loadInbox = async (silent: boolean = false) => {
+  const raw = localStorage.getItem("app_user");
+  const user = raw ? JSON.parse(raw) : null;
+  const loggedInId = user?.superAdminId || user?.barangayAdminId || user?.residentId;
+  if (!loggedInId) {
+    if (!silent) toast.error("No logged in ID found. Please login again.");
+  setIsLoading(false);
+  return;
+}
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/requests/admin/all`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (!silent) toast.error(data?.detail || data?.error || "Failed to load requests");
+        setRequests([]);
+        setCertificateCount(0);
+        setOtherCount(0);
+        return;
+      }
+
+      //  COUNT HERE (data exists here)
+      const certificates = (data as any[]).filter(
+        (r) =>
+          r.RequestStatus === "Pending" &&
+          (
+            r.RequestType === "Barangay Clearance" ||
+            r.RequestType === "Certificate of Indigency" ||
+            r.RequestType === "Barangay ID"
+          )
+      ).length;
+
+      const certificateTypes = ['Barangay Clearance', 'Certificate of Indigency', 'Barangay ID', 'Barangay Certificate', 'Certificate'];
+      const others = (data as any[]).filter(
+        (r) =>
+          r.RequestStatus === "Pending" &&
+          !certificateTypes.includes(r.RequestType)
+      ).length;
+
+      setCertificateCount(certificates);
+      setOtherCount(others);
+
+
+
+      const mapped = (data as InboxRow[]).map(toUIRequest);
+      setRequests(mapped);
+
+    } catch {
+      if (!silent) toast.error("Could not connect to backend.");
+      setRequests([]);
+      setCertificateCount(0);
+      setOtherCount(0);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
+  useEffect(() => {
+    loadInbox(false);
+
+    const interval = setInterval(() => {
+      loadInbox(true);
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Update counts whenever requests or statusFilter change
+  useEffect(() => {
+    const certificateTypes = ['Barangay Clearance', 'Certificate of Indigency', 'Barangay ID', 'Barangay Certificate', 'Certificate'];
+    
+    const filterStatus = statusFilter === 'all' ? undefined : statusFilter;
+    
+    const newCertificateCount = requests.filter(
+      (r) =>
+        (filterStatus ? r.status === filterStatus : true) &&
+        certificateTypes.includes(r.documentType)
+    ).length;
+
+    const newOtherCount = requests.filter(
+      (r) =>
+        (filterStatus ? r.status === filterStatus : true) &&
+        !certificateTypes.includes(r.documentType)
+    ).length;
+
+    setCertificateCount(newCertificateCount);
+    setOtherCount(newOtherCount);
+  }, [requests, statusFilter]);
+
+  const handleStatusChange = async (id: string, newStatus: RequestStatus) => {
+    try {
+      // Optimistic update
+      setRequests(prev =>
+        prev.map(req =>
+          req.id === id ? { ...req, status: newStatus } : req
+        )
+      );
+
+      const res = await fetch(`${API_BASE}/requests/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || "Failed to update status");
+        await loadInbox(false); // Revert on error
+        return;
+      }
+
+      await loadInbox(false);
+
+      toast.success(`Moved to ${newStatus}`);
+
+    } catch {
+      toast.error("Server error while updating.");
+      await loadInbox(false); // Revert on error
+    }
+  };
+  const handleDenyRequest = async () => {
     if (!denyingRequest || !denyReason.trim()) {
       toast.error('Please provide a reason for denying this request');
       return;
     }
 
-    setRequests(requests.map(req =>
-      req.id === denyingRequest.id 
-        ? { ...req, status: 'Rejected', rejectionReason: denyReason, dateCompleted: new Date().toISOString() } 
-        : req
-    ));
+    try {
+      // Optimistic update
+      setRequests(prev =>
+        prev.map(req =>
+          req.id === denyingRequest.id
+            ? { ...req, status: 'Rejected', rejectionReason: denyReason, dateCompleted: new Date().toISOString() }
+            : req
+        )
+      );
 
-    // Simulate sending notification
-    toast.success(
-      `Request denied. Notification sent to ${denyingRequest.residentName} via Email/SMS`,
-      { duration: 5000 }
-    );
+      const res = await fetch(`${API_BASE}/requests/${denyingRequest.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: 'Rejected', reason: denyReason })
+      });
 
-    setDenyingRequest(null);
-    setDenyReason('');
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || "Failed to deny request");
+        await loadInbox(false); // Revert on error
+        return;
+      }
+
+      await loadInbox(false);
+
+      toast.success(`Request denied.`, { duration: 4000 });
+
+      setDenyingRequest(null);
+      setDenyReason('');
+
+    } catch {
+      toast.error("Server error while denying request.");
+      await loadInbox(false); // Revert on error
+    }
   };
 
   const handleSendAppointment = () => {
@@ -151,48 +285,14 @@ export function OnlineRequests() {
       return;
     }
 
-    // Update request status to Processing
-    setRequests(requests.map(req =>
-      req.id === appointmentRequest.id ? { ...req, status: 'Processing' } : req
-    ));
-
-    // Simulate sending appointment notification
-    const message = `
-Dear ${appointmentRequest.residentName},
-
-Your request for ${appointmentRequest.documentType} (${appointmentRequest.requestNo}) is being processed.
-
-Please visit our barangay office for an appointment on:
-📅 Date: ${appointmentDetails.date}
-🕐 Time: ${appointmentDetails.time}
-
-📋 Required Documents to Bring:
-${appointmentDetails.requirements}
-
-${appointmentDetails.additionalNotes ? `Additional Notes:\n${appointmentDetails.additionalNotes}` : ''}
-
-We look forward to seeing you!
-
-Barangay Management
-    `.trim();
-
-    console.log('Appointment notification:', message);
-    
-    toast.success(
-      <div className="space-y-1">
-        <p className="font-semibold">Appointment scheduled!</p>
-        <p className="text-sm">Notification sent to {appointmentRequest.email} and {appointmentRequest.contactNumber}</p>
-      </div>,
-      { duration: 5000 }
+    setRequests(prev =>
+      prev.map(req => (req.id === appointmentRequest.id ? { ...req, status: 'Processing' } : req))
     );
 
+    toast.success(`Appointment scheduled! (UI only)`, { duration: 4000 });
+
     setAppointmentRequest(null);
-    setAppointmentDetails({
-      date: '',
-      time: '',
-      requirements: '',
-      additionalNotes: ''
-    });
+    setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' });
   };
 
   const getStatusColor = (status: string) => {
@@ -217,32 +317,35 @@ Barangay Management
     }
   };
 
-  // Filter requests by document type
-  const certificateRequests = requests.filter(r => 
-    ['Barangay Clearance', 'Certificate of Indigency', 'Barangay ID', 'Barangay Certificate'].includes(r.documentType)
-  );
-  const otherDocumentsRequests = requests.filter(r => 
-    !['Barangay Clearance', 'Certificate of Indigency', 'Barangay ID', 'Barangay Certificate'].includes(r.documentType)
-  );
+  const certificateDocTypes = useMemo(() => ([
+    'Barangay Clearance',
+    'Certificate of Indigency',
+    'Barangay ID',
+    'Barangay Certificate',
+    'Certificate',
+  ]), []);
+
+  const certificateRequests = requests.filter(r => certificateDocTypes.includes(r.documentType));
+  const otherDocumentsRequests = requests.filter(r => !certificateDocTypes.includes(r.documentType));
 
   const pendingRequests = requests.filter(r => r.status === 'Pending');
   const processingRequests = requests.filter(r => r.status === 'Processing');
   const readyRequests = requests.filter(r => r.status === 'Ready for Pickup');
   const completedRequests = requests.filter(r => r.status === 'Completed');
+  const deniedRequests = requests.filter(r => r.status === 'Rejected');
 
-  // Get filtered requests based on active tab and status filter
   const getCurrentTabRequests = () => {
-    const baseRequests = activeTab === 'certificates' ? certificateRequests : otherDocumentsRequests;
-    if (statusFilter === 'all') return baseRequests;
-    return baseRequests.filter(r => r.status === statusFilter);
+    const base = activeTab === 'certificates' ? certificateRequests : otherDocumentsRequests;
+    if (statusFilter === 'all') return base;
+    return base.filter(r => r.status === statusFilter);
   };
 
   const currentRequests = getCurrentTabRequests();
 
-  // Filter requests based on search term (applied to current tab)
   const filteredRequests = currentRequests.filter(req =>
     req.requestNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
     req.residentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    req.residentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
     req.documentType.toLowerCase().includes(searchTerm.toLowerCase()) ||
     req.purpose.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -252,7 +355,7 @@ Barangay Management
       <TableHeader className="bg-[#2957a1]">
         <TableRow className="hover:bg-[#2957a1]">
           <TableHead className="text-white font-bold">Request No.</TableHead>
-          <TableHead className="text-white font-bold">Resident Name</TableHead>
+          <TableHead className="text-white font-bold">Resident</TableHead>
           <TableHead className="text-white font-bold">Document Type</TableHead>
           {!isOtherDocuments && <TableHead className="text-white font-bold">Purpose</TableHead>}
           <TableHead className="text-white font-bold">Date Requested</TableHead>
@@ -264,7 +367,12 @@ Barangay Management
         {requestList.map((request) => (
           <TableRow key={request.id} className="hover:bg-gray-50">
             <TableCell className="font-medium">{request.requestNo}</TableCell>
-            <TableCell>{request.residentName}</TableCell>
+            <TableCell>
+              <div className="flex flex-col">
+                <span>{request.residentName}</span>
+                <span className="text-xs text-gray-500">{request.residentId}</span>
+              </div>
+            </TableCell>
             <TableCell>{request.documentType}</TableCell>
             {!isOtherDocuments && <TableCell>{request.purpose}</TableCell>}
             <TableCell>{new Date(request.dateRequested).toLocaleDateString()}</TableCell>
@@ -277,14 +385,16 @@ Barangay Management
               </Badge>
             </TableCell>
             <TableCell>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 text-gray-400 hover:text-gray-600">
                 <Button
-                  variant="ghost"
                   size="sm"
+                  className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors"
                   onClick={() => setViewingRequest(request)}
                 >
-                  <Eye className="w-4 h-4" />
+                  <Eye className="w-6 h-6" />
+                  <span>View Info</span>
                 </Button>
+
                 {request.status === 'Pending' && (
                   <>
                     {isOtherDocuments ? (
@@ -304,15 +414,12 @@ Barangay Management
                         Process
                       </Button>
                     )}
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => setDenyingRequest(request)}
-                    >
+                    <Button size="sm" variant="destructive" onClick={() => setDenyingRequest(request)}>
                       Deny
                     </Button>
                   </>
                 )}
+
                 {request.status === 'Processing' && (
                   <Button
                     size="sm"
@@ -322,6 +429,7 @@ Barangay Management
                     Ready
                   </Button>
                 )}
+
                 {request.status === 'Ready for Pickup' && (
                   <Button
                     size="sm"
@@ -335,10 +443,11 @@ Barangay Management
             </TableCell>
           </TableRow>
         ))}
+
         {requestList.length === 0 && (
           <TableRow>
             <TableCell colSpan={isOtherDocuments ? 6 : 7} className="text-center text-gray-500 py-8">
-              No requests found
+              {isLoading ? "Loading..." : "No requests found"}
             </TableCell>
           </TableRow>
         )}
@@ -354,26 +463,32 @@ Barangay Management
           <h1 className="text-2xl font-bold text-gray-900">Online Requests</h1>
           <p className="text-gray-600 mt-1">Manage document requests from residents</p>
         </div>
-        {/* Search Bar */}
-        <div className="flex items-center gap-2">
-          <Label className="text-sm">Search:</Label>
-          <div className="relative w-80">
-            <Input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by request no., name, doc type, purpose..."
-              className="pr-8"
-            />
-            <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={() => loadInbox(false)} disabled={isLoading}>
+            Refresh
+          </Button>
+
+          <div className="flex items-center gap-2">
+            <Label className="text-sm">Search:</Label>
+            <div className="relative w-80">
+              <Input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by request no., name, ID, doc type, purpose..."
+                className="pr-8"
+              />
+              <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card 
-          className={`border-yellow-400 cursor-pointer transition-all hover:shadow-md ${statusFilter === 'Pending' ? 'ring-2 ring-yellow-400' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'Pending' ? 'all' : 'Pending')}
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <Card
+          className={`border-yellow-400 transition-all ${statusFilter === 'Pending' ? 'ring-2 ring-yellow-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          onClick={() => statusFilter !== 'Pending' && setStatusFilter('Pending')}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -388,9 +503,9 @@ Barangay Management
           </CardContent>
         </Card>
 
-        <Card 
-          className={`border-blue-400 cursor-pointer transition-all hover:shadow-md ${statusFilter === 'Processing' ? 'ring-2 ring-blue-400' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'Processing' ? 'all' : 'Processing')}
+        <Card
+          className={`border-blue-400 transition-all ${statusFilter === 'Processing' ? 'ring-2 ring-blue-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          onClick={() => statusFilter !== 'Processing' && setStatusFilter('Processing')}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -405,9 +520,9 @@ Barangay Management
           </CardContent>
         </Card>
 
-        <Card 
-          className={`border-green-400 cursor-pointer transition-all hover:shadow-md ${statusFilter === 'Ready for Pickup' ? 'ring-2 ring-green-400' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'Ready for Pickup' ? 'all' : 'Ready for Pickup')}
+        <Card
+          className={`border-green-400 transition-all ${statusFilter === 'Ready for Pickup' ? 'ring-2 ring-green-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          onClick={() => statusFilter !== 'Ready for Pickup' && setStatusFilter('Ready for Pickup')}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -422,9 +537,9 @@ Barangay Management
           </CardContent>
         </Card>
 
-        <Card 
-          className={`border-gray-400 cursor-pointer transition-all hover:shadow-md ${statusFilter === 'Completed' ? 'ring-2 ring-gray-400' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'Completed' ? 'all' : 'Completed')}
+        <Card
+          className={`border-gray-400 transition-all ${statusFilter === 'Completed' ? 'ring-2 ring-gray-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          onClick={() => statusFilter !== 'Completed' && setStatusFilter('Completed')}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -438,14 +553,53 @@ Barangay Management
             </div>
           </CardContent>
         </Card>
+        <Card
+          className={`border-2 border-red-500 transition-all ${statusFilter === 'Rejected' ? 'border-red-500 ring-2 ring-red-500 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          onClick={() =>
+            statusFilter !== 'Rejected' && setStatusFilter('Rejected')
+          }
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Denied</p>
+                <p className="text-2xl font-semibold text-gray-900">{deniedRequests.length}</p>
+              </div>
+              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                <XCircle className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Requests Tabs by Document Type */}
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'certificates' | 'other')} className="space-y-4">
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="certificates">Certificates</TabsTrigger>
-          <TabsTrigger value="other">Other Documents</TabsTrigger>
+          <TabsTrigger value="certificates">
+            <div className="flex items-center gap-2">
+              <span>Certificates</span>
+              {certificateCount > 0 && (
+                <span className="min-w-[26px] h-6 px-2 rounded-full bg-red-600 text-white text-sm font-semibold flex items-center justify-center">
+                  {certificateCount}
+                </span>
+              )}
+            </div>
+          </TabsTrigger>
+
+          <TabsTrigger value="other">
+            <div className="flex items-center gap-2">
+              <span>Other Documents</span>
+              {otherCount > 0 && (
+                <span className="min-w-[26px] h-6 px-2 rounded-full bg-red-600 text-white text-sm font-semibold flex items-center justify-center">
+                  {otherCount}
+                </span>
+              )}
+            </div>
+          </TabsTrigger>
         </TabsList>
+
+
 
         <TabsContent value="certificates">
           <Card>
@@ -453,15 +607,11 @@ Barangay Management
               <CardTitle>
                 Certificate Requests
                 {statusFilter !== 'all' && (
-                  <span className="text-sm font-normal text-gray-500 ml-2">
-                    - Showing {statusFilter} only
-                  </span>
+                  <span className="text-sm font-normal text-gray-500 ml-2">- Showing {statusFilter} only</span>
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4">
-              {renderRequestTable(filteredRequests, false)}
-            </CardContent>
+            <CardContent className="p-4">{renderRequestTable(filteredRequests, false)}</CardContent>
           </Card>
         </TabsContent>
 
@@ -471,15 +621,11 @@ Barangay Management
               <CardTitle>
                 Other Documents (Business Permit, etc.)
                 {statusFilter !== 'all' && (
-                  <span className="text-sm font-normal text-gray-500 ml-2">
-                    - Showing {statusFilter} only
-                  </span>
+                  <span className="text-sm font-normal text-gray-500 ml-2">- Showing {statusFilter} only</span>
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4">
-              {renderRequestTable(filteredRequests, true)}
-            </CardContent>
+            <CardContent className="p-4">{renderRequestTable(filteredRequests, true)}</CardContent>
           </Card>
         </TabsContent>
       </Tabs>
@@ -499,8 +645,19 @@ Barangay Management
                   <p className="font-semibold">{viewingRequest.requestNo}</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Resident Name</Label>
+                  <Label className="text-xs text-gray-500">Resident</Label>
                   <p className="font-semibold">{viewingRequest.residentName}</p>
+                  <p className="text-xs text-gray-500">{viewingRequest.residentId}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs text-gray-500">Contact Number</Label>
+                    <p className="font-semibold">{viewingRequest.contactNumber}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Email</Label>
+                    <p className="font-semibold">{viewingRequest.email}</p>
+                  </div>
                 </div>
                 <div>
                   <Label className="text-xs text-gray-500">Document Type</Label>
@@ -511,28 +668,12 @@ Barangay Management
                   <p>{viewingRequest.purpose}</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Contact Number</Label>
-                  <p>{viewingRequest.contactNumber}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Email</Label>
-                  <p>{viewingRequest.email || 'N/A'}</p>
-                </div>
-                <div>
                   <Label className="text-xs text-gray-500">Date Requested</Label>
                   <p>{new Date(viewingRequest.dateRequested).toLocaleDateString()}</p>
                 </div>
-                {viewingRequest.dateCompleted && (
-                  <div>
-                    <Label className="text-xs text-gray-500">Date {viewingRequest.status === 'Rejected' ? 'Rejected' : 'Completed'}</Label>
-                    <p>{new Date(viewingRequest.dateCompleted).toLocaleDateString()}</p>
-                  </div>
-                )}
                 <div>
                   <Label className="text-xs text-gray-500">Status</Label>
-                  <Badge className={getStatusColor(viewingRequest.status)}>
-                    {viewingRequest.status}
-                  </Badge>
+                  <Badge className={getStatusColor(viewingRequest.status)}>{viewingRequest.status}</Badge>
                 </div>
                 {viewingRequest.rejectionReason && (
                   <div>
@@ -547,12 +688,15 @@ Barangay Management
       </Dialog>
 
       {/* Deny Request Dialog */}
-      <Dialog open={!!denyingRequest} onOpenChange={(open) => {
-        if (!open) {
-          setDenyingRequest(null);
-          setDenyReason('');
-        }
-      }}>
+      <Dialog
+        open={!!denyingRequest}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDenyingRequest(null);
+            setDenyReason('');
+          }
+        }}
+      >
         <DialogContent>
           {denyingRequest && (
             <>
@@ -562,21 +706,13 @@ Barangay Management
                   Deny Request
                 </DialogTitle>
                 <DialogDescription>
-                  Provide a reason for denying this request. The resident will be notified via Email/SMS.
+                  Provide a reason for denying this request. (UI only)
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
                   <Label className="text-xs text-gray-500">Request Number</Label>
                   <p className="font-semibold">{denyingRequest.requestNo}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Resident Name</Label>
-                  <p className="font-semibold">{denyingRequest.residentName}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Document Type</Label>
-                  <p className="font-semibold">{denyingRequest.documentType}</p>
                 </div>
                 <div>
                   <Label htmlFor="denyReason">Reason for Denial *</Label>
@@ -591,19 +727,10 @@ Barangay Management
                 </div>
               </div>
               <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setDenyingRequest(null);
-                    setDenyReason('');
-                  }}
-                >
+                <Button variant="outline" onClick={() => { setDenyingRequest(null); setDenyReason(''); }}>
                   Cancel
                 </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleDenyRequest}
-                >
+                <Button variant="destructive" onClick={handleDenyRequest}>
                   Deny Request
                 </Button>
               </DialogFooter>
@@ -612,18 +739,16 @@ Barangay Management
         </DialogContent>
       </Dialog>
 
-      {/* Appointment Dialog for Other Documents */}
-      <Dialog open={!!appointmentRequest} onOpenChange={(open) => {
-        if (!open) {
-          setAppointmentRequest(null);
-          setAppointmentDetails({
-            date: '',
-            time: '',
-            requirements: '',
-            additionalNotes: ''
-          });
-        }
-      }}>
+      {/* Appointment Dialog */}
+      <Dialog
+        open={!!appointmentRequest}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAppointmentRequest(null);
+            setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' });
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl">
           {appointmentRequest && (
             <>
@@ -633,9 +758,10 @@ Barangay Management
                   Schedule Appointment
                 </DialogTitle>
                 <DialogDescription>
-                  Set appointment details for the resident to visit the barangay. A notification will be sent via Email/SMS.
+                  Set appointment details for the resident (UI only).
                 </DialogDescription>
               </DialogHeader>
+
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
                   <div>
@@ -647,12 +773,9 @@ Barangay Management
                     <p className="font-semibold">{appointmentRequest.documentType}</p>
                   </div>
                   <div>
-                    <Label className="text-xs text-gray-500">Resident Name</Label>
+                    <Label className="text-xs text-gray-500">Resident</Label>
                     <p className="font-semibold">{appointmentRequest.residentName}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Contact</Label>
-                    <p className="text-sm">{appointmentRequest.contactNumber}</p>
+                    <p className="text-xs text-gray-500">{appointmentRequest.residentId}</p>
                   </div>
                 </div>
 
@@ -684,7 +807,7 @@ Barangay Management
                     id="requirements"
                     value={appointmentDetails.requirements}
                     onChange={(e) => setAppointmentDetails({ ...appointmentDetails, requirements: e.target.value })}
-                    placeholder="e.g., Valid ID, Proof of Residency, 2x2 ID Picture, etc."
+                    placeholder="e.g., Valid ID, Proof of Residency, etc."
                     rows={4}
                     className="resize-none"
                   />
@@ -696,37 +819,18 @@ Barangay Management
                     id="additionalNotes"
                     value={appointmentDetails.additionalNotes}
                     onChange={(e) => setAppointmentDetails({ ...appointmentDetails, additionalNotes: e.target.value })}
-                    placeholder="Any additional instructions or information for the resident..."
+                    placeholder="Any additional instructions..."
                     rows={3}
                     className="resize-none"
                   />
                 </div>
-
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-sm text-blue-800">
-                    📧 The resident will receive a notification with the appointment details via Email ({appointmentRequest.email}) and SMS ({appointmentRequest.contactNumber}).
-                  </p>
-                </div>
               </div>
+
               <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setAppointmentRequest(null);
-                    setAppointmentDetails({
-                      date: '',
-                      time: '',
-                      requirements: '',
-                      additionalNotes: ''
-                    });
-                  }}
-                >
+                <Button variant="outline" onClick={() => { setAppointmentRequest(null); setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' }); }}>
                   Cancel
                 </Button>
-                <Button
-                  className="bg-blue-600 hover:bg-blue-700"
-                  onClick={handleSendAppointment}
-                >
+                <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleSendAppointment}>
                   <Mail className="w-4 h-4 mr-2" />
                   Send Appointment
                 </Button>
@@ -738,3 +842,4 @@ Barangay Management
     </div>
   );
 }
+

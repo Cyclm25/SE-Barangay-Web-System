@@ -3,6 +3,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { toast } from 'sonner';
 import imgImage3 from "../../assets/citybg.png";
+import { api } from "../../utils/api"; // ✅ ADD THIS
 
 interface ForgotPasswordPageProps {
   onBack: () => void;
@@ -16,18 +17,15 @@ export function ForgotPasswordPage({ onBack, onOTPVerified }: ForgotPasswordPage
   const [maskedEmail, setMaskedEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Mock OTP for testing
-  const MOCK_OTP = '123456';
-
   const maskEmail = (email: string) => {
     const [localPart, domain] = email.split('@');
     if (!localPart || !domain) return email;
-    const visibleChars = Math.min(2, localPart.length);
     const masked = localPart.substring(0, 1) + '****' + localPart.substring(localPart.length - 1);
     return `${masked}@${domain}`;
   };
 
-  const handleSendOTP = () => {
+  // ✅ REPLACE YOUR handleSendOTP WITH THIS
+  const handleSendOTP = async () => {
     if (!email) {
       toast.error('Please enter your email');
       return;
@@ -40,52 +38,77 @@ export function ForgotPasswordPage({ onBack, onOTPVerified }: ForgotPasswordPage
       return;
     }
 
-    setIsLoading(true);
+    // Your DB limit requirement: email <= 40
+    if (email.trim().length > 40) {
+      toast.error("Email too long (max 40 characters)");
+      return;
+    }
 
-    // Simulate sending OTP
-    setTimeout(() => {
-      setMaskedEmail(maskEmail(email));
+    try {
+      setIsLoading(true);
+
+      // ✅ CALL BACKEND
+      await api.post("/api/otp/send", { email: email.trim() });
+
+      setMaskedEmail(maskEmail(email.trim()));
       setStep('otp');
-      toast.success(`OTP has been sent to ${maskEmail(email)}`);
-      toast.info(`For testing: OTP is ${MOCK_OTP}`);
+      toast.success(`OTP has been sent to ${maskEmail(email.trim())}`);
+    } catch (err: any) {
+      toast.error("Failed to send OTP", {
+        description: err?.response?.data?.message || err?.response?.data?.error || "Check /api/otp/send",
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
-  const handleVerifyOTP = () => {
+  // ✅ REPLACE YOUR handleVerifyOTP WITH THIS
+  const handleVerifyOTP = async () => {
     if (!otp) {
       toast.error('Please enter the OTP');
       return;
     }
+    if (otp.length !== 6) {
+      toast.error("OTP must be 6 digits");
+      return;
+    }
 
-    setIsLoading(true);
+    try {
+      setIsLoading(true);
 
-    setTimeout(() => {
-      if (otp === MOCK_OTP) {
-        toast.success('OTP verified successfully!');
-        onOTPVerified();
-      } else {
-        toast.error('Invalid OTP. Please try again.');
-      }
+      // ✅ CALL BACKEND
+      // This endpoint should verify the OTP and allow reset step (or mark verified)
+      await api.post("/api/otp/verify", {
+        email: email.trim(),
+        otp: otp.trim(),
+      });
+
+      toast.success('OTP verified successfully!');
+      onOTPVerified(); // move to your next page (reset password)
+    } catch (err: any) {
+      toast.error("Invalid OTP", {
+        description: err?.response?.data?.message || err?.response?.data?.error || "Please try again.",
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
     <div className="h-screen w-screen bg-[#2957a1] flex items-center justify-center relative overflow-hidden p-4">
       {/* Background Images */}
       <div className="absolute left-[-24px] bottom-0 w-[400px] md:w-[823px] h-[200px] md:h-[337px] opacity-80">
-        <img 
-          src={imgImage3} 
-          alt="City Background" 
-          className="w-full h-full object-cover" 
+        <img
+          src={imgImage3}
+          alt="City Background"
+          className="w-full h-full object-cover"
         />
       </div>
       <div className="absolute right-[-24px] bottom-0 w-[450px] md:w-[918px] h-[220px] md:h-[376px] opacity-80">
-        <img 
-          src={imgImage3} 
-          alt="City Background" 
-          className="w-full h-full object-cover" 
+        <img
+          src={imgImage3}
+          alt="City Background"
+          className="w-full h-full object-cover"
         />
       </div>
 
@@ -190,7 +213,8 @@ export function ForgotPasswordPage({ onBack, onOTPVerified }: ForgotPasswordPage
 
               <button
                 onClick={handleSendOTP}
-                className="w-full text-[#2957a1] text-[12px] md:text-[13px] font-medium hover:underline"
+                disabled={isLoading}
+                className="w-full text-[#2957a1] text-[12px] md:text-[13px] font-medium hover:underline disabled:opacity-60"
               >
                 Resend OTP
               </button>

@@ -9,7 +9,7 @@ import { ResidentProfile } from './ResidentProfile';
 import { TrackRequest } from './TrackRequest';
 import { toast } from 'sonner';
 
-type Page = 'home' | 'services' | 'about' | 'announcement-detail' | 'profile' | 'track-request';
+type Page = 'home' | 'services' | 'track' | 'about' | 'announcement-detail' | 'profile' | 'track-request';
 
 interface ResidentPortalProps {
   residentName: string;
@@ -21,7 +21,7 @@ export function ResidentPortal({ residentName, onLogout }: ResidentPortalProps) 
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   const [isProfileSidebarOpen, setIsProfileSidebarOpen] = useState(false);
 
-  const handleNavigate = (page: 'home' | 'services' | 'about') => {
+  const handleNavigate = (page: 'home' | 'services' | 'track' | 'about') => {
     setCurrentPage(page);
     setSelectedAnnouncement(null);
   };
@@ -44,7 +44,6 @@ export function ResidentPortal({ residentName, onLogout }: ResidentPortalProps) 
     toast.success('Document request submitted successfully!', {
       description: 'You will be notified once your request is processed.'
     });
-    // Navigate to track request page
     setCurrentPage('track-request');
   };
 
@@ -53,11 +52,11 @@ export function ResidentPortal({ residentName, onLogout }: ResidentPortalProps) 
     onLogout();
   };
 
-  const getActivePage = (): 'home' | 'services' | 'about' | null => {
+  const getActivePage = (): 'home' | 'services' | 'track' | 'about' | null => {
     if (currentPage === 'services') return 'services';
     if (currentPage === 'about') return 'about';
+    if (currentPage === 'track' || currentPage === 'track-request') return 'track';
     if (currentPage === 'home' || currentPage === 'announcement-detail') return 'home';
-    // Return null for profile and track-request pages
     return null;
   };
 
@@ -84,6 +83,9 @@ export function ResidentPortal({ residentName, onLogout }: ResidentPortalProps) 
       
       case 'profile':
         return <ResidentProfile />;
+
+      case 'track':
+        return <TrackRequest />;
       
       case 'track-request':
         return <TrackRequest />;

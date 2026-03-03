@@ -5,8 +5,8 @@ import imgProfile from "../../assets/profilepic.png";
 
 interface ResidentHeaderProps {
   residentName: string;
-  activePage: 'home' | 'services' | 'about' | null;
-  onNavigate: (page: 'home' | 'services' | 'about') => void;
+  activePage: 'home' | 'services' | 'track' | 'about' | null;
+  onNavigate: (page: 'home' | 'services' | 'track' | 'about') => void;
   onProfileClick: () => void;
 }
 
@@ -19,7 +19,7 @@ export function ResidentHeader({ residentName, activePage, onNavigate, onProfile
       <div className="bg-white fixed top-0 left-0 right-0 z-50 shadow-sm">
         <div className="max-w-[1440px] mx-auto px-4 md:px-8">
           <div className="flex items-center justify-between h-[70px] md:h-[90px]">
-            {/* Logo and Welcome - Logo is clickable */}
+            {/* Logo and Welcome */}
             <button 
               onClick={() => onNavigate('home')}
               className="flex items-center gap-2 md:gap-4 hover:opacity-80 transition-opacity"
@@ -54,6 +54,7 @@ export function ResidentHeader({ residentName, activePage, onNavigate, onProfile
                   <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#2957a1] rounded-full" />
                 )}
               </button>
+
               <button
                 onClick={() => onNavigate('services')}
                 className={`text-[16px] font-semibold transition-colors relative pb-1 ${
@@ -67,6 +68,21 @@ export function ResidentHeader({ residentName, activePage, onNavigate, onProfile
                   <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#2957a1] rounded-full" />
                 )}
               </button>
+
+              <button
+                onClick={() => onNavigate('track')}
+                className={`text-[16px] font-semibold transition-colors relative pb-1 ${
+                  activePage === 'track' 
+                    ? 'text-[#2957a1]' 
+                    : 'text-gray-600 hover:text-[#2957a1]'
+                }`}
+              >
+                Track Request
+                {activePage === 'track' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#2957a1] rounded-full" />
+                )}
+              </button>
+
               <button
                 onClick={() => onNavigate('about')}
                 className={`text-[16px] font-semibold transition-colors relative pb-1 ${
@@ -80,6 +96,7 @@ export function ResidentHeader({ residentName, activePage, onNavigate, onProfile
                   <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#2957a1] rounded-full" />
                 )}
               </button>
+
               <button 
                 onClick={onProfileClick} 
                 className="ml-4 hover:opacity-80 transition-opacity"
@@ -122,40 +139,33 @@ export function ResidentHeader({ residentName, activePage, onNavigate, onProfile
           <div className="md:hidden bg-white border-t border-gray-200 shadow-lg">
             <div className="px-4 py-3 space-y-1">
               <button
-                onClick={() => {
-                  onNavigate('home');
-                  setIsMobileMenuOpen(false);
-                }}
+                onClick={() => { onNavigate('home'); setIsMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-md text-[15px] font-semibold transition-colors ${
-                  activePage === 'home' 
-                    ? 'bg-[#2957a1] text-white' 
-                    : 'text-gray-700 hover:bg-gray-100'
+                  activePage === 'home' ? 'bg-[#2957a1] text-white' : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
                 Home
               </button>
               <button
-                onClick={() => {
-                  onNavigate('services');
-                  setIsMobileMenuOpen(false);
-                }}
+                onClick={() => { onNavigate('services'); setIsMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-md text-[15px] font-semibold transition-colors ${
-                  activePage === 'services' 
-                    ? 'bg-[#2957a1] text-white' 
-                    : 'text-gray-700 hover:bg-gray-100'
+                  activePage === 'services' ? 'bg-[#2957a1] text-white' : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
                 Services
               </button>
               <button
-                onClick={() => {
-                  onNavigate('about');
-                  setIsMobileMenuOpen(false);
-                }}
+                onClick={() => { onNavigate('track'); setIsMobileMenuOpen(false); }}
                 className={`w-full text-left px-4 py-3 rounded-md text-[15px] font-semibold transition-colors ${
-                  activePage === 'about' 
-                    ? 'bg-[#2957a1] text-white' 
-                    : 'text-gray-700 hover:bg-gray-100'
+                  activePage === 'track' ? 'bg-[#2957a1] text-white' : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Track Request
+              </button>
+              <button
+                onClick={() => { onNavigate('about'); setIsMobileMenuOpen(false); }}
+                className={`w-full text-left px-4 py-3 rounded-md text-[15px] font-semibold transition-colors ${
+                  activePage === 'about' ? 'bg-[#2957a1] text-white' : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
                 About

@@ -187,3 +187,82 @@
 html {
   font-size: var(--font-size);
 }
+
+
+/* make react-datepicker match shadcn-ish look */
+.react-datepicker {
+  font-family: inherit;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.react-datepicker__header {
+  background: white;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+
+.react-datepicker__day-name,
+.react-datepicker__day,
+.react-datepicker__time-name {
+  width: 2rem;
+  line-height: 2rem;
+  margin: 0.15rem;
+  border-radius: 0.5rem;
+}
+
+.react-datepicker__day:hover {
+  background: rgba(41, 87, 161, 0.12);
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  background: #2957a1;
+  color: white;
+}
+
+.datepicker-popper {
+  z-index: 9999; /* ensure it appears above your dialog */
+}
+
+.MuiPickersPopper-root {
+  z-index: 999999 !important;
+}
+
+/* ✅ Make MUI DatePicker input match shadcn Input */
+.shadcn-date-field .MuiOutlinedInput-root {
+  height: 40px; /* same as h-10 */
+  border-radius: var(--radius);
+  background: var(--input-background);
+}
+
+.shadcn-date-field .MuiOutlinedInput-input {
+  padding: 0 12px; /* px-3 */
+  height: 40px;
+  display: flex;
+  align-items: center;
+  font-size: var(--text-base);
+}
+
+.shadcn-date-field .MuiOutlinedInput-notchedOutline {
+  border-color: var(--border);
+}
+
+.shadcn-date-field .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* focus ring vibe */
+.shadcn-date-field .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border-width: 2px;
+  border-color: #2957a1;
+}
+
+.shadcn-date-field .MuiFormLabel-root {
+  display: none;
+}
+
+/* icon alignment like your inputs */
+.shadcn-date-field .MuiIconButton-root {
+  margin-right: 2px;
+}

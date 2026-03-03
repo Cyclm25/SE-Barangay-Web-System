@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Camera, Edit2, CreditCard } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { toast } from 'sonner';
@@ -8,30 +8,119 @@ export function ResidentProfile() {
   const [isEditing, setIsEditing] = useState(false);
   const [showBarangayID, setShowBarangayID] = useState(false);
   const [profileData, setProfileData] = useState({
-    firstName: 'Juan',
-    middleName: 'Campos',
-    lastName: 'Dela Cruz',
+    firstName: 'First Name',
+    middleName: 'Middle Name',
+    lastName: 'Last Name',
     suffix: '',
-    birthdate: '2004-10-30',
-    age: '20',
-    sex: 'Male',
+    birthdate: '1990-01-01',
+    age: '34',
+    sex: 'Sex',
     civilStatus: 'Single',
     nationality: 'Filipino',
     religion: 'Roman Catholic',
     contactNumber: '09123456789',
-    email: 'juan.delacruz@email.com',
+    email: 'example@email.com',
     houseNo: '15',
     street: 'Yuseco Street',
     barangay: 'Barangay 160',
     city: 'Manila',
     province: 'Metro Manila',
     zipCode: '1013',
-    emergencyContactName: 'Maria Dela Cruz',
+    emergencyContactName: 'Contact Name',
     emergencyContactRelation: 'Mother',
-    emergencyContactNumber: '09987654321'
+    emergencyContactNumber: '09123456789'
   });
 
+  useEffect(() => {
+    const userType = localStorage.getItem("userType");
+    const residentId = localStorage.getItem("residentId");
+
+    console.log("🧾 ResidentProfile mounted");
+    console.log("userType =", userType);
+    console.log("residentId =", residentId);
+
+    if (userType !== "resident" || !residentId) {
+      console.warn("⛔ Skipping fetch: userType not resident OR residentId missing");
+      return;
+    }
+
+    (async () => {
+      const url = `http://localhost:5001/residents/${encodeURIComponent(residentId)}`;
+      console.log("➡️ Fetching:", url);
+
+      try {
+        const res = await fetch(url, {
+          method: "GET",
+          headers: { "Accept": "application/json" },
+        });
+
+        const raw = await res.text();
+        console.log("✅ Response status:", res.status);
+        console.log("✅ Raw response:", raw);
+
+        let data: any = null;
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          // backend returned HTML or plain text
+        }
+
+        if (!res.ok) {
+          toast.error(data?.error || `Failed to load profile (HTTP ${res.status})`);
+          return;
+        }
+
+        if (!data) {
+          toast.error("Backend did not return JSON. Check your route / server.");
+          return;
+        }
+
+        setProfileData({
+          firstName: data.FirstName || '',
+          middleName: data.MiddleName || '',
+          lastName: data.LastName || '',
+          suffix: '',
+          birthdate: data.Birthday || '',
+          age: data.Age != null ? String(data.Age) : '',
+          sex: data.Gender || '',
+          civilStatus: data.CivilStatus || '',
+          nationality: 'Filipino',
+          religion: 'Roman Catholic',
+          contactNumber: data.ContactNumber || '',
+          email: data.Email || '',
+          houseNo: data.HouseNumber || '',
+          street: data.StreetAddress || '',
+          barangay: 'Barangay 160',
+          city: 'Manila',
+          province: 'Metro Manila',
+          zipCode: '',
+          emergencyContactName: data.ContactPerson || '',
+          emergencyContactRelation: '',
+          emergencyContactNumber: data.ContactPersonNo || ''
+        });
+      } catch (err) {
+        console.error("❌ Fetch failed:", err);
+        toast.error("Could not connect to server.");
+      }
+    })();
+  }, []);
+
+  // derive local contact part (10 digits) from stored profileData.contactNumber
+  useEffect(() => {
+    const num = profileData.contactNumber || '';
+    let local = '';
+    if (num.startsWith('+63')) local = num.slice(3);
+    else if (num.startsWith('63')) local = num.slice(2);
+    else if (num.startsWith('0')) local = num.slice(1);
+    else local = num;
+    // keep digits only
+    local = (local.match(/\d+/g) || []).join('').slice(0, 10);
+    setContactLocal(local);
+  }, [profileData.contactNumber]);
+
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [contactLocal, setContactLocal] = useState('');
+  const [contactError, setContactError] = useState('');
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -50,7 +139,20 @@ export function ResidentProfile() {
   };
 
   const handleSave = () => {
+    // Validate contact local part: must be 10 digits and start with '9'
+    const local = (contactLocal || '').trim();
+    if (isEditing) {
+      if (!/^9\d{9}$/.test(local)) {
+        setContactError('Enter 10 digits starting with 9');
+        toast.error('Contact number must be 10 digits and start with 9');
+        return;
+      }
+      // update stored contactNumber to include +63 prefix
+      setProfileData(prev => ({ ...prev, contactNumber: `+63${local}` }));
+    }
+
     setIsEditing(false);
+    setContactError('');
     toast.success('Profile information updated successfully!');
   };
 
@@ -77,9 +179,9 @@ export function ResidentProfile() {
                 <div className="relative group">
                   <div className="w-[120px] h-[120px] md:w-[160px] md:h-[160px] rounded-full overflow-hidden border-4 border-white shadow-lg bg-white">
                     {profileImage ? (
-                      <img 
-                        src={profileImage} 
-                        alt="Profile" 
+                      <img
+                        src={profileImage}
+                        alt="Profile"
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -112,7 +214,7 @@ export function ResidentProfile() {
                     <p><strong>Civil Status:</strong> {profileData.civilStatus}</p>
                   </div>
                   <p className="mt-2 text-[14px] opacity-80">
-                    Resident ID: RES2026-0123
+                    Resident ID: {localStorage.getItem("residentId") || "-"}
                   </p>
                 </div>
               </div>
@@ -238,13 +340,37 @@ export function ResidentProfile() {
                 Contact Information
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  label="Contact Number"
-                  type="tel"
-                  value={profileData.contactNumber}
-                  onChange={(value) => handleChange('contactNumber', value)}
-                  isEditing={isEditing}
-                />
+                <div>
+                  <label className="block text-[12px] md:text-[13px] text-gray-700 font-semibold mb-2">Contact Number</label>
+                  {isEditing ? (
+                    <div>
+                      <div className="flex items-center">
+                        <div className="flex items-center border-2 border-[#2957a1] rounded-lg overflow-hidden w-full">
+                          <span className="inline-flex items-center px-3 py-2 text-sm">+63</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={contactLocal}
+                            onChange={(e) => {
+                              const cleaned = (e.target.value || '').replace(/\D/g, '').slice(0, 10);
+                              setContactLocal(cleaned);
+                              if (/^9\d{9}$/.test(cleaned)) setContactError('');
+                            }}
+                            placeholder="9123456789"
+                            className="w-full px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      {contactError && <p className="text-sm text-red-600 mt-1">{contactError}</p>}
+                      <p className="text-xs text-gray-500 mt-1">Enter 10 digits (must start with 9). Country code <strong>+63</strong> is applied automatically.</p>
+                    </div>
+                  ) : (
+                    <div className="w-full bg-gray-50 border-2 border-gray-200 rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] text-gray-700">
+                      {profileData.contactNumber || '-'}
+                    </div>
+                  )}
+                </div>
                 <FormField
                   label="Email Address"
                   type="email"
@@ -367,7 +493,7 @@ function FormField({ label, value, onChange, isEditing, type = 'text', placehold
             onChange={(e) => onChange(e.target.value)}
             className="w-full border-2 border-[#2957a1] rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2957a1]/50 bg-white"
           >
-            <option value="">Select...</option>
+            {/* <option value="">Select...</option> */}
             {options?.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
