@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { cn } from '../ui/utils';
 import { Button } from '../ui/button';
-import { 
-  LayoutDashboard, 
-  Users, 
-  User, 
-  FileText, 
-  Megaphone, 
+import {
+  LayoutDashboard,
+  Users,
+  User,
+  FileText,
+  Megaphone,
   History,
   LogOut
 } from 'lucide-react';
@@ -36,14 +36,14 @@ const navigation = [
 
 export function Sidebar({ activeTab, onTabChange, onLogout, adminName, adminId, userRole = 'admin' }: SidebarProps) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  
+
   // Filters navigation based on the userRole string passed from App.tsx
   const filteredNavigation = navigation.filter(item => item.roles.includes(userRole));
 
   const handleLogoutClick = () => {
     setShowLogoutConfirm(true);
   };
-  
+
   return (
     <div className="w-[250px] bg-[#2957a1] text-white flex flex-col h-full">
       {/* Logo and Brand */}
@@ -94,8 +94,8 @@ export function Sidebar({ activeTab, onTabChange, onLogout, adminName, adminId, 
             <p className="text-[13px] font-semibold truncate">{adminName}</p>
             <p className="text-[11px] text-white/70 truncate">
               {/* Dynamic role label */}
-              {userRole === 'superadmin' ? 'Super Administrator' : 
-               userRole === 'admin' ? 'Barangay Secretary' : 'Barangay Official'}
+              {userRole === 'superadmin' ? 'Super Administrator' :
+                userRole === 'admin' ? 'Barangay Secretary' : 'Barangay Official'}
             </p>
           </div>
         </div>
@@ -114,9 +114,10 @@ export function Sidebar({ activeTab, onTabChange, onLogout, adminName, adminId, 
         onClose={() => setShowLogoutConfirm(false)}
         onConfirm={onLogout}
         title="Logout Confirmation"
-        message="Are you sure you want to logout?"
+        message="Are you sure you want to logout this account?"
         confirmText="Logout"
         cancelText="Cancel"
+        type="danger" 
       />
     </div>
   );

@@ -96,7 +96,7 @@ router.post("/", async (req, res) => {
     if (client) {
       try {
         await client.query("ROLLBACK");
-      } catch {}
+      } catch { }
     }
 
     return res.status(500).json({
@@ -118,23 +118,23 @@ router.patch("/:id/status", async (req, res) => {
 
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, reason } = req.body; // ✅ include reason
 
     const allowed = ["Pending", "Processing", "Ready for Pickup", "Completed", "Rejected"];
     if (!allowed.includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
     }
 
+    if (status === "Rejected" && (!reason || !String(reason).trim())) {
+      return res.status(400).json({ error: "Rejection reason is required" });
+    }
+
     await client.query("BEGIN");
 
-    // 1) Get current request (so we can detect transition)
     const current = await client.query(
-      `SELECT "RequestID", "ResidentID", "RequestType", "RequestPurpose", "RequestStatus"
-       FROM request
-       WHERE "RequestID" = $1`,
+      `SELECT "RequestStatus" FROM request WHERE "RequestID" = $1`,
       [id]
     );
-
     if (current.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(404).json({ error: "Request not found" });
@@ -142,101 +142,36 @@ router.patch("/:id/status", async (req, res) => {
 
     const prevStatus = current.rows[0].RequestStatus;
 
-    // 2) Update request with status and timestamps
     let updateQuery = `UPDATE request SET "RequestStatus" = $1`;
-    const params = [status, id];
-    
-    // Add PickupDate when status changes to "Ready for Pickup"
+    const params = [status];
+    let idx = 2;
+
+    // ✅ persist rejection reason
+    if (status === "Rejected") {
+      updateQuery += `, "RejectionReason" = $${idx}`;
+      params.push(String(reason).trim());
+      idx++;
+    }
+
     if (status === "Ready for Pickup" && prevStatus !== "Ready for Pickup") {
       updateQuery += `, "PickupDate" = NOW()`;
     }
-    
-    // Add CompletionDate when status changes to "Completed"
+
     if (status === "Completed" && prevStatus !== "Completed") {
       updateQuery += `, "CompletionDate" = NOW()`;
     }
-    
-    updateQuery += ` WHERE "RequestID" = $2
-       RETURNING "RequestID","ResidentID","RequestType","RequestPurpose","RequestStatus","RequestDate","PickupDate","CompletionDate"`;
-    
+
+    updateQuery += ` WHERE "RequestID" = $${idx}
+      RETURNING "RequestID","ResidentID","RequestType","RequestPurpose","RequestStatus","RequestDate","PickupDate","CompletionDate","RejectionReason"`;
+    params.push(id);
+
     const update = await client.query(updateQuery, params);
-
-    const requestData = update.rows[0];
-
-    // 3) Only email when moving INTO "Ready for Pickup"
-    const movedToReadyForPickup =
-      prevStatus !== "Ready for Pickup" && status === "Ready for Pickup";
-
-    let emailed = false;
-
-    if (movedToReadyForPickup) {
-      // Get resident info
-      const resident = await client.query(
-        `SELECT "FirstName", "Email"
-         FROM resident
-         WHERE "ResidentID" = $1`,
-        [requestData.ResidentID]
-      );
-
-      if (resident.rowCount > 0 && resident.rows[0].Email) {
-        const { FirstName, Email } = resident.rows[0];
-
-        // Optional: prevent duplicates using Notification table (recommended)
-        const alreadySent = await client.query(
-          `SELECT 1
-           FROM notification
-           WHERE "RequestID" = $1
-             AND "NotificationType" = 'Email'
-             AND "Message" = 'READY_FOR_PICKUP_EMAIL'
-           LIMIT 1`,
-          [id]
-        );
-
-        if (alreadySent.rowCount === 0) {
-          // Send email (still inside transaction? better after COMMIT, see below)
-          await transporter.sendMail({
-            from: process.env.SMTP_USER,
-            to: Email,
-            subject: `Your document is ready for pickup (Request #${id})`,
-            text:
-`Hello ${FirstName},
-
-Your requested document is now READY FOR PICKUP.
-
-Document: ${requestData.RequestType}
-Purpose: ${requestData.RequestPurpose}
-Request No: ${id}
-
-Please proceed to the Barangay Office to claim your document.
-
-Thank you,
-Barangay 160`,
-          });
-
-          // Log so you don't send again
-          await client.query(
-            `INSERT INTO notification
-              ("RequestID","RecipientRole","RecipientID","NotificationType","NotificationDate","Message")
-             VALUES ($1,'Resident',$2,'Email',NOW(),'READY_FOR_PICKUP_EMAIL')`,
-            [id, requestData.ResidentID]
-          );
-
-          emailed = true;
-        }
-      }
-    }
 
     await client.query("COMMIT");
 
-    return res.json({
-      message: movedToReadyForPickup
-        ? (emailed ? "Moved to Ready for Pickup and email sent" : "Moved to Ready for Pickup (email skipped)")
-        : "Status updated",
-      data: requestData,
-    });
+    return res.json({ message: "Status updated", data: update.rows[0] });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("Update Status Error:", err);
     return res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -260,6 +195,7 @@ router.get("/admin/all", async (req, res) => {
         req."RequestStatus",
         req."RequestPurpose",
         req."ResidentID",
+        req."RejectionReason",
         r."FirstName",
         r."MiddleName",
         r."LastName",

@@ -17,7 +17,7 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
 
-    /* Linting (Kept relaxed for your development) */
+    /* Linting (Kept relaxed for development) */
     "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,

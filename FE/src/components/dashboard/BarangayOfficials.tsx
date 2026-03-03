@@ -242,11 +242,11 @@ export function BarangayOfficials() {
       console.log("Sending payload:", payload);
       const res = await api.post("/api/officials", payload);
       console.log("API response:", res.data);
-      
+
       // Backend returns { official: {...}, residentaccount: {...} }
       const created = (res.data?.official || res.data) as Official;
       console.log("Created official:", created);
-      
+
       if (!created || !created.barangayadminid) {
         throw new Error("Invalid response from server");
       }
@@ -260,17 +260,19 @@ export function BarangayOfficials() {
       resetForm();
 
       toast.success("Barangay official successfully added!", {
-        description: `${created.adminname} has been registered as ${created.position ?? "Official"}.`,
+        description: `${created.adminname} has been registered as ${created.position ?? "Official"
+          }.`,
       });
     } catch (err: any) {
       console.error("Error adding official:", err);
-      console.error('Error response data:', err?.response?.data);
-      console.error('Error status:', err?.response?.status);
-      const errorMessage = err?.response?.data?.message || 
-                          err?.response?.data?.error || 
-                          err?.message || 
-                          'Unknown error';
-      console.error('Final error message:', errorMessage);
+      console.error("Error response data:", err?.response?.data);
+      console.error("Error status:", err?.response?.status);
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Unknown error";
+      console.error("Final error message:", errorMessage);
       toast.error("Failed to add official", {
         description: errorMessage,
       });
@@ -283,16 +285,22 @@ export function BarangayOfficials() {
     try {
       setLoading(true);
 
-      const res = await api.patch(`/api/officials/${id}/status`, { status: nextStatus });
+      const res = await api.patch(`/api/officials/${id}/status`, {
+        status: nextStatus,
+      });
       const updated = res.data as Official;
 
-      setOfficials((prev) => prev.map((o) => (o.barangayadminid === id ? updated : o)));
+      setOfficials((prev) =>
+        prev.map((o) => (o.barangayadminid === id ? updated : o))
+      );
 
-      toast.success(nextStatus ? "Official record reactivated" : "Official record inactivated", {
-        description: `${updated.adminname}'s record has been marked as ${
-          nextStatus ? "active" : "inactive"
-        }.`,
-      });
+      toast.success(
+        nextStatus ? "Official record reactivated" : "Official record inactivated",
+        {
+          description: `${updated.adminname}'s record has been marked as ${nextStatus ? "active" : "inactive"
+            }.`,
+        }
+      );
     } catch (err) {
       console.error(err);
       toast.error("Failed to update status", {
@@ -311,7 +319,9 @@ export function BarangayOfficials() {
           <h1 className="text-2xl font-bold text-gray-900">
             Barangay Officials ({officials.length})
           </h1>
-          <p className="text-gray-600 mt-1">Manage barangay officials and positions</p>
+          <p className="text-gray-600 mt-1">
+            Manage barangay officials and positions
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -330,7 +340,10 @@ export function BarangayOfficials() {
             }}
           >
             <DialogTrigger asChild>
-              <Button className="bg-[#2957a1] hover:bg-[#1e3f7a] text-white" disabled={loading}>
+              <Button
+                className="bg-[#2957a1] hover:bg-[#1e3f7a] text-white"
+                disabled={loading}
+              >
                 ADD NEW OFFICIAL
               </Button>
             </DialogTrigger>
@@ -339,7 +352,9 @@ export function BarangayOfficials() {
               <DialogHeader>
                 <DialogTitle>Add New Official</DialogTitle>
               </DialogHeader>
-              <DialogDescription>Add a new barangay official to the system.</DialogDescription>
+              <DialogDescription>
+                Add a new barangay official to the system.
+              </DialogDescription>
 
               <div className="space-y-4 py-4">
                 {/* Profile Image Upload */}
@@ -379,7 +394,9 @@ export function BarangayOfficials() {
                     <Input
                       id="name"
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
                       placeholder="Enter full name"
                     />
                   </div>
@@ -388,13 +405,17 @@ export function BarangayOfficials() {
                     <Label htmlFor="position">Position *</Label>
                     <Select
                       value={formData.position}
-                      onValueChange={(value) => setFormData({ ...formData, position: value })}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, position: value })
+                      }
                     >
                       <SelectTrigger id="position">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Barangay Captain">Barangay Captain</SelectItem>
+                        <SelectItem value="Barangay Captain">
+                          Barangay Captain
+                        </SelectItem>
                         <SelectItem value="Kagawad">Kagawad</SelectItem>
                         <SelectItem value="SK Chairman">SK Chairman</SelectItem>
                         <SelectItem value="Secretary">Secretary</SelectItem>
@@ -411,7 +432,9 @@ export function BarangayOfficials() {
                       id="email"
                       type="email"
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
                       placeholder="email@example.com"
                     />
                   </div>
@@ -422,7 +445,10 @@ export function BarangayOfficials() {
                       id="contactNumber"
                       value={formData.contactNumber}
                       onChange={(e) =>
-                        setFormData({ ...formData, contactNumber: e.target.value })
+                        setFormData({
+                          ...formData,
+                          contactNumber: e.target.value,
+                        })
                       }
                       placeholder="09XX XXX XXXX"
                     />
@@ -436,7 +462,9 @@ export function BarangayOfficials() {
                       id="termStart"
                       type="date"
                       value={formData.termStart}
-                      onChange={(e) => setFormData({ ...formData, termStart: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, termStart: e.target.value })
+                      }
                     />
                   </div>
 
@@ -446,7 +474,9 @@ export function BarangayOfficials() {
                       id="termEnd"
                       type="date"
                       value={formData.termEnd}
-                      onChange={(e) => setFormData({ ...formData, termEnd: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, termEnd: e.target.value })
+                      }
                     />
                   </div>
 
@@ -455,7 +485,10 @@ export function BarangayOfficials() {
                     <Select
                       value={formData.status}
                       onValueChange={(value) =>
-                        setFormData({ ...formData, status: value as StatusText })
+                        setFormData({
+                          ...formData,
+                          status: value as StatusText,
+                        })
                       }
                     >
                       <SelectTrigger id="status">
@@ -471,7 +504,11 @@ export function BarangayOfficials() {
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={loading}>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDialogOpen(false)}
+                  disabled={loading}
+                >
                   Cancel
                 </Button>
                 <Button
@@ -488,19 +525,30 @@ export function BarangayOfficials() {
       </div>
 
       {/* STEP 2: DATA PRIVACY DIALOG */}
-      <AlertDialog open={showDataPrivacyDialog} onOpenChange={setShowDataPrivacyDialog}>
+      <AlertDialog
+        open={showDataPrivacyDialog}
+        onOpenChange={setShowDataPrivacyDialog}
+      >
         <AlertDialogContent className="max-w-[400px]">
           <AlertDialogHeader>
             <AlertDialogTitle>Data Privacy Agreement</AlertDialogTitle>
             <AlertDialogDescription>
-              Do you agree to process this barangay official’s information for management and record-keeping purposes?
+              Do you agree to process this barangay official’s information for
+              management and record-keeping purposes?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancelDataPrivacy} disabled={loading}>
+            <AlertDialogCancel
+              onClick={handleCancelDataPrivacy}
+              disabled={loading}
+            >
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmPrivacy} className="bg-[#2957a1]" disabled={loading}>
+            <AlertDialogAction
+              onClick={handleConfirmPrivacy}
+              className="bg-[#2957a1]"
+              disabled={loading}
+            >
               Agree and Continue
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -520,13 +568,16 @@ export function BarangayOfficials() {
               </DialogTitle>
             </div>
             <DialogDescription className="text-xs text-gray-500">
-              Create and confirm the password for this barangay official’s account.
+              Create and confirm the password for this barangay official’s
+              account.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label className="text-sm font-bold text-gray-700">Initial Password *</Label>
+              <Label className="text-sm font-bold text-gray-700">
+                Initial Password *
+              </Label>
               <div className="relative">
                 <Input
                   type={showPassword ? "text" : "password"}
@@ -547,19 +598,24 @@ export function BarangayOfficials() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-bold text-gray-700">Confirm Password *</Label>
+              <Label className="text-sm font-bold text-gray-700">
+                Confirm Password *
+              </Label>
               <Input
                 type={showPassword ? "text" : "password"}
                 maxLength={50}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-type password"
-                className={`h-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1] ${
-                  confirmPassword && password !== confirmPassword ? "border-red-500 ring-red-500" : ""
-                }`}
+                className={`h-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1] ${confirmPassword && password !== confirmPassword
+                    ? "border-red-500 ring-red-500"
+                    : ""
+                  }`}
               />
               {confirmPassword && password !== confirmPassword && (
-                <p className="text-[10px] text-red-500 mt-1">Passwords do not match</p>
+                <p className="text-[10px] text-red-500 mt-1">
+                  Passwords do not match
+                </p>
               )}
             </div>
           </div>
@@ -587,10 +643,12 @@ export function BarangayOfficials() {
         </DialogContent>
       </Dialog>
 
-      {/* Officials Grid (FIXED: ACTUALLY RENDERS ITEMS) */}
+      {/* Officials Grid */}
       {loading ? (
         <Card>
-          <CardContent className="p-12 text-center text-gray-600">Loading officials…</CardContent>
+          <CardContent className="p-12 text-center text-gray-600">
+            Loading officials…
+          </CardContent>
         </Card>
       ) : filteredOfficials.length === 0 ? (
         <Card>
@@ -605,7 +663,10 @@ export function BarangayOfficials() {
             const statusText = toStatusText(official.status);
 
             return (
-              <Card key={official.barangayadminid} className="hover:shadow-lg transition-shadow bg-white">
+              <Card
+                key={official.barangayadminid}
+                className="hover:shadow-lg transition-shadow bg-white"
+              >
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="w-16 h-16 bg-[#2957a1] rounded-full flex items-center justify-center overflow-hidden">
@@ -622,21 +683,32 @@ export function BarangayOfficials() {
                               className="h-8 px-3 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                               disabled={loading}
                             >
-                              Inactivate
+                              Deactivate
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Inactivate Official?</AlertDialogTitle>
+                              <AlertDialogTitle>
+                                Deactivate the account of this Barangay Official?
+                              </AlertDialogTitle>
                               <AlertDialogDescription>
-                                Are you sure you want to inactivate {official.adminname}'s record?
-                                This will mark the official as inactive but the data will be preserved.
+                                Are you sure you want to inactivate{" "}
+                                {official.adminname}'s record? This will mark the
+                                official as inactive, but the data will be
+                                preserved.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+                              <AlertDialogCancel disabled={loading}>
+                                Cancel
+                              </AlertDialogCancel>
                               <AlertDialogAction
-                                onClick={() => void setOfficialStatus(official.barangayadminid, false)}
+                                onClick={() =>
+                                  void setOfficialStatus(
+                                    official.barangayadminid,
+                                    false
+                                  )
+                                }
                                 className="bg-orange-600 hover:bg-orange-700"
                                 disabled={loading}
                               >
@@ -646,25 +718,64 @@ export function BarangayOfficials() {
                           </AlertDialogContent>
                         </AlertDialog>
                       ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => void setOfficialStatus(official.barangayadminid, true)}
-                          className="h-8 px-3 text-green-600 hover:text-green-700 hover:bg-green-50"
-                          disabled={loading}
-                        >
-                          Reactivate
-                        </Button>
+                        // ✅ ADDED CONFIRMATION FOR REACTIVATE
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-3 text-green-600 hover:text-green-700 hover:bg-green-50"
+                              disabled={loading}
+                            >
+                              Reactivate
+                            </Button>
+                          </AlertDialogTrigger>
+
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Reactivate the account of this Barangay Official?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to reactivate{" "}
+                                {official.adminname}'s record? This will restore
+                                the official’s active status.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+
+                            <AlertDialogFooter>
+                              <AlertDialogCancel disabled={loading}>
+                                Cancel
+                              </AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() =>
+                                  void setOfficialStatus(
+                                    official.barangayadminid,
+                                    true
+                                  )
+                                }
+                                className="bg-green-600 hover:bg-green-700"
+                                disabled={loading}
+                              >
+                                Reactivate
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       )}
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <h3 className="font-bold text-lg text-gray-900">{official.adminname}</h3>
+                    <h3 className="font-bold text-lg text-gray-900">
+                      {official.adminname}
+                    </h3>
                     <p className="text-sm font-semibold text-[#2957a1]">
                       {official.position ?? "—"}
                     </p>
-                    <p className="text-xs text-gray-500">{official.barangayadminid}</p>
+                    <p className="text-xs text-gray-500">
+                      {official.barangayadminid}
+                    </p>
 
                     <div className="pt-2 space-y-1">
                       {official.email ? (
@@ -674,11 +785,10 @@ export function BarangayOfficials() {
 
                     <div className="pt-2">
                       <span
-                        className={`inline-block px-2 py-1 text-xs rounded-full ${
-                          statusText === "Active"
+                        className={`inline-block px-2 py-1 text-xs rounded-full ${statusText === "Active"
                             ? "bg-green-100 text-green-700"
                             : "bg-gray-100 text-gray-700"
-                        }`}
+                          }`}
                       >
                         {statusText}
                       </span>

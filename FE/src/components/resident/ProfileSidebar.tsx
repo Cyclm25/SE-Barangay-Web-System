@@ -110,7 +110,7 @@ export function ProfileSidebar({
             </div>
           </button>
 
-          <button
+          {/* <button
             onClick={() => {
               onNavigate('track-request');
               onClose();
@@ -126,7 +126,7 @@ export function ProfileSidebar({
               <span className="font-semibold block">Track My Requests</span>
               <span className="text-[12px] text-gray-500">Monitor document status</span>
             </div>
-          </button>
+          </button> */}
         </div>
 
         <div className="p-6 border-t border-gray-200 bg-gray-50">

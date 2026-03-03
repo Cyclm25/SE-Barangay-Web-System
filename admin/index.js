@@ -20,7 +20,7 @@ const { archiveExpiredAnnouncements } = require("./utils/archiveExpiredAnnouncem
     if (pubResult.published > 0) {
       console.log(`[AUTO] Published ${pubResult.published} scheduled announcement(s) on startup`);
     }
-    
+
     console.log("[AUTO] Running initial expired announcements check...");
     const archResult = await archiveExpiredAnnouncements();
     if (archResult.archived > 0) {
@@ -73,7 +73,7 @@ app.use(express.urlencoded({ extended: true }));
 ================================ */
 const dashboardRoutes = require("./routes/dashboard");
 
-  // Frontend is calling /api/dashboard/stats
+// Frontend is calling /api/dashboard/stats
 app.use("/api/dashboard", dashboardRoutes);
 
 console.log("Loading route '/api/officials' from:", require.resolve("./routes/officials"));
@@ -92,6 +92,33 @@ try {
 app.use("/residents", require("./routes/residents"));
 app.use("/requests", require("./routes/requests"));
 app.use("/api/otp", require("./routes/otp"));
+
+// TRANSACTION ROUTES
+app.use("/api/transactions", require("./routes/transactions"));
+console.log("Loading route '/api/transactions' from:", require.resolve("./routes/transactions"));
+
+// STATS ROUTES
+const statsRoutes = require("./routes/stats");
+app.use("/api/stats", statsRoutes);
+
+// STATS: Resident types (inline to avoid routing/file-path issues)
+app.get("/api/stats/resident-types", async (req, res) => {
+  try {
+    const q = `
+      SELECT "ResidentType" AS type, COUNT(*)::int AS count
+      FROM resident
+      WHERE "ResidentType" IS NOT NULL AND TRIM("ResidentType") <> ''
+      GROUP BY "ResidentType"
+      ORDER BY count DESC;
+    `;
+    const r = await pool.query(q);
+    return res.json({ data: r.rows });
+  } catch (err) {
+    console.error("resident-types stats error:", err);
+    return res.status(500).json({ error: "Failed to fetch resident type stats" });
+  }
+});
+
 
 /* ================================
    HEALTH CHECK ROUTES
@@ -127,6 +154,8 @@ app.get("/_dbinfo", async (req, res) => {
   }
 });
 
+
+
 /* ================================
    START SERVER
 ================================ */
@@ -136,6 +165,3 @@ app.listen(PORT, () => {
   console.log(`Server started on http://localhost:${PORT}`);
 });
 
-// TRANSACTION ROUTES
-app.use("/api/transactions", require("./routes/transactions"));
-console.log("Loading route '/api/transactions' from:", require.resolve("./routes/transactions"));

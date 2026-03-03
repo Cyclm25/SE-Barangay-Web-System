@@ -1240,14 +1240,15 @@ export function ResidentRecords() {
                     </TableCell>
 
                     <TableCell className="py-3">
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-5">
+
                         <Button
-                          variant="ghost"
                           size="sm"
-                          className="h-7 w-7 p-0"
+                          className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors"
                           onClick={() => setViewingResident(resident)}
                         >
-                          <Eye className="w-3.5 h-3.5 text-blue-600" />
+                          <Eye className="w-6 h-6" />
+                          <span>View Info</span>
                         </Button>
 
                         {resident.status === "Active" ? (
@@ -1263,11 +1264,14 @@ export function ResidentRecords() {
                             <AlertDialogContent>
                               <AlertDialogHeader>
                                 <AlertDialogTitle>
-                                  Deactivate Account?
+                                  Deactivate this account?
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Mark {resident.firstName} {resident.lastName}{" "}
-                                  as inactive?
+                                  Are you certain you want to deactivate the account of{" "}
+                                  <span className="font-semibold">
+                                    {resident.firstName} {resident.lastName}
+                                  </span>
+                                  ? This will set the account to inactive.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
@@ -1284,13 +1288,41 @@ export function ResidentRecords() {
                             </AlertDialogContent>
                           </AlertDialog>
                         ) : (
-                          <Button
-                            size="sm"
-                            onClick={() => handleReactivate(resident.residentNo)}
-                            className="bg-green-500 hover:bg-green-600 text-white text-[10px] h-7 px-2"
-                          >
-                            REACTIVATE
-                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                className="bg-green-500 hover:bg-green-600 text-white text-[10px] h-7 px-2"
+                              >
+                                REACTIVATE
+                              </Button>
+                            </AlertDialogTrigger>
+
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Reactivate Account?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you certain you want to activate the account of{" "}
+                                  <span className="font-semibold">
+                                    {resident.firstName} {resident.lastName}
+                                  </span>
+                                  ? This will set the account to active.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleReactivate(resident.residentNo)}
+                                  className="bg-green-600"
+                                >
+                                  Reactivate
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         )}
                       </div>
                     </TableCell>
@@ -1413,62 +1445,203 @@ export function ResidentRecords() {
         </Dialog>
 
         {/* VIEW RESIDENT DETAILS */}
+        {/* VIEW RESIDENT DETAILS */}
         <Dialog
           open={!!viewingResident}
           onOpenChange={(open) => {
             if (!open) setViewingResident(null);
           }}
         >
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Resident Details</DialogTitle>
-            </DialogHeader>
+          <DialogContent
+            className="
+      w-[96vw] sm:w-[92vw] md:w-[86vw] lg:w-[78vw]
+      max-w-5xl
+      max-h-[90vh] overflow-y-auto
+      p-0
+    "
+          >
+            {/* Sticky header */}
+            <div className="sticky top-0 z-10 bg-white border-b">
+              <DialogHeader className="px-4 sm:px-6 py-4">
+                <DialogTitle className="text-lg font-semibold">Resident Details</DialogTitle>
+              </DialogHeader>
+            </div>
 
             {viewingResident && (
-              <div className="space-y-4">
-                <div className="flex gap-4">
-                  {viewingResident.profileImage && (
-                    <img
-                      src={viewingResident.profileImage}
-                      alt="Profile"
-                      className="w-32 h-32 rounded-full object-cover"
-                    />
-                  )}
-                  <div className="flex-1 space-y-2">
-                    <p>
-                      <strong>Name:</strong> {viewingResident.firstName}{" "}
-                      {viewingResident.middleName} {viewingResident.lastName}
+              <div className="p-4 sm:p-6 space-y-6">
+                {/* Top Profile Section */}
+                <div className="flex flex-col md:flex-row gap-6">
+                  {/* Avatar */}
+                  <div className="flex items-center justify-center md:justify-start md:w-44">
+                    {viewingResident.profileImage ? (
+                      <img
+                        src={viewingResident.profileImage}
+                        alt="Profile"
+                        className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover border"
+                      />
+                    ) : (
+                      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border flex items-center justify-center bg-gray-50 text-gray-500 text-sm">
+                        No Photo
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Header Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xl font-semibold text-gray-900 break-words">
+                      {viewingResident.firstName}{" "}
+                      {viewingResident.middleName ? viewingResident.middleName + " " : ""}
+                      {viewingResident.lastName}
                     </p>
-                    <p>
-                      <strong>Resident No:</strong>{" "}
-                      {formatId(viewingResident.residentNo)}
-                    </p>
-                    <p>
-                      <strong>Age:</strong> {viewingResident.age}
-                    </p>
-                    <p>
-                      <strong>Gender:</strong> {viewingResident.gender}
-                    </p>
-                    <p>
-                      <strong>Contact:</strong> {viewingResident.contactNumber}
-                    </p>
-                    <p>
-                      <strong>Email:</strong> {viewingResident.email}
-                    </p>
-                    <p>
-                      <strong>Address:</strong> {viewingResident.houseNo}{" "}
-                      {viewingResident.streetAddress} {viewingResident.city}
-                    </p>
+
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                        Resident No: {formatId(viewingResident.residentNo)}
+                      </span>
+
+                      {viewingResident.residentType ? (
+                        <span className="text-xs px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-100">
+                          Type: {viewingResident.residentType}
+                        </span>
+                      ) : null}
+
+                      {typeof viewingResident.voterStatus !== "undefined" ? (
+                        <span className="text-xs px-2 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-100">
+                          Voter: {viewingResident.voterStatus ? "Registered" : "Not Registered"}
+                        </span>
+                      ) : null}
+
+                      {viewingResident.status ? (
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full border ${String(viewingResident.status).toLowerCase() === "active"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                              : "bg-red-50 text-red-700 border-red-100"
+                            }`}
+                        >
+                          {viewingResident.status}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {/* Quick Info Cards */}
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 rounded-lg border bg-white">
+                        <p className="text-[11px] text-gray-500">Gender</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {viewingResident.gender || "—"}
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-lg border bg-white">
+                        <p className="text-[11px] text-gray-500">Age</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {typeof viewingResident.age !== "undefined" ? viewingResident.age : "—"}
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-lg border bg-white">
+                        <p className="text-[11px] text-gray-500">Birthday</p>
+                        <p className="text-sm font-medium text-gray-900 break-words">
+                          {viewingResident.birthday || "—"}
+                        </p>
+                      </div>
+
+                      {/* ✅ Missing field #1 */}
+                      <div className="p-3 rounded-lg border bg-white">
+                        <p className="text-[11px] text-gray-500">Civil Status</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {viewingResident.civilStatus || "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Details Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Family Information */}
+                  <div className="rounded-lg border bg-white">
+                    <div className="px-4 py-3 border-b">
+                      <p className="text-sm font-semibold text-gray-900">Family Information</p>
+                      <p className="text-xs text-gray-500">Parents and spouse details</p>
+                    </div>
+
+                    <div className="p-4 space-y-3">
+                      {/* ✅ Missing field #2 */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
+                        <p className="text-sm text-gray-600">Father</p>
+                        <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
+                          {viewingResident.fatherName || "—"}
+                        </p>
+                      </div>
+
+                      {/* ✅ Missing field #3 */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
+                        <p className="text-sm text-gray-600">Mother</p>
+                        <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
+                          {viewingResident.motherName || "—"}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
+                        <p className="text-sm text-gray-600">Spouse</p>
+                        <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
+                          {viewingResident.spouseName || "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact & Address */}
+                  <div className="rounded-lg border bg-white">
+                    <div className="px-4 py-3 border-b">
+                      <p className="text-sm font-semibold text-gray-900">Contact & Address</p>
+                      <p className="text-xs text-gray-500">How to reach this resident</p>
+                    </div>
+
+                    <div className="p-4 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
+                        <p className="text-sm text-gray-600">Contact No.</p>
+                        <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
+                          {viewingResident.contactNumber || "—"}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
+                        <p className="text-sm text-gray-600">Email</p>
+                        <p className="text-sm font-medium text-gray-900 sm:text-right break-all">
+                          {viewingResident.email || "—"}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
+                        <p className="text-sm text-gray-600">Address</p>
+                        <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
+                          {`${viewingResident.houseNo || ""} ${viewingResident.streetAddress || ""} ${viewingResident.city || ""}`.trim() ||
+                            "—"}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
+                        <p className="text-sm text-gray-600">Barangay Card No.</p>
+                        <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
+                          {viewingResident.barangayCard || "—"}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setViewingResident(null)}>
-                Close
-              </Button>
-            </DialogFooter>
+            {/* Sticky footer */}
+            <div className="sticky bottom-0 bg-white border-t px-4 sm:px-6 py-4">
+              <DialogFooter className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setViewingResident(null)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       </div>

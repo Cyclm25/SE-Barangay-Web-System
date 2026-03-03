@@ -42,6 +42,7 @@ interface InboxRow {
   LastName: string;
   ContactNumber?: string;
   Email?: string;
+  RejectionReason?: string;
 }
 
 export function OnlineRequests() {
@@ -58,6 +59,7 @@ export function OnlineRequests() {
   const [viewingRequest, setViewingRequest] = useState<Request | null>(null);
   const [denyingRequest, setDenyingRequest] = useState<Request | null>(null);
   const [denyReason, setDenyReason] = useState('');
+  const [viewingDenialReason, setViewingDenialReason] = useState<string | null>(null);
   const [appointmentRequest, setAppointmentRequest] = useState<Request | null>(null);
   const [appointmentDetails, setAppointmentDetails] = useState({
     date: '',
@@ -103,24 +105,18 @@ export function OnlineRequests() {
       status: normalizeStatus(row.RequestStatus),
       contactNumber: row.ContactNumber || 'N/A',
       email: row.Email || 'N/A',
+      rejectionReason: (row as any).RejectionReason || (row as any).rejectionReason || undefined,
     };
   };
 
-/**
- * ✅ loadInbox(silent?)
- * - silent=false: shows toast errors
- * - silent=true: used by polling (prevents toast spam)
- */
-const loadInbox = async (silent: boolean = false) => {
-  const raw = localStorage.getItem("app_user");
-  const user = raw ? JSON.parse(raw) : null;
-  const loggedInId = user?.superAdminId || user?.barangayAdminId || user?.residentId;
-  if (!loggedInId) {
-    if (!silent) toast.error("No logged in ID found. Please login again.");
-  setIsLoading(false);
-  return;
-}
+  /**
+   * ✅ loadInbox(silent?)
+   * - silent=false: shows toast errors
+   * - silent=true: used by polling (prevents toast spam)
+   */
+  const loadInbox = async (silent: boolean = false) => {
     setIsLoading(true);
+
     try {
       const res = await fetch(`${API_BASE}/requests/admin/all`);
       const data = await res.json();
@@ -133,33 +129,33 @@ const loadInbox = async (silent: boolean = false) => {
         return;
       }
 
-      //  COUNT HERE (data exists here)
+      // COUNT HERE (Pending only)
       const certificates = (data as any[]).filter(
         (r) =>
           r.RequestStatus === "Pending" &&
-          (
-            r.RequestType === "Barangay Clearance" ||
+          (r.RequestType === "Barangay Clearance" ||
             r.RequestType === "Certificate of Indigency" ||
-            r.RequestType === "Barangay ID"
-          )
+            r.RequestType === "Barangay ID")
       ).length;
 
-      const certificateTypes = ['Barangay Clearance', 'Certificate of Indigency', 'Barangay ID', 'Barangay Certificate', 'Certificate'];
+      const certificateTypes = [
+        "Barangay Clearance",
+        "Certificate of Indigency",
+        "Barangay ID",
+        "Barangay Certificate",
+        "Certificate",
+      ];
+
       const others = (data as any[]).filter(
-        (r) =>
-          r.RequestStatus === "Pending" &&
-          !certificateTypes.includes(r.RequestType)
+        (r) => r.RequestStatus === "Pending" && !certificateTypes.includes(r.RequestType)
       ).length;
 
       setCertificateCount(certificates);
       setOtherCount(others);
 
-
-
       const mapped = (data as InboxRow[]).map(toUIRequest);
       setRequests(mapped);
-
-    } catch {
+    } catch (e) {
       if (!silent) toast.error("Could not connect to backend.");
       setRequests([]);
       setCertificateCount(0);
@@ -183,9 +179,9 @@ const loadInbox = async (silent: boolean = false) => {
   // Update counts whenever requests or statusFilter change
   useEffect(() => {
     const certificateTypes = ['Barangay Clearance', 'Certificate of Indigency', 'Barangay ID', 'Barangay Certificate', 'Certificate'];
-    
+
     const filterStatus = statusFilter === 'all' ? undefined : statusFilter;
-    
+
     const newCertificateCount = requests.filter(
       (r) =>
         (filterStatus ? r.status === filterStatus : true) &&
@@ -334,6 +330,9 @@ const loadInbox = async (silent: boolean = false) => {
   const completedRequests = requests.filter(r => r.status === 'Completed');
   const deniedRequests = requests.filter(r => r.status === 'Rejected');
 
+  // show the first available denial reason on the Denied card (if any)
+  const firstDenialReason = deniedRequests.find(r => r.rejectionReason)?.rejectionReason || '';
+
   const getCurrentTabRequests = () => {
     const base = activeTab === 'certificates' ? certificateRequests : otherDocumentsRequests;
     if (statusFilter === 'all') return base;
@@ -386,14 +385,27 @@ const loadInbox = async (silent: boolean = false) => {
             </TableCell>
             <TableCell>
               <div className="flex items-center gap-2 text-gray-400 hover:text-gray-600">
-                <Button
-                  size="sm"
-                  className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors"
-                  onClick={() => setViewingRequest(request)}
-                >
-                  <Eye className="w-6 h-6" />
-                  <span>View Info</span>
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors"
+                    onClick={() => setViewingRequest(request)}
+                  >
+                    <Eye className="w-6 h-6" />
+                    <span>View Info</span>
+                  </Button>
+
+                  {request.status === 'Rejected' && (
+                    <Button
+                      size="sm"
+                      className="flex items-center gap-2 bg-white text-red-600 border border-red-200 hover:bg-red-50"
+                      onClick={() => setViewingDenialReason(request.rejectionReason ?? 'No reason provided')}
+                    >
+                      <XCircle className="w-4 h-4" />
+                      <span>View Reason</span>
+                    </Button>
+                  )}
+                </div>
 
                 {request.status === 'Pending' && (
                   <>
@@ -706,7 +718,7 @@ const loadInbox = async (silent: boolean = false) => {
                   Deny Request
                 </DialogTitle>
                 <DialogDescription>
-                  Provide a reason for denying this request. (UI only)
+                  Provide a reason for denying this request (max of 60 characters).
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -714,16 +726,29 @@ const loadInbox = async (silent: boolean = false) => {
                   <Label className="text-xs text-gray-500">Request Number</Label>
                   <p className="font-semibold">{denyingRequest.requestNo}</p>
                 </div>
-                <div>
+                <div className="space-y-2 w-full">
                   <Label htmlFor="denyReason">Reason for Denial *</Label>
-                  <Textarea
-                    id="denyReason"
-                    value={denyReason}
-                    onChange={(e) => setDenyReason(e.target.value)}
-                    placeholder="Enter the reason for denying this request..."
-                    rows={4}
-                    className="resize-none"
-                  />
+
+                  <div className="w-full">
+                    <Textarea
+                      id="denyReason"
+                      value={denyReason}
+                      onChange={(e) => setDenyReason(e.target.value)}
+                      placeholder="Enter the reason for denying this request..."
+                      rows={4}
+                      maxLength={30}
+                      className="w-full max-w-full resize-none overflow-hidden break-all whitespace-pre-wrap"
+                    />
+                  </div>
+
+                  <div className="flex justify-end">
+                    <span
+                      className={`text-xs ${denyReason.length >= 60 ? "text-red-600" : "text-gray-500"
+                        }`}
+                    >
+                      {denyReason.length}/30 characters
+                    </span>
+                  </div>
                 </div>
               </div>
               <DialogFooter>
@@ -837,6 +862,31 @@ const loadInbox = async (silent: boolean = false) => {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* View Denial Reason Dialog */}
+      <Dialog
+        open={!!viewingDenialReason}
+        onOpenChange={(open) => !open && setViewingDenialReason(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-red-600" />
+              Denial Reason
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+              <p className="text-gray-700 whitespace-pre-wrap">{viewingDenialReason}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewingDenialReason(null)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
