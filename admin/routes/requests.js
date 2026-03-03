@@ -142,14 +142,24 @@ router.patch("/:id/status", async (req, res) => {
 
     const prevStatus = current.rows[0].RequestStatus;
 
-    // 2) Update request
-    const update = await client.query(
-      `UPDATE request
-       SET "RequestStatus" = $1
-       WHERE "RequestID" = $2
-       RETURNING "RequestID","ResidentID","RequestType","RequestPurpose","RequestStatus"`,
-      [status, id]
-    );
+    // 2) Update request with status and timestamps
+    let updateQuery = `UPDATE request SET "RequestStatus" = $1`;
+    const params = [status, id];
+    
+    // Add PickupDate when status changes to "Ready for Pickup"
+    if (status === "Ready for Pickup" && prevStatus !== "Ready for Pickup") {
+      updateQuery += `, "PickupDate" = NOW()`;
+    }
+    
+    // Add CompletionDate when status changes to "Completed"
+    if (status === "Completed" && prevStatus !== "Completed") {
+      updateQuery += `, "CompletionDate" = NOW()`;
+    }
+    
+    updateQuery += ` WHERE "RequestID" = $2
+       RETURNING "RequestID","ResidentID","RequestType","RequestPurpose","RequestStatus","RequestDate","PickupDate","CompletionDate"`;
+    
+    const update = await client.query(updateQuery, params);
 
     const requestData = update.rows[0];
 
@@ -244,6 +254,8 @@ router.get("/admin/all", async (req, res) => {
       SELECT 
         req."RequestID",
         req."RequestDate",
+        req."PickupDate",
+        req."CompletionDate",
         req."RequestType",
         req."RequestStatus",
         req."RequestPurpose",
@@ -274,7 +286,7 @@ router.get("/resident/:residentId", async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT "RequestID","ResidentID","RequestDate","RequestType","RequestStatus","RequestPurpose"
+      SELECT "RequestID","ResidentID","RequestDate","PickupDate","CompletionDate","RequestType","RequestStatus","RequestPurpose"
       FROM request
       WHERE "ResidentID" = $1
       ORDER BY "RequestDate" DESC, "RequestID" DESC

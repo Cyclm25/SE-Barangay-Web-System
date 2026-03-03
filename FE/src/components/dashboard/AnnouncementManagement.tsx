@@ -57,7 +57,11 @@ interface Announcement {
   targetAudience: string;
   dateCreated: string;
   datePosted?: string;
+  scheduledPublishDate?: string;
+  isScheduled?: boolean;
+  expirationDate?: string;
   postedBy: string;
+  postedByName?: string;
   status: "draft" | "posted" | "archived";
   tags: string[];
 }
@@ -104,10 +108,16 @@ function mapApiAnnouncementToUI(a: any): Announcement {
       a.postedat ??
       a.DatePosted ??
       a.datePosted ??
+      a.PublishedDate ??
+      a.publisheddate ??
       a.CreatedAt ??
       a.createdat ??
       undefined,
+    scheduledPublishDate: a.ScheduledPublishDate ?? a.scheduledPublishDate ?? undefined,
+    isScheduled: a.IsScheduled ?? a.isScheduled ?? false,
+    expirationDate: a.ExpirationDate ?? a.expirationDate ?? undefined,
     postedBy: buildFullName(),
+    postedByName: a.PostedByName ?? a.postedByName ?? buildFullName(),
     status,
     tags: Array.isArray(a.Tags ?? a.tags) ? (a.Tags ?? a.tags) : [],
   };
@@ -117,13 +127,7 @@ export function AnnouncementManagement() {
   const [isSaving, setIsSaving] = useState(false);
 
   const [customTargetAudiences, setCustomTargetAudiences] = useState<string[]>([
-    "Primary 4A",
-    "Primary 4B",
-    "Primary 5A",
-    "Primary 5B",
-    "SS1",
-    "SS2",
-    "SS3",
+  
   ]);
 
   // NOW: announcements come from DB/API (not hardcoded)
@@ -141,6 +145,12 @@ export function AnnouncementManagement() {
     images: [] as string[],
     targetAudience: "all" as Announcement["targetAudience"],
     tags: [] as string[],
+    isScheduled: false,
+    scheduledDate: "",
+    scheduledTime: "",
+    hasExpiration: false,
+    expirationDate: "",
+    expirationTime: "",
   });
 
   const [newCustomAudience, setNewCustomAudience] = useState("");
@@ -152,6 +162,12 @@ export function AnnouncementManagement() {
       images: [],
       targetAudience: "all",
       tags: [],
+      isScheduled: false,
+      scheduledDate: "",
+      scheduledTime: "",
+      hasExpiration: false,
+      expirationDate: "",
+      expirationTime: "",
     });
     setEditingAnnouncement(null);
     setNewCustomAudience("");
@@ -224,6 +240,15 @@ export function AnnouncementManagement() {
         status: saveAsDraft ? "draft" : "posted",
         postedByRole,
         postedById,
+        // NEW: Scheduled publishing
+        isScheduled: formData.isScheduled && !!formData.scheduledDate,
+        scheduledPublishDate: formData.isScheduled && formData.scheduledDate 
+          ? `${formData.scheduledDate}T${formData.scheduledTime || "00:00"}:00`
+          : null,
+        // NEW: Expiration
+        expirationDate: formData.hasExpiration && formData.expirationDate
+          ? `${formData.expirationDate}T${formData.expirationTime || "23:59"}:59`
+          : null,
       };
 
       setIsSaving(true);
@@ -256,6 +281,12 @@ export function AnnouncementManagement() {
       images: announcement.images,
       targetAudience: announcement.targetAudience,
       tags: announcement.tags,
+      isScheduled: announcement.isScheduled ?? false,
+      scheduledDate: "",
+      scheduledTime: "",
+      hasExpiration: false,
+      expirationDate: "",
+      expirationTime: "",
     });
     setIsDialogOpen(true);
   };
@@ -294,23 +325,15 @@ export function AnnouncementManagement() {
   const archivedAnnouncements = announcements.filter((a) => a.status === "archived");
 
   const getTargetAudienceBadge = (targetAudience: string) => {
-    switch (targetAudience) {
-      case "all":
-        return "All";
-      case "students":
-        return "Students";
-      case "senior-citizens":
-        return "Senior Citizens";
-      case "pwd":
-        return "PWD";
-      case "events":
-        return "Events";
-      case "health":
-        return "Health";
-      default:
-        return targetAudience;
-    }
-  };
+  switch (targetAudience) {
+    case 'all': return 'All';
+    case 'students': return 'Students';
+    case 'senior-citizens': return 'Senior Citizen';
+    case 'health': return 'Health';
+    case 'events': return 'Events';
+    default: return targetAudience;
+  }
+};
 
   const AnnouncementCard = ({ announcement }: { announcement: Announcement }) => (
     <Card className="overflow-hidden hover:shadow-md transition-shadow">
@@ -345,6 +368,16 @@ export function AnnouncementManagement() {
                 {announcement.title}
               </h3>
               <div className="flex items-center gap-1 flex-shrink-0">
+                {announcement.expirationDate && new Date(announcement.expirationDate) < new Date() && (
+                  <Badge className="bg-red-100 text-red-800 border-0 text-xs">
+                    ⏰ Expired
+                  </Badge>
+                )}
+                {announcement.isScheduled && (
+                  <Badge className="bg-blue-100 text-blue-800 border-0 text-xs">
+                    📅 Scheduled
+                  </Badge>
+                )}
                 <Badge variant="outline" className="text-xs">
                   {getTargetAudienceBadge(announcement.targetAudience)}
                 </Badge>
@@ -358,9 +391,28 @@ export function AnnouncementManagement() {
             <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
               <div className="flex items-center gap-1">
                 <User className="w-3 h-3" />
-                <span>Posted by: {announcement.postedBy}</span>
+                <span>Posted by: {announcement.postedByName || announcement.postedBy}</span>
               </div>
-              {announcement.datePosted ? (
+              {announcement.expirationDate && (
+                <div className="flex items-center gap-1 font-semibold text-red-600">
+                  <Calendar className="w-3 h-3" />
+                  <span>
+                    Expires: {new Date(announcement.expirationDate).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+              {announcement.isScheduled && announcement.scheduledPublishDate ? (
+                <div className="flex items-center gap-1 font-semibold text-blue-600">
+                  <Clock className="w-3 h-3" />
+                  <span>
+                    Scheduled: {new Date(announcement.scheduledPublishDate).toLocaleDateString()} at{" "}
+                    {new Date(announcement.scheduledPublishDate).toLocaleTimeString("en-US", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              ) : announcement.datePosted ? (
                 <div className="flex items-center gap-1">
                   <Calendar className="w-3 h-3" />
                   <span>{new Date(announcement.datePosted).toLocaleDateString()}</span>
@@ -542,48 +594,183 @@ export function AnnouncementManagement() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="targetAudience">Target Audience</Label>
-                <Select
-                  value={formData.targetAudience}
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      targetAudience: value as Announcement["targetAudience"],
-                    })
-                  }
-                >
-                  <SelectTrigger id="targetAudience">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="students">Students</SelectItem>
-                    <SelectItem value="senior-citizens">Senior Citizens</SelectItem>
-                    <SelectItem value="pwd">PWD</SelectItem>
-                    <SelectItem value="events">Events</SelectItem>
-                    <SelectItem value="health">Health</SelectItem>
-                    {customTargetAudiences.map((audience) => (
-                      <SelectItem key={audience} value={audience}>
-                        {audience}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+<div className="space-y-2">
+  <Label htmlFor="targetAudience">Target Audience</Label>
+  <Select
+    value={formData.targetAudience}
+    onValueChange={(value) =>
+      setFormData({
+        ...formData,
+        targetAudience: value as Announcement["targetAudience"],
+      })
+    }
+  >
+    <SelectTrigger id="targetAudience">
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="all">All</SelectItem>
+      <SelectItem value="students">Students</SelectItem>
+      <SelectItem value="senior-citizens">Senior Citizen</SelectItem>
+      <SelectItem value="health">Health</SelectItem>
+      <SelectItem value="events">Events</SelectItem>
+      {customTargetAudiences.map((audience) => (
+        <SelectItem key={audience} value={audience}>
+          {audience}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
+ 
+
+
+              {/* NEW: Scheduled Publishing Section */}
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="isScheduled"
+                    checked={formData.isScheduled}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        isScheduled: e.target.checked,
+                        scheduledDate: e.target.checked ? formData.scheduledDate : "",
+                        scheduledTime: e.target.checked ? formData.scheduledTime : "",
+                      })
+                    }
+                    className="w-4 h-4 rounded border border-gray-300 cursor-pointer"
+                  />
+                  <Label htmlFor="isScheduled" className="font-semibold cursor-pointer">
+                    Schedule this announcement for later
+                  </Label>
+                </div>
+
+                {formData.isScheduled && (
+                  <div className="space-y-3 mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="scheduledDate">Date *</Label>
+                        <Input
+                          id="scheduledDate"
+                          type="date"
+                          value={formData.scheduledDate}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              scheduledDate: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="scheduledTime">Time (UTC)</Label>
+                        <Input
+                          id="scheduledTime"
+                          type="time"
+                          value={formData.scheduledTime}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              scheduledTime: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-gray-600">
+                      📅 This announcement will be automatically published on{" "}
+                      {formData.scheduledDate
+                        ? new Date(`${formData.scheduledDate}T${formData.scheduledTime || "00:00"}`).toLocaleDateString(
+                            "en-US",
+                            {
+                              weekday: "long",
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            }
+                          ) + ` at ${formData.scheduledTime || "00:00"}`
+                        : "the selected date"}
+                    </p>
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-2">
-                <Label>Add Custom Target Audience</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={newCustomAudience}
-                    onChange={(e) => setNewCustomAudience(e.target.value)}
-                    placeholder="Enter new target audience"
+              {/* NEW: Expiration Date Section */}
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="hasExpiration"
+                    checked={formData.hasExpiration}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        hasExpiration: e.target.checked,
+                        expirationDate: e.target.checked ? formData.expirationDate : "",
+                        expirationTime: e.target.checked ? formData.expirationTime : "",
+                      })
+                    }
+                    className="w-4 h-4 rounded border border-gray-300 cursor-pointer"
                   />
-                  <Button variant="default" size="sm" onClick={handleAddCustomAudience}>
-                    Add
-                  </Button>
+                  <Label htmlFor="hasExpiration" className="font-semibold cursor-pointer">
+                    Set an expiration date for this announcement
+                  </Label>
                 </div>
+
+                {formData.hasExpiration && (
+                  <div className="space-y-3 mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="expirationDate">Date *</Label>
+                        <Input
+                          id="expirationDate"
+                          type="date"
+                          value={formData.expirationDate}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              expirationDate: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="expirationTime">Time</Label>
+                        <Input
+                          id="expirationTime"
+                          type="time"
+                          value={formData.expirationTime}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              expirationTime: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-gray-600">
+                      🗂️ This announcement will be automatically archived on{" "}
+                      {formData.expirationDate
+                        ? new Date(`${formData.expirationDate}T${formData.expirationTime || "23:59"}`).toLocaleDateString(
+                            "en-US",
+                            {
+                              weekday: "long",
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            }
+                          ) + ` at ${formData.expirationTime || "23:59"}`
+                        : "the selected date"}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -597,7 +784,9 @@ export function AnnouncementManagement() {
               </Button>
 
               <Button onClick={() => handleCreateOrUpdate(false)} disabled={isSaving}>
-                {isSaving ? "Posting..." : (editingAnnouncement ? "Update & Publish" : "Post Announcement")}
+                {isSaving ? "Processing..." : formData.isScheduled 
+                  ? "Schedule Announcement" 
+                  : (editingAnnouncement ? "Update & Publish" : "Post Announcement")}
               </Button>
             </DialogFooter>
           </DialogContent>

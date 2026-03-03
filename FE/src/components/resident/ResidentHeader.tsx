@@ -177,3 +177,5 @@ export function ResidentHeader({ residentName, activePage, onNavigate, onProfile
     </>
   );
 }
+
+

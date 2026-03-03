@@ -6,6 +6,8 @@ type DBRequest = {
   RequestID: number;
   ResidentID: string;
   RequestDate: string;      // ISO/timestamp
+  PickupDate?: string | null;     // When picked up
+  CompletionDate?: string | null; // When completed
   RequestType: string;
   RequestStatus: string;    // Pending / Processing / Ready for Pickup / Pickup / Completed / Denied
   RequestPurpose: string;
@@ -181,8 +183,64 @@ export function TrackRequest() {
                             })
                           : "—"}
                       </p>
+                      <p className="text-[11px] text-gray-500">
+                        {request.RequestDate
+                          ? new Date(request.RequestDate).toLocaleTimeString("en-US", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : ""}
+                      </p>
                     </div>
                   </div>
+
+                  {request.PickupDate && (
+                    <div className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 bg-green-50 rounded-lg border border-green-200">
+                      <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-green-600 flex-shrink-0" />
+                      <div>
+                        <p className="text-[11px] md:text-[12px] text-green-700 font-semibold">
+                          Date Picked Up
+                        </p>
+                        <p className="text-[13px] md:text-[14px] text-gray-900">
+                          {new Date(request.PickupDate).toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })}
+                        </p>
+                        <p className="text-[11px] text-gray-500">
+                          {new Date(request.PickupDate).toLocaleTimeString("en-US", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {request.CompletionDate && (
+                    <div className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-blue-600 flex-shrink-0" />
+                      <div>
+                        <p className="text-[11px] md:text-[12px] text-blue-700 font-semibold">
+                          Date Completed
+                        </p>
+                        <p className="text-[13px] md:text-[14px] text-gray-900">
+                          {new Date(request.CompletionDate).toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })}
+                        </p>
+                        <p className="text-[11px] text-gray-500">
+                          {new Date(request.CompletionDate).toLocaleTimeString("en-US", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 bg-gray-50 rounded-lg">
                     <svg

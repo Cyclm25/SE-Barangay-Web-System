@@ -6,6 +6,58 @@ const app = express();
 const pool = require("./db");
 
 /* ================================
+   ANNOUNCEMENT AUTOMATION
+================================ */
+// Import utilities
+const { publishScheduledAnnouncements } = require("./utils/publishScheduledAnnouncements");
+const { archiveExpiredAnnouncements } = require("./utils/archiveExpiredAnnouncements");
+
+// Run checks immediately on startup
+(async () => {
+  try {
+    console.log("[AUTO] Running initial scheduled announcements check...");
+    const pubResult = await publishScheduledAnnouncements();
+    if (pubResult.published > 0) {
+      console.log(`[AUTO] Published ${pubResult.published} scheduled announcement(s) on startup`);
+    }
+    
+    console.log("[AUTO] Running initial expired announcements check...");
+    const archResult = await archiveExpiredAnnouncements();
+    if (archResult.archived > 0) {
+      console.log(`[AUTO] Archived ${archResult.archived} expired announcement(s) on startup`);
+    }
+  } catch (err) {
+    console.error("[AUTO] Error during startup checks:", err.message);
+  }
+})();
+
+// Run scheduled announcements check every 1 minute
+setInterval(async () => {
+  try {
+    const result = await publishScheduledAnnouncements();
+    if (result.published > 0) {
+      console.log(`[AUTO] Published ${result.published} scheduled announcement(s)`);
+    }
+  } catch (err) {
+    console.error("[AUTO] Error publishing scheduled announcements:", err.message);
+  }
+}, 1 * 60 * 1000); // 1 minute
+
+// Run expired announcements check every 1 minute
+setInterval(async () => {
+  try {
+    const result = await archiveExpiredAnnouncements();
+    if (result.archived > 0) {
+      console.log(`[AUTO] Archived ${result.archived} expired announcement(s)`);
+    }
+  } catch (err) {
+    console.error("[AUTO] Error archiving expired announcements:", err.message);
+  }
+}, 1 * 60 * 1000); // 1 minute
+
+console.log("[AUTO] Announcement automation started - checking every 1 minute");
+
+/* ================================
    MIDDLEWARE
 ================================ */
 // Find this in your backend index.js/server.js

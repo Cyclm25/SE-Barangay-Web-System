@@ -109,7 +109,7 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
   const [loading, setLoading] = useState(false);
 
   // Filter buttons (matches your original UI)
-  const tags = ["Student", "Senior Citizen", "Events"];
+  const tags = ["Student", "Senior Citizen","Health", "Events"];
 
   useEffect(() => {
     const fetchResidentAnnouncements = async () => {
