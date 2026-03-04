@@ -45,10 +45,26 @@ interface InboxRow {
   RejectionReason?: string;
 }
 
-export function OnlineRequests() {
+interface OnlineRequestsProps {
+  initialFilter?: string;
+  initialTab?: 'certificates' | 'other';
+  onFilterChange?: (filter: string) => void;
+  onTabChange?: (tab: 'certificates' | 'other') => void;
+}
+
+export function OnlineRequests({
+  initialFilter = 'all',
+  initialTab = 'certificates',
+  onFilterChange,
+  onTabChange,
+}: OnlineRequestsProps = {}) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'certificates' | 'other'>('certificates');
-  const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('Pending');
+  const [activeTab, setActiveTab] = useState<'certificates' | 'other'>(initialTab);
+  const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>(
+    initialFilter === 'pending' ? 'Pending' :
+    initialFilter === 'pickup' ? 'Ready for Pickup' :
+    'Pending'
+  );
 
   const [requests, setRequests] = useState<Request[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -197,6 +213,22 @@ export function OnlineRequests() {
     setCertificateCount(newCertificateCount);
     setOtherCount(newOtherCount);
   }, [requests, statusFilter]);
+
+  // Handle initial filter from dashboard navigation
+  useEffect(() => {
+    if (initialFilter === 'pending') {
+      setStatusFilter('Pending');
+      setActiveTab('certificates');
+    } else if (initialFilter === 'pickup') {
+      setStatusFilter('Ready for Pickup');
+      setActiveTab('certificates');
+    }
+  }, [initialFilter]);
+
+  // Sync tab changes with parent
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const handleStatusChange = async (id: string, newStatus: RequestStatus) => {
     try {
@@ -500,7 +532,12 @@ export function OnlineRequests() {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card
           className={`border-yellow-400 transition-all ${statusFilter === 'Pending' ? 'ring-2 ring-yellow-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
-          onClick={() => statusFilter !== 'Pending' && setStatusFilter('Pending')}
+          onClick={() => {
+            if (statusFilter !== 'Pending') {
+              setStatusFilter('Pending');
+              onFilterChange?.('pending');
+            }
+          }}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -517,7 +554,12 @@ export function OnlineRequests() {
 
         <Card
           className={`border-blue-400 transition-all ${statusFilter === 'Processing' ? 'ring-2 ring-blue-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
-          onClick={() => statusFilter !== 'Processing' && setStatusFilter('Processing')}
+          onClick={() => {
+            if (statusFilter !== 'Processing') {
+              setStatusFilter('Processing');
+              onFilterChange?.('processing');
+            }
+          }}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -534,7 +576,12 @@ export function OnlineRequests() {
 
         <Card
           className={`border-green-400 transition-all ${statusFilter === 'Ready for Pickup' ? 'ring-2 ring-green-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
-          onClick={() => statusFilter !== 'Ready for Pickup' && setStatusFilter('Ready for Pickup')}
+          onClick={() => {
+            if (statusFilter !== 'Ready for Pickup') {
+              setStatusFilter('Ready for Pickup');
+              onFilterChange?.('pickup');
+            }
+          }}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -586,7 +633,11 @@ export function OnlineRequests() {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={(v) => {
+        const newTab = v as 'certificates' | 'other';
+        setActiveTab(newTab);
+        onTabChange?.(newTab);
+      }} className="space-y-4">
         <TabsList>
           <TabsTrigger value="certificates">
             <div className="flex items-center gap-2">

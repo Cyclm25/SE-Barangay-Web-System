@@ -67,108 +67,44 @@ router.get("/resident", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const {
-      title,
-      body,
-      postedByRole,
-      postedById,
-      status,          // UI value: posted/draft/archived OR DB value
-      targetAudience,  // maps to "Category"
-      isScheduled,     // NEW: boolean indicating if announcement is scheduled
-      scheduledPublishDate, // NEW: ISO timestamp string
-      expirationDate,  // NEW: ISO timestamp string for auto-archiving
+      title, body, postedByRole, postedById, status,
+      targetAudience, // This will now be an ARRAY: ['Students', 'Health']
+      isScheduled, scheduledPublishDate, expirationDate, images
     } = req.body;
 
     if (!title || !body) {
       return res.status(400).json({ error: "Title and body are required" });
     }
 
-    // ✅ Normalize UI -> DB status
-    const uiStatus = (status || "posted").toLowerCase();
-    const dbStatus =
-      uiStatus === "posted" ? "Active" :
-        uiStatus === "draft" ? "Drafts" :
-          uiStatus === "archived" ? "Archived" :
-            // if someone already sends Active/Drafts/Archived, keep it safe:
-            (status === "Active" || status === "Drafts" || status === "Archived") ? status :
-              "Active";
+    const finalIsScheduled = isScheduled === true;
+    let dbStatus = finalIsScheduled ? "Drafts" : (status === "draft" ? "Drafts" : "Active");
+    const finalIsPublished = !finalIsScheduled && dbStatus === "Active";
 
-    // Determine if scheduled and validate date
-    let finalIsScheduled = isScheduled === true;
-    let finalScheduledDate = null;
-    let finalPublishedDate = null;
-    let finalExpirationDate = null;
+    // Ensure targetAudience is an array and handle "All" logic
+    let categories = Array.isArray(targetAudience) ? targetAudience : ["All"];
+    if (categories.length === 0) categories = ["All"];
 
-    if (finalIsScheduled && scheduledPublishDate) {
-      try {
-        finalScheduledDate = new Date(scheduledPublishDate).toISOString();
-        // If scheduled, set status to Drafts initially (shows as unpublished)
-      } catch (e) {
-        return res.status(400).json({ error: "Invalid scheduledPublishDate format" });
-      }
-    } else {
-      // If posting immediately, set PublishedDate to now
-      if (dbStatus === "Active") {
-        finalPublishedDate = new Date().toISOString();
-      }
-    }
-
-    // Validate expiration date if provided
-    if (expirationDate) {
-      try {
-        finalExpirationDate = new Date(expirationDate).toISOString();
-      } catch (e) {
-        return res.status(400).json({ error: "Invalid expirationDate format" });
-      }
-    }
-
-    const result = await pool.query(
-      `
-      INSERT INTO announcement
-        ("Title","Body","PostedByRole","PostedByID","Category","Status","CreatedAt","IsScheduled","ScheduledPublishDate","PublishedDate","ExpirationDate")
-      VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7,$8,$9,$10)
+    const queryText = `
+      INSERT INTO announcement (
+        "Title", "Body", "PostedByRole", "PostedByID", "Category", "Status", 
+        "CreatedAt", "IsScheduled", "ScheduledPublishDate", "PublishedDate", 
+        "ExpirationDate", "Images", "IsPublished"
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8, 
+        CASE WHEN $9 = true THEN NOW() ELSE NULL END, $10, $11, $12)
       RETURNING *
-      `,
-      [
-        title,
-        body,
-        postedByRole,
-        postedById,
-        targetAudience || "All",
-        finalIsScheduled ? "Drafts" : dbStatus,
-        finalIsScheduled,
-        finalScheduledDate,
-        finalPublishedDate,
-        finalExpirationDate,
-      ]
-    );
+    `;
 
-    const newAnnouncement = result.rows[0];
+    const values = [
+      title, body, postedByRole || 'Admin', postedById || 'SYSTEM',
+      categories, // Saved as TEXT[] array
+      dbStatus, finalIsScheduled, scheduledPublishDate || null,
+      finalIsPublished, expirationDate || null, images || [], finalIsPublished
+    ];
 
-    // ==============================
-    // ✅ INSERT TRANSACTION LOG HERE
-    // ==============================
-
-    await pool.query(
-      `
-  INSERT INTO transaction_history
-    ("RequestID","ResidentID","Action","RequestStatus","RequestType","RequestPurpose","CreatedAt")
-  VALUES
-    ($1,$2,$3,$4,$5,$6,NOW())
-  `,
-      [
-        null,                  // not tied to request
-        postedById,            // this is the admin/superadmin ID
-        "Posted Announcement", // action
-        dbStatus,              // Active/Drafts/Archived
-        "Announcements",       // module
-        title                  // store title as detail
-      ]
-    );
-
-    // return response AFTER logging
-    res.status(201).json(newAnnouncement);
+    const result = await pool.query(queryText, values);
+    res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error("Create Announcement Error:", err);
+    console.error("Create Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

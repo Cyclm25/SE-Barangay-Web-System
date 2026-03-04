@@ -13,19 +13,22 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+
     /* Module Interop */
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
 
+<<<<<<< HEAD
     /* Linting (Kept relaxed for development) */
+=======
+    /* Linting */
+>>>>>>> main
     "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
 
-    /* Path aliases */
-    "baseUrl": ".",
-    "paths": {
+     "paths": {
       "@/*": ["./src/*"],
       "figma:asset/*": ["./src/assets/*"]
     }
