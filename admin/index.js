@@ -62,7 +62,7 @@ console.log("[AUTO] Announcement automation started - checking every 1 minute");
 ================================ */
 // Find this in your backend index.js/server.js
 app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:3001"],  // add 3001
+  origin: ["http://localhost:3000", "http://localhost:3001"],
   credentials: true
 }));
 app.use(express.json());
