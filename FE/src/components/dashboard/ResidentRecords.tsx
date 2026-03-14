@@ -47,8 +47,6 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs, { Dayjs } from "dayjs";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 
-<<<<<<< HEAD
-=======
 // Helper: Get default cutoff date (30 days ago)
 const getDefaultCutoffDate = () => {
   const date = new Date();
@@ -62,7 +60,6 @@ interface ResidentRecordsProps {
   onUpdateCutoffDate?: (date: string) => void;
 }
 
->>>>>>> main
 type ResidentStatus = "Active" | "Inactive";
 
 interface Resident {
@@ -201,7 +198,6 @@ export function ResidentRecords({
   const [pendingResident, setPendingResident] = useState<Resident | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string>("");
   const [saveAttempted, setSaveAttempted] = useState(false);
-<<<<<<< HEAD
 
   type SortField =
     | "residentNo"
@@ -232,7 +228,7 @@ export function ResidentRecords({
   const handleSortMenuChange = (v: SortMenuValue) => {
     setSortMenuValue(v);
 
-    // A–Z / Z–A must ALWAYS sort by First Name
+    // Aâ€“Z / Zâ€“A must ALWAYS sort by First Name
     if (v === "dir:asc") {
       setSortBy("firstName");
       setSortDirection("asc");
@@ -264,13 +260,10 @@ export function ResidentRecords({
       return;
     }
   };
-=======
-  const [sortBy, setSortBy] = useState<"residentNo" | "firstName" | "lastName" | "residentType" | "status">("residentNo");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
   const [activeFilter, setActiveFilter] = useState<'all' | 'new'>(initialFilter);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [tempCutoffDate, setTempCutoffDate] = useState(registrationCutoffDate);
->>>>>>> main
 
   const [formData, setFormData] = useState({
     profileImage: "",
@@ -647,13 +640,6 @@ export function ResidentRecords({
       <div className="p-6 space-y-6 bg-gray-50 min-h-full">
         <div className="flex items-center justify-between">
           <div>
-<<<<<<< HEAD
-            <h1 className="text-2xl font-bold text-gray-900">
-              Resident Records (
-              {residents.filter((r) => r.status === "Active").length})
-            </h1>
-            <p className="text-gray-600 mt-1">Manage all registered residents</p>
-=======
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">
                 Resident Records ({residents.filter((r) => r.status === "Active").length})
@@ -676,7 +662,6 @@ export function ResidentRecords({
                 : 'Manage all registered residents'
               }
             </p>
->>>>>>> main
           </div>
 
           <div className="flex items-center gap-2">
@@ -862,7 +847,7 @@ export function ResidentRecords({
                       </Select>
                     </div>
 
-                    {/* ✅ BIRTHDAY */}
+                    {/* âœ… BIRTHDAY */}
                     <div className="space-y-2">
                       <Label>Birthday *</Label>
 
@@ -1028,13 +1013,13 @@ export function ResidentRecords({
 
                       {contactTooLong && (
                         <p className="text-xs text-red-500 mt-1">
-                          Contact number must not exceed 12 digits.❌
+                          Contact number must not exceed 12 digits.âŒ
                         </p>
                       )}
 
                       {contactComplete && !contactTooLong && (
                         <p className="text-xs text-green-600 mt-1">
-                          Contact number complete (11 digits)✅
+                          Contact number complete (11 digits)âœ…
                         </p>
                       )}
 
@@ -1228,8 +1213,8 @@ export function ResidentRecords({
 
                   <SelectContent>
                     {/* MUST be 1st & 2nd: direction for FIRST NAME */}
-                    <SelectItem value="dir:asc">A–Z (First Name)</SelectItem>
-                    <SelectItem value="dir:desc">Z–A (First Name)</SelectItem>
+                    <SelectItem value="dir:asc">Aâ€“Z (First Name)</SelectItem>
+                    <SelectItem value="dir:desc">Zâ€“A (First Name)</SelectItem>
 
                     {/* Resident No has its own Asc/Desc */}
                     <SelectItem value="field:residentNo:asc">Resident No (Ascending)</SelectItem>
@@ -1618,29 +1603,29 @@ export function ResidentRecords({
                       <div className="p-3 rounded-lg border bg-white">
                         <p className="text-[11px] text-gray-500">Gender</p>
                         <p className="text-sm font-medium text-gray-900">
-                          {viewingResident.gender || "—"}
+                          {viewingResident.gender || "â€”"}
                         </p>
                       </div>
 
                       <div className="p-3 rounded-lg border bg-white">
                         <p className="text-[11px] text-gray-500">Age</p>
                         <p className="text-sm font-medium text-gray-900">
-                          {typeof viewingResident.age !== "undefined" ? viewingResident.age : "—"}
+                          {typeof viewingResident.age !== "undefined" ? viewingResident.age : "â€”"}
                         </p>
                       </div>
 
                       <div className="p-3 rounded-lg border bg-white">
                         <p className="text-[11px] text-gray-500">Birthday</p>
                         <p className="text-sm font-medium text-gray-900 break-words">
-                          {viewingResident.birthday || "—"}
+                          {viewingResident.birthday || "â€”"}
                         </p>
                       </div>
 
-                      {/* ✅ Missing field #1 */}
+                      {/* âœ… Missing field #1 */}
                       <div className="p-3 rounded-lg border bg-white">
                         <p className="text-[11px] text-gray-500">Civil Status</p>
                         <p className="text-sm font-medium text-gray-900">
-                          {viewingResident.civilStatus || "—"}
+                          {viewingResident.civilStatus || "â€”"}
                         </p>
                       </div>
                     </div>
@@ -1657,26 +1642,26 @@ export function ResidentRecords({
                     </div>
 
                     <div className="p-4 space-y-3">
-                      {/* ✅ Missing field #2 */}
+                      {/* âœ… Missing field #2 */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
                         <p className="text-sm text-gray-600">Father</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
-                          {viewingResident.fatherName || "—"}
+                          {viewingResident.fatherName || "â€”"}
                         </p>
                       </div>
 
-                      {/* ✅ Missing field #3 */}
+                      {/* âœ… Missing field #3 */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
                         <p className="text-sm text-gray-600">Mother</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
-                          {viewingResident.motherName || "—"}
+                          {viewingResident.motherName || "â€”"}
                         </p>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
                         <p className="text-sm text-gray-600">Spouse</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
-                          {viewingResident.spouseName || "—"}
+                          {viewingResident.spouseName || "â€”"}
                         </p>
                       </div>
                     </div>
@@ -1693,14 +1678,14 @@ export function ResidentRecords({
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
                         <p className="text-sm text-gray-600">Contact No.</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
-                          {viewingResident.contactNumber || "—"}
+                          {viewingResident.contactNumber || "â€”"}
                         </p>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
                         <p className="text-sm text-gray-600">Email</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-all">
-                          {viewingResident.email || "—"}
+                          {viewingResident.email || "â€”"}
                         </p>
                       </div>
 
@@ -1708,14 +1693,14 @@ export function ResidentRecords({
                         <p className="text-sm text-gray-600">Address</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
                           {`${viewingResident.houseNo || ""} ${viewingResident.streetAddress || ""} ${viewingResident.city || ""}`.trim() ||
-                            "—"}
+                            "â€”"}
                         </p>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
                         <p className="text-sm text-gray-600">Barangay Card No.</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
-                          {viewingResident.barangayCard || "—"}
+                          {viewingResident.barangayCard || "â€”"}
                         </p>
                       </div>
                     </div>
