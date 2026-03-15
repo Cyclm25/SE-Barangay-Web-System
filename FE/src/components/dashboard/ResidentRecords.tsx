@@ -47,8 +47,6 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs, { Dayjs } from "dayjs";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 
-<<<<<<< HEAD
-=======
 // Helper: Get default cutoff date (30 days ago)
 const getDefaultCutoffDate = () => {
   const date = new Date();
@@ -62,7 +60,6 @@ interface ResidentRecordsProps {
   onUpdateCutoffDate?: (date: string) => void;
 }
 
->>>>>>> main
 type ResidentStatus = "Active" | "Inactive";
 
 interface Resident {
@@ -121,6 +118,15 @@ type ResidentRow = {
   status: ResidentStatus | null;
   dateRegistered?: string | null;
 };
+
+type SortMenuValue =
+  | "dir:asc"
+  | "dir:desc"
+  | "field:residentNo:asc"
+  | "field:residentNo:desc"
+  | "field:lastName"
+  | "field:residentType"
+  | "field:status";
 
 const API_BASE = "http://localhost:5001";
 
@@ -201,76 +207,56 @@ export function ResidentRecords({
   const [pendingResident, setPendingResident] = useState<Resident | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string>("");
   const [saveAttempted, setSaveAttempted] = useState(false);
-<<<<<<< HEAD
-
-  type SortField =
-    | "residentNo"
-    | "firstName"
-    | "lastName"
-    | "residentType"
-    | "status";
-  type SortDirection = "asc" | "desc";
-
-  type SortMenuValue =
-    | "dir:asc"
-    | "dir:desc"
-    | "field:residentNo:asc"
-    | "field:residentNo:desc"
-    | "field:firstName"
-    | "field:lastName"
-    | "field:residentType"
-    | "field:status";
-
-  const [sortBy, setSortBy] = useState<SortField>("residentNo");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-
-  // single source of truth for the dropdown selection
-  const [sortMenuValue, setSortMenuValue] = useState<SortMenuValue>(
-    "field:residentNo:asc"
-  );
-
-  const handleSortMenuChange = (v: SortMenuValue) => {
-    setSortMenuValue(v);
-
-    // A–Z / Z–A must ALWAYS sort by First Name
-    if (v === "dir:asc") {
-      setSortBy("firstName");
-      setSortDirection("asc");
-      return;
-    }
-    if (v === "dir:desc") {
-      setSortBy("firstName");
-      setSortDirection("desc");
-      return;
-    }
-
-    // Resident No needs explicit Asc/Desc
-    if (v === "field:residentNo:asc") {
-      setSortBy("residentNo");
-      setSortDirection("asc");
-      return;
-    }
-    if (v === "field:residentNo:desc") {
-      setSortBy("residentNo");
-      setSortDirection("desc");
-      return;
-    }
-
-    // Other fields: default to Asc when selected
-    if (v.startsWith("field:")) {
-      const field = v.replace("field:", "") as SortField;
-      setSortBy(field);
-      setSortDirection("asc");
-      return;
-    }
-  };
-=======
   const [sortBy, setSortBy] = useState<"residentNo" | "firstName" | "lastName" | "residentType" | "status">("residentNo");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [activeFilter, setActiveFilter] = useState<'all' | 'new'>(initialFilter);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [tempCutoffDate, setTempCutoffDate] = useState(registrationCutoffDate);
->>>>>>> main
+  const sortMenuValue: SortMenuValue =
+    sortBy === "firstName"
+      ? (sortDirection === "asc" ? "dir:asc" : "dir:desc")
+      : sortBy === "residentNo"
+        ? (sortDirection === "asc"
+          ? "field:residentNo:asc"
+          : "field:residentNo:desc")
+        : sortBy === "lastName"
+          ? "field:lastName"
+          : sortBy === "residentType"
+            ? "field:residentType"
+            : "field:status";
+
+  const handleSortMenuChange = (value: SortMenuValue) => {
+    switch (value) {
+      case "dir:asc":
+        setSortBy("firstName");
+        setSortDirection("asc");
+        break;
+      case "dir:desc":
+        setSortBy("firstName");
+        setSortDirection("desc");
+        break;
+      case "field:residentNo:asc":
+        setSortBy("residentNo");
+        setSortDirection("asc");
+        break;
+      case "field:residentNo:desc":
+        setSortBy("residentNo");
+        setSortDirection("desc");
+        break;
+      case "field:lastName":
+        setSortBy("lastName");
+        setSortDirection("asc");
+        break;
+      case "field:residentType":
+        setSortBy("residentType");
+        setSortDirection("asc");
+        break;
+      case "field:status":
+        setSortBy("status");
+        setSortDirection("asc");
+        break;
+    }
+  };
 
   const [formData, setFormData] = useState({
     profileImage: "",
@@ -647,13 +633,6 @@ export function ResidentRecords({
       <div className="p-6 space-y-6 bg-gray-50 min-h-full">
         <div className="flex items-center justify-between">
           <div>
-<<<<<<< HEAD
-            <h1 className="text-2xl font-bold text-gray-900">
-              Resident Records (
-              {residents.filter((r) => r.status === "Active").length})
-            </h1>
-            <p className="text-gray-600 mt-1">Manage all registered residents</p>
-=======
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">
                 Resident Records ({residents.filter((r) => r.status === "Active").length})
@@ -671,12 +650,11 @@ export function ResidentRecords({
               )}
             </div>
             <p className="text-gray-600 mt-1">
-              {activeFilter === 'new' 
+              {activeFilter === 'new'
                 ? `Showing residents registered after ${dayjs(registrationCutoffDate).format('MM/DD/YYYY')}`
                 : 'Manage all registered residents'
               }
             </p>
->>>>>>> main
           </div>
 
           <div className="flex items-center gap-2">
@@ -707,511 +685,511 @@ export function ResidentRecords({
                 </Button>
               </DialogTrigger>
 
-            <DialogContent className="max-w-[1200px] w-[95vw] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="text-xl">Add New Resident</DialogTitle>
-                <DialogDescription>
-                  Fill in the resident's information to register them in the
-                  system.
-                </DialogDescription>
-              </DialogHeader>
+              <DialogContent className="max-w-[1200px] w-[95vw] max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="text-xl">Add New Resident</DialogTitle>
+                  <DialogDescription>
+                    Fill in the resident's information to register them in the
+                    system.
+                  </DialogDescription>
+                </DialogHeader>
 
-              <div className="space-y-6 py-4">
-                <div className="flex justify-center mb-2">
-                  <OcrScanner onDataExtracted={handleOcrData} />
-                </div>
+                <div className="space-y-6 py-4">
+                  <div className="flex justify-center mb-2">
+                    <OcrScanner onDataExtracted={handleOcrData} />
+                  </div>
 
-                <div className="flex justify-center">
-                  <div className="space-y-2 text-center">
-                    <div className="w-32 h-32 mx-auto rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-[#2957a1]">
-                      {profileImagePreview ? (
-                        <img
-                          src={profileImagePreview}
-                          alt="Profile"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <User className="w-16 h-16 text-gray-400" />
-                      )}
-                    </div>
-                    <Label htmlFor="profileImage" className="cursor-pointer">
-                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#2957a1] text-white rounded-md hover:bg-[#1e3f7a] transition-colors">
-                        <Upload className="w-4 h-4" />{" "}
-                        <span className="text-sm">Upload Profile Picture</span>
+                  <div className="flex justify-center">
+                    <div className="space-y-2 text-center">
+                      <div className="w-32 h-32 mx-auto rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-[#2957a1]">
+                        {profileImagePreview ? (
+                          <img
+                            src={profileImagePreview}
+                            alt="Profile"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <User className="w-16 h-16 text-gray-400" />
+                        )}
                       </div>
-                      <Input
-                        id="profileImage"
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleImageUpload}
-                      />
-                    </Label>
-                  </div>
-                </div>
-
-                {/* PERSONAL INFO */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">
-                    Personal Information
-                  </h3>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>First Name *</Label>
-                      <Input
-                        value={formData.firstName}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            firstName: e.target.value,
-                          })
-                        }
-                        placeholder="Enter first name"
-                        className={
-                          firstNameError ? "border-red-500 ring-red-500" : ""
-                        }
-                      />
-                      {firstNameError && (
-                        <p className="text-xs text-red-500 mt-1">
-                          First name is required.
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Middle Name</Label>
-                      <Input
-                        value={formData.middleName}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            middleName: e.target.value,
-                          })
-                        }
-                        placeholder="Enter middle name"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Last Name *</Label>
-                      <Input
-                        value={formData.lastName}
-                        onChange={(e) =>
-                          setFormData({ ...formData, lastName: e.target.value })
-                        }
-                        placeholder="Enter last name"
-                        className={
-                          lastNameError ? "border-red-500 ring-red-500" : ""
-                        }
-                      />
-                      {lastNameError && (
-                        <p className="text-xs text-red-500 mt-1">
-                          Last name is required.
-                        </p>
-                      )}
+                      <Label htmlFor="profileImage" className="cursor-pointer">
+                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#2957a1] text-white rounded-md hover:bg-[#1e3f7a] transition-colors">
+                          <Upload className="w-4 h-4" />{" "}
+                          <span className="text-sm">Upload Profile Picture</span>
+                        </div>
+                        <Input
+                          id="profileImage"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleImageUpload}
+                        />
+                      </Label>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-4">
-                    <div className="space-y-2">
-                      <Label>Age</Label>
-                      <Input
-                        type="number"
-                        value={formData.age}
-                        readOnly
-                        placeholder="Auto-calculated"
-                      />
-                    </div>
+                  {/* PERSONAL INFO */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">
+                      Personal Information
+                    </h3>
 
-                    <div className="space-y-2">
-                      <Label>Gender</Label>
-                      <Select
-                        value={formData.gender}
-                        onValueChange={(v) =>
-                          setFormData({ ...formData, gender: v as any })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Male">Male</SelectItem>
-                          <SelectItem value="Female">Female</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Civil Status</Label>
-                      <Select
-                        value={formData.civilStatus}
-                        onValueChange={(v) =>
-                          setFormData({ ...formData, civilStatus: v })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Single">Single</SelectItem>
-                          <SelectItem value="Married">Married</SelectItem>
-                          <SelectItem value="Widowed">Widowed</SelectItem>
-                          <SelectItem value="Separated">Separated</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* ✅ BIRTHDAY */}
-                    <div className="space-y-2">
-                      <Label>Birthday *</Label>
-
-                      <DatePicker
-                        value={formData.birthday ? dayjs(formData.birthday) : null}
-                        onChange={(newValue: Dayjs | null) => {
-                          if (!newValue || !newValue.isValid()) {
-                            setFormData({ ...formData, birthday: "", age: "" });
-                            return;
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>First Name *</Label>
+                        <Input
+                          value={formData.firstName}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              firstName: e.target.value,
+                            })
                           }
-                          const ymd = newValue.format("YYYY-MM-DD");
-                          setFormData({
-                            ...formData,
-                            birthday: ymd,
-                            age: calculateAge(ymd),
-                          });
-                        }}
-                        openTo="year"
-                        views={["year", "month", "day"]}
-                        disableFuture
-                        format="MM/DD/YYYY"
-                        slotProps={{
-                          popper: { disablePortal: true, sx: { zIndex: 999999 } },
-                          textField: {
-                            fullWidth: true,
-                            className: "shadcn-date-field",
-                            error: birthdayError,
-                            helperText: birthdayError ? "Birthday is required." : "",
-                          },
-                        }}
-                      />
+                          placeholder="Enter first name"
+                          className={
+                            firstNameError ? "border-red-500 ring-red-500" : ""
+                          }
+                        />
+                        {firstNameError && (
+                          <p className="text-xs text-red-500 mt-1">
+                            First name is required.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Middle Name</Label>
+                        <Input
+                          value={formData.middleName}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              middleName: e.target.value,
+                            })
+                          }
+                          placeholder="Enter middle name"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Last Name *</Label>
+                        <Input
+                          value={formData.lastName}
+                          onChange={(e) =>
+                            setFormData({ ...formData, lastName: e.target.value })
+                          }
+                          placeholder="Enter last name"
+                          className={
+                            lastNameError ? "border-red-500 ring-red-500" : ""
+                          }
+                        />
+                        {lastNameError && (
+                          <p className="text-xs text-red-500 mt-1">
+                            Last name is required.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="space-y-2">
+                        <Label>Age</Label>
+                        <Input
+                          type="number"
+                          value={formData.age}
+                          readOnly
+                          placeholder="Auto-calculated"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Gender</Label>
+                        <Select
+                          value={formData.gender}
+                          onValueChange={(v) =>
+                            setFormData({ ...formData, gender: v as any })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Male">Male</SelectItem>
+                            <SelectItem value="Female">Female</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Civil Status</Label>
+                        <Select
+                          value={formData.civilStatus}
+                          onValueChange={(v) =>
+                            setFormData({ ...formData, civilStatus: v })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Single">Single</SelectItem>
+                            <SelectItem value="Married">Married</SelectItem>
+                            <SelectItem value="Widowed">Widowed</SelectItem>
+                            <SelectItem value="Separated">Separated</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* ✅ BIRTHDAY */}
+                      <div className="space-y-2">
+                        <Label>Birthday *</Label>
+
+                        <DatePicker
+                          value={formData.birthday ? dayjs(formData.birthday) : null}
+                          onChange={(newValue: Dayjs | null) => {
+                            if (!newValue || !newValue.isValid()) {
+                              setFormData({ ...formData, birthday: "", age: "" });
+                              return;
+                            }
+                            const ymd = newValue.format("YYYY-MM-DD");
+                            setFormData({
+                              ...formData,
+                              birthday: ymd,
+                              age: calculateAge(ymd),
+                            });
+                          }}
+                          openTo="year"
+                          views={["year", "month", "day"]}
+                          disableFuture
+                          format="MM/DD/YYYY"
+                          slotProps={{
+                            popper: { disablePortal: true, sx: { zIndex: 999999 } },
+                            textField: {
+                              fullWidth: true,
+                              className: "shadcn-date-field",
+                              error: birthdayError,
+                              helperText: birthdayError ? "Birthday is required." : "",
+                            },
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Resident Type</Label>
+                        <Select
+                          value={formData.residentType}
+                          onValueChange={(v) =>
+                            setFormData({ ...formData, residentType: v })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Resident">Resident</SelectItem>
+                            <SelectItem value="Student">Student</SelectItem>
+                            <SelectItem value="Senior Citizen">
+                              Senior Citizen
+                            </SelectItem>
+                            <SelectItem value="PWD">PWD</SelectItem>
+                            <SelectItem value="Indigenous">Indigenous</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Voter Status</Label>
+                        <Select
+                          value={formData.voterStatus}
+                          onValueChange={(v) =>
+                            setFormData({ ...formData, voterStatus: v as any })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Yes">Yes</SelectItem>
+                            <SelectItem value="No">No</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Resident Type</Label>
-                      <Select
-                        value={formData.residentType}
-                        onValueChange={(v) =>
-                          setFormData({ ...formData, residentType: v })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Resident">Resident</SelectItem>
-                          <SelectItem value="Student">Student</SelectItem>
-                          <SelectItem value="Senior Citizen">
-                            Senior Citizen
-                          </SelectItem>
-                          <SelectItem value="PWD">PWD</SelectItem>
-                          <SelectItem value="Indigenous">Indigenous</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  {/* ADDRESS & CONTACT */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">
+                      Address & Contact
+                    </h3>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>House No.</Label>
+                        <Input
+                          value={formData.houseNo}
+                          onChange={(e) =>
+                            setFormData({ ...formData, houseNo: e.target.value })
+                          }
+                          placeholder="House number"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Street Address</Label>
+                        <Input
+                          value={formData.streetAddress}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              streetAddress: e.target.value,
+                            })
+                          }
+                          placeholder="Street address"
+                        />
+                      </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label>Voter Status</Label>
-                      <Select
-                        value={formData.voterStatus}
-                        onValueChange={(v) =>
-                          setFormData({ ...formData, voterStatus: v as any })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Yes">Yes</SelectItem>
-                          <SelectItem value="No">No</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>City</Label>
+                        <Input
+                          value={formData.city}
+                          onChange={(e) =>
+                            setFormData({ ...formData, city: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Postal Code</Label>
+                        <Input
+                          value={formData.postalCode}
+                          onChange={(e) =>
+                            setFormData({ ...formData, postalCode: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Country</Label>
+                        <Input
+                          value={formData.country}
+                          onChange={(e) =>
+                            setFormData({ ...formData, country: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* CONTACT NUMBER */}
+                      <div className="space-y-2">
+                        <Label>Contact Number *</Label>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={12}
+                          value={formData.contactNumber}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, "");
+                            setFormData({ ...formData, contactNumber: value });
+                          }}
+                          className={
+                            contactTooLong
+                              ? "border-red-500 ring-red-500"
+                              : contactComplete
+                                ? "border-green-500 ring-green-500"
+                                : ""
+                          }
+                          placeholder="09XX XXX XXXX"
+                        />
+
+                        {contactTooLong && (
+                          <p className="text-xs text-red-500 mt-1">
+                            Contact number must not exceed 12 digits.❌
+                          </p>
+                        )}
+
+                        {contactComplete && !contactTooLong && (
+                          <p className="text-xs text-green-600 mt-1">
+                            Contact number complete (11 digits)✅
+                          </p>
+                        )}
+
+                        {contactError && (
+                          <p className="text-xs text-red-500 mt-1">
+                            Contact number must be exactly 11 digits.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* EMAIL */}
+                      <div className="space-y-2">
+                        <Label>Email (Gmail only) *</Label>
+                        <Input
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) =>
+                            setFormData({ ...formData, email: e.target.value })
+                          }
+                          placeholder="example@gmail.com"
+                          className={
+                            emailInvalidFormat ? "border-red-500 ring-red-500" : ""
+                          }
+                        />
+
+                        {emailInvalidFormat && (
+                          <p className="text-xs text-red-500 mt-1">
+                            Only Gmail addresses are allowed (example@gmail.com).
+                          </p>
+                        )}
+
+                        {emailValidFormat && !emailInvalidFormat && (
+                          <p className="text-xs text-green-600 mt-1">
+                            Valid email format
+                          </p>
+                        )}
+
+                        {emailError && (
+                          <p className="text-xs text-red-500 mt-1">
+                            Email is required.
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* ADDRESS & CONTACT */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">
-                    Address & Contact
-                  </h3>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>House No.</Label>
-                      <Input
-                        value={formData.houseNo}
-                        onChange={(e) =>
-                          setFormData({ ...formData, houseNo: e.target.value })
-                        }
-                        placeholder="House number"
-                      />
+                  {/* FAMILY */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">
+                      Family Background
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Father's Name</Label>
+                        <Input
+                          value={formData.fatherName}
+                          onChange={(e) =>
+                            setFormData({ ...formData, fatherName: e.target.value })
+                          }
+                          placeholder="Father's full name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Mother's Name</Label>
+                        <Input
+                          value={formData.motherName}
+                          onChange={(e) =>
+                            setFormData({ ...formData, motherName: e.target.value })
+                          }
+                          placeholder="Mother's full name"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Street Address</Label>
-                      <Input
-                        value={formData.streetAddress}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            streetAddress: e.target.value,
-                          })
-                        }
-                        placeholder="Street address"
-                      />
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Spouse's Name</Label>
+                        <Input
+                          value={formData.spouseName}
+                          onChange={(e) =>
+                            setFormData({ ...formData, spouseName: e.target.value })
+                          }
+                          placeholder="Spouse's full name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>No. of Children</Label>
+                        <Input
+                          type="number"
+                          value={formData.numberOfChildren}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              numberOfChildren: e.target.value,
+                            })
+                          }
+                          placeholder="0"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>City</Label>
-                      <Input
-                        value={formData.city}
-                        onChange={(e) =>
-                          setFormData({ ...formData, city: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Postal Code</Label>
-                      <Input
-                        value={formData.postalCode}
-                        onChange={(e) =>
-                          setFormData({ ...formData, postalCode: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Country</Label>
-                      <Input
-                        value={formData.country}
-                        onChange={(e) =>
-                          setFormData({ ...formData, country: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* CONTACT NUMBER */}
-                    <div className="space-y-2">
-                      <Label>Contact Number *</Label>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={12}
-                        value={formData.contactNumber}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, "");
-                          setFormData({ ...formData, contactNumber: value });
-                        }}
-                        className={
-                          contactTooLong
-                            ? "border-red-500 ring-red-500"
-                            : contactComplete
-                              ? "border-green-500 ring-green-500"
+                  {/* EMERGENCY CONTACT */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">
+                      Person to Contact in Case of Emergency
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Name</Label>
+                        <Input
+                          value={formData.emergencyContactName}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              emergencyContactName: e.target.value,
+                            })
+                          }
+                          placeholder="Emergency contact name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Contact No.</Label>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          value={formData.emergencyContactNumber}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, "");
+                            setFormData({
+                              ...formData,
+                              emergencyContactNumber: value,
+                            });
+                          }}
+                          className={
+                            formData.emergencyContactNumber.length > 11
+                              ? "border-red-500 ring-red-500"
                               : ""
-                        }
-                        placeholder="09XX XXX XXXX"
-                      />
-
-                      {contactTooLong && (
-                        <p className="text-xs text-red-500 mt-1">
-                          Contact number must not exceed 12 digits.❌
-                        </p>
-                      )}
-
-                      {contactComplete && !contactTooLong && (
-                        <p className="text-xs text-green-600 mt-1">
-                          Contact number complete (11 digits)✅
-                        </p>
-                      )}
-
-                      {contactError && (
-                        <p className="text-xs text-red-500 mt-1">
-                          Contact number must be exactly 11 digits.
-                        </p>
-                      )}
-                    </div>
-
-                    {/* EMAIL */}
-                    <div className="space-y-2">
-                      <Label>Email (Gmail only) *</Label>
-                      <Input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) =>
-                          setFormData({ ...formData, email: e.target.value })
-                        }
-                        placeholder="example@gmail.com"
-                        className={
-                          emailInvalidFormat ? "border-red-500 ring-red-500" : ""
-                        }
-                      />
-
-                      {emailInvalidFormat && (
-                        <p className="text-xs text-red-500 mt-1">
-                          Only Gmail addresses are allowed (example@gmail.com).
-                        </p>
-                      )}
-
-                      {emailValidFormat && !emailInvalidFormat && (
-                        <p className="text-xs text-green-600 mt-1">
-                          Valid email format
-                        </p>
-                      )}
-
-                      {emailError && (
-                        <p className="text-xs text-red-500 mt-1">
-                          Email is required.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* FAMILY */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">
-                    Family Background
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Father's Name</Label>
-                      <Input
-                        value={formData.fatherName}
-                        onChange={(e) =>
-                          setFormData({ ...formData, fatherName: e.target.value })
-                        }
-                        placeholder="Father's full name"
-                      />
+                          }
+                          placeholder="09XX XXX XXXX"
+                        />
+                        {formData.emergencyContactNumber.length > 11 && (
+                          <p className="text-xs text-red-500 mt-1">
+                            Contact number must not exceed 11 digits.
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Mother's Name</Label>
+                      <Label>Address</Label>
                       <Input
-                        value={formData.motherName}
-                        onChange={(e) =>
-                          setFormData({ ...formData, motherName: e.target.value })
-                        }
-                        placeholder="Mother's full name"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Spouse's Name</Label>
-                      <Input
-                        value={formData.spouseName}
-                        onChange={(e) =>
-                          setFormData({ ...formData, spouseName: e.target.value })
-                        }
-                        placeholder="Spouse's full name"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>No. of Children</Label>
-                      <Input
-                        type="number"
-                        value={formData.numberOfChildren}
+                        value={formData.emergencyContactAddress}
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            numberOfChildren: e.target.value,
+                            emergencyContactAddress: e.target.value,
                           })
                         }
-                        placeholder="0"
+                        placeholder="Emergency contact address"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* EMERGENCY CONTACT */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">
-                    Person to Contact in Case of Emergency
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Name</Label>
-                      <Input
-                        value={formData.emergencyContactName}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            emergencyContactName: e.target.value,
-                          })
-                        }
-                        placeholder="Emergency contact name"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Contact No.</Label>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        value={formData.emergencyContactNumber}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, "");
-                          setFormData({
-                            ...formData,
-                            emergencyContactNumber: value,
-                          });
-                        }}
-                        className={
-                          formData.emergencyContactNumber.length > 11
-                            ? "border-red-500 ring-red-500"
-                            : ""
-                        }
-                        placeholder="09XX XXX XXXX"
-                      />
-                      {formData.emergencyContactNumber.length > 11 && (
-                        <p className="text-xs text-red-500 mt-1">
-                          Contact number must not exceed 11 digits.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Address</Label>
-                    <Input
-                      value={formData.emergencyContactAddress}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          emergencyContactAddress: e.target.value,
-                        })
-                      }
-                      placeholder="Emergency contact address"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSaveResident}
-                  className="bg-[#2957a1] hover:bg-[#1e3f7a]"
-                >
-                  Save Resident
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSaveResident}
+                    className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+                  >
+                    Save Resident
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
@@ -1597,15 +1575,15 @@ export function ResidentRecords({
 
                       {typeof viewingResident.voterStatus !== "undefined" ? (
                         <span className="text-xs px-2 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-100">
-                          Voter: {viewingResident.voterStatus ? "Registered" : "Not Registered"}
+                          Voter: {viewingResident.voterStatus === "Yes" ? "Registered" : "Not Registered"}
                         </span>
                       ) : null}
 
                       {viewingResident.status ? (
                         <span
                           className={`text-xs px-2 py-1 rounded-full border ${String(viewingResident.status).toLowerCase() === "active"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                              : "bg-red-50 text-red-700 border-red-100"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                            : "bg-red-50 text-red-700 border-red-100"
                             }`}
                         >
                           {viewingResident.status}
@@ -1713,9 +1691,9 @@ export function ResidentRecords({
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
-                        <p className="text-sm text-gray-600">Barangay Card No.</p>
+                        <p className="text-sm text-gray-600">Resident No.</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
-                          {viewingResident.barangayCard || "—"}
+                          {formatId(viewingResident.residentNo) || "—"}
                         </p>
                       </div>
                     </div>
@@ -1744,7 +1722,7 @@ export function ResidentRecords({
                 Configure the cutoff date for identifying new residents
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>New Resident Cutoff Date</Label>

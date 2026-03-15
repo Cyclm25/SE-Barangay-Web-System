@@ -1,21 +1,4 @@
-<<<<<<< HEAD
-import { useState, useEffect } from "react";
-import { Sidebar } from "./components/layout/Sidebar";
-import { DashboardHome } from "./components/dashboard/DashboardHome";
-import { ResidentRecords } from "./components/dashboard/ResidentRecords";
-import { BarangayOfficials } from "./components/dashboard/BarangayOfficials";
-import { OnlineRequests } from "./components/dashboard/OnlineRequests";
-import { AnnouncementManagement } from "./components/dashboard/AnnouncementManagement";
-import { TransactionHistory } from "./components/dashboard/TransactionHistory";
-import { LoginPage } from "./components/auth/LoginPage";
-import  ForgotPasswordPage  from "./components/auth/ForgotPasswordPage";
-import { SetNewPasswordPage } from "./components/auth/SetNewPasswordPage";
-import { ResidentPortal } from "./components/resident/ResidentPortal";
-import { Toaster } from "./components/ui/sonner";
-import { toast } from "sonner";
-
-=======
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { DashboardHome } from './components/dashboard/DashboardHome';
 import { ResidentRecords } from './components/dashboard/ResidentRecords';
@@ -24,7 +7,7 @@ import { OnlineRequests } from './components/dashboard/OnlineRequests';
 import { AnnouncementManagement } from './components/dashboard/AnnouncementManagement';
 import { TransactionHistory } from './components/dashboard/TransactionHistory';
 import { LoginPage } from './components/auth/LoginPage';
-import { ForgotPasswordPage } from './components/auth/ForgotPasswordPage';
+import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
 import { SetNewPasswordPage } from './components/auth/SetNewPasswordPage';
 import { ResidentPortal } from './components/resident/ResidentPortal';
 import { Toaster } from './components/ui/sonner';
@@ -44,7 +27,6 @@ const loadCutoffDate = () => {
 };
 
 // 1. User Interface definition matching your DB User data [cite: 462-479]
->>>>>>> main
 interface User {
   id: string;
   name: string;
@@ -68,6 +50,14 @@ type ResetIdentity = {
   username: string;
 };
 
+type RecentActivityApiRow = {
+  account?: string | null;
+  action?: string | null;
+  module?: string | null;
+  details?: string | null;
+  timestamp?: string | null;
+};
+
 type ResetState = {
   residentAccountId: number;
   otpCode: string;
@@ -79,11 +69,8 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("dashboard");
   const [user, setUser] = useState<User | null>(null);
-
-<<<<<<< HEAD
   const [resetState, setResetState] = useState<ResetState | null>(null);
 
-=======
   // SHARED STATE: Filter and cutoff date management
   const [residentFilter, setResidentFilter] = useState<'all' | 'new'>('all');
   const [requestFilter, setRequestFilter] = useState<'all' | 'pending' | 'pickup'>('all');
@@ -96,7 +83,6 @@ export default function App() {
   }, [registrationCutoffDate]);
 
   // Persistence logic to keep user logged in on refresh [cite: 293-295]
->>>>>>> main
   useEffect(() => {
     const savedUser = localStorage.getItem("app_user");
     if (savedUser) {
@@ -143,12 +129,10 @@ export default function App() {
     toast.success("Logged out successfully.");
   };
 
-<<<<<<< HEAD
-=======
   // HANDLER: Integrated Dashboard Navigation Logic
   const handleDashboardNavigate = (tab: string, filter?: string) => {
     setActiveTab(tab as ActiveTab);
-    
+
     if (tab === 'residents') {
       setResidentFilter((filter as 'all' | 'new') || 'all');
     } else if (tab === 'requests') {
@@ -163,63 +147,45 @@ export default function App() {
   };
 
   // 3. Routing Logic: Gates features based on authorized roles 
->>>>>>> main
   const renderMainContent = () => {
     if (!user) return null;
 
     switch (activeTab) {
-<<<<<<< HEAD
-      case "dashboard":
-        return <DashboardHome adminName={user.name} />;
-      case "residents":
-        return <ResidentRecords />;
-      case "officials":
-        return user.role === "admin" ? <BarangayOfficials /> : <DashboardHome adminName={user.name} />;
-      case "requests":
-        return <OnlineRequests />;
-      case "announcements":
-        return <AnnouncementManagement />;
-      case "transactions":
-        return user.role === "admin" ? <TransactionHistory /> : <DashboardHome adminName={user.name} />;
-      default:
-        return <DashboardHome adminName={user.name} />;
-=======
-      case 'dashboard': 
+      case 'dashboard':
         return (
-          <DashboardHome 
+          <DashboardHome
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
           />
         );
-      case 'residents': 
+      case 'residents':
         return (
-          <ResidentRecords 
+          <ResidentRecords
             initialFilter={residentFilter}
             registrationCutoffDate={registrationCutoffDate}
             onUpdateCutoffDate={(date) => setRegistrationCutoffDate(date)}
           />
         );
-      case 'officials': 
+      case 'officials':
         // Only the Super Admin ('admin') can manage officials [cite: 319-320]
         return user.role === 'admin' ? <BarangayOfficials /> : <DashboardHome adminName={user.name} onNavigate={handleDashboardNavigate} registrationCutoffDate={registrationCutoffDate} />;
-      case 'requests': 
+      case 'requests':
         return (
-          <OnlineRequests 
+          <OnlineRequests
             initialFilter={requestFilter}
             initialTab={requestTab}
             onFilterChange={(filter) => setRequestFilter(filter as any)}
             onTabChange={(tab) => setRequestTab(tab)}
           />
         );
-      case 'announcements': 
+      case 'announcements':
         return <AnnouncementManagement />;
-      case 'transactions': 
+      case 'transactions':
         // Only the Super Admin ('admin') sees full transaction summaries [cite: 325]
         return user.role === 'admin' ? <TransactionHistory /> : <DashboardHome adminName={user.name} onNavigate={handleDashboardNavigate} registrationCutoffDate={registrationCutoffDate} />;
-      default: 
+      default:
         return <DashboardHome adminName={user.name} onNavigate={handleDashboardNavigate} registrationCutoffDate={registrationCutoffDate} />;
->>>>>>> main
     }
   };
 
@@ -294,11 +260,7 @@ export default function App() {
         onLogout={handleLogout}
         adminName={user.name}
         adminId={user.id}
-<<<<<<< HEAD
         userRole={user.role}
-=======
-        userRole={user.role} 
->>>>>>> main
       />
       <div className="flex-1 overflow-auto">{renderMainContent()}</div>
       <Toaster position="top-right" />

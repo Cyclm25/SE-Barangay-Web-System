@@ -18,11 +18,8 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
 
-<<<<<<< HEAD
-    /* Linting (Kept relaxed for development) */
-=======
-    /* Linting */
->>>>>>> main
+
+    
     "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,

@@ -1,28 +1,10 @@
-<<<<<<< HEAD
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Calendar, Clock } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
-import { useEffect, useMemo, useState } from "react";
-=======
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Calendar, Clock, UserPlus, TrendingUp, CheckCircle, Users } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line
 } from 'recharts';
-import { useState, useEffect } from 'react';
->>>>>>> main
+import { useState, useEffect, useMemo } from 'react';
 import { api } from "../../utils/api";
 import dayjs from 'dayjs';
 
@@ -51,40 +33,6 @@ type DashboardStatsResponse = {
     not_registered?: number | string;
     notRegistered?: number | string;
   };
-<<<<<<< HEAD
-};
-
-type ResidentTypeStatsRow = {
-  type: string;
-  count: number | string;
-};
-
-type ResidentTypeStatsResponse = {
-  data?: ResidentTypeStatsRow[];
-};
-
-type RecentActivityApiRow = {
-  timestamp: string;
-  account?: string;
-  action?: string;
-  details?: string;
-  module?: string;
-};
-
-// Color map for resident types
-const RESIDENT_TYPE_COLOR: Record<string, string> = {
-  Resident: "#4aa8cf",
-  Student: "#5f913f",
-  "Senior Citizen": "#ffa62e",
-  PWD: "#ea4d48",
-  Indigenous: "#2957a1",
-};
-
-export function DashboardHome({ adminName }: DashboardHomeProps) {
-  const [currentDateTime, setCurrentDateTime] = useState("");
-
-  // cards
-=======
   activities?: Array<{
     action: string;
     name?: string;
@@ -96,6 +44,14 @@ export function DashboardHome({ adminName }: DashboardHomeProps) {
   }>;
 };
 
+type RecentActivityApiRow = {
+  account?: string | null;
+  action?: string | null;
+  module?: string | null;
+  details?: string | null;
+  timestamp?: string | null;
+};
+
 export function DashboardHome({ 
   adminName, 
   onNavigate,
@@ -103,7 +59,6 @@ export function DashboardHome({
 }: DashboardHomeProps) {
   const [currentDateTime, setCurrentDateTime] = useState('');
 
->>>>>>> main
   const [stats, setStats] = useState({
     totalResidents: 0,
     totalOfficials: 0,
@@ -112,28 +67,10 @@ export function DashboardHome({
     newResidents: 0,
   });
 
-<<<<<<< HEAD
-  // Residents bar chart (by resident type)
-  const [residentData, setResidentData] = useState<
-    { category: string; value: number }[]
-  >([]);
-
-  // Voters pie chart
-  const [voterData, setVoterData] = useState<
-    { name: string; value: number; fill: string }[]
-  >([]);
-
-  // recent activities
-  const [activities, setActivities] = useState<
-    Array<{ action: string; name?: string; time?: string }>
-  >([]);
-
-=======
   const [residentData, setResidentData] = useState<{ category: string; value: number; fill: string }[]>([]);
   const [voterData, setVoterData] = useState<{ name: string; value: number; fill: string }[]>([]);
   const [weeklyTrendData, setWeeklyTrendData] = useState<{ week: string; count: number }[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
->>>>>>> main
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingActivities, setLoadingActivities] = useState(true);
 
@@ -240,10 +177,6 @@ export function DashboardHome({
     return () => clearInterval(interval);
   }, []);
 
-<<<<<<< HEAD
-  // Fetch dashboard stats + resident type stats
-=======
->>>>>>> main
   useEffect(() => {
     let isMounted = true;
 
@@ -251,26 +184,10 @@ export function DashboardHome({
       setLoadingStats(true);
 
       try {
-<<<<<<< HEAD
-        // 1) Cards + voters
-        const res = await api.get<DashboardStatsResponse>("/api/dashboard/stats");
-        const data = res.data || {};
-
-        const totalResidents = Number(data.totalResidents ?? 0);
-        const totalOfficials = Number(data.totalOfficials ?? 0);
-        const pendingRequests = Number(data.pendingRequests ?? 0);
-        const documentsToPickup = Number(
-          data.readyPickup ?? data.documentsToPickup ?? 0
-        );
-
-        if (!isMounted) return;
-
-=======
         // Pass the admin's cutoff date to the backend
         const res = await api.get<DashboardStatsResponse>(`/api/dashboard/stats?cutoff=${registrationCutoffDate}`);
         const data = res.data || {};
 
->>>>>>> main
         setStats({
           totalResidents: Number(data.totalResidents ?? 0),
           totalOfficials: Number(data.totalOfficials ?? 0),
@@ -279,10 +196,6 @@ export function DashboardHome({
           newResidents: Number(data.newResidents ?? 0),
         });
 
-<<<<<<< HEAD
-        // Voters
-=======
->>>>>>> main
         const registered = Number(data?.voters?.registered ?? 0);
         const notRegistered = Number(
           data?.voters?.not_registered ?? data?.voters?.notRegistered ?? 0
@@ -293,34 +206,6 @@ export function DashboardHome({
           { name: "Not Registered", value: notRegistered, fill: "#ffa62e" },
         ]);
 
-<<<<<<< HEAD
-        // 2) Residents bar chart by type
-        try {
-          const typeRes = await api.get<ResidentTypeStatsResponse>(
-            "/api/stats/resident-types"
-          );
-
-          const rows = Array.isArray(typeRes.data?.data) ? typeRes.data.data : [];
-
-          const chart = rows
-            .map((r) => ({
-              category: String(r.type ?? "").trim(),
-              value: Number(r.count ?? 0),
-            }))
-            .filter((r) => r.category.length > 0);
-
-          if (!isMounted) return;
-
-          if (chart.length > 0) {
-            setResidentData(chart);
-          } else {
-            setResidentData([{ category: "Total Residents", value: totalResidents }]);
-          }
-        } catch (e) {
-          console.error("Failed to fetch resident type stats:", e);
-          if (!isMounted) return;
-          setResidentData([{ category: "Total Residents", value: totalResidents }]);
-=======
         setResidentData([
           { category: 'Total Residents', value: Number(data.totalResidents ?? 0), fill: '#4aa8cf' },
         ]);
@@ -330,17 +215,11 @@ export function DashboardHome({
           setWeeklyTrendData(data.weeklyTrend);
         } else {
           setWeeklyTrendData(defaultWeeklyTrend);
->>>>>>> main
         }
 
         setActivities(data.activities || []);
       } catch (err) {
         console.error("Failed to fetch dashboard stats:", err);
-<<<<<<< HEAD
-        if (!isMounted) return;
-
-=======
->>>>>>> main
         setStats({
           totalResidents: 0,
           totalOfficials: 0,
@@ -350,26 +229,15 @@ export function DashboardHome({
         });
         setResidentData([]);
         setVoterData([]);
-<<<<<<< HEAD
-        // IMPORTANT: don't setActivities([]) here (prevents flicker/override)
-=======
         setWeeklyTrendData(defaultWeeklyTrend);
         setActivities([]);
->>>>>>> main
       } finally {
         if (isMounted) setLoadingStats(false);
       }
     };
 
     fetchDashboardStats();
-<<<<<<< HEAD
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-=======
   }, [registrationCutoffDate]);
->>>>>>> main
 
   const statText = (n: number) => (loadingStats ? "—" : String(n));
   const hasResidentChart = residentData.length > 0;
@@ -412,11 +280,6 @@ export function DashboardHome({
           onClick={() => onNavigate?.('residents', 'new')}
         >
           <CardContent className="p-4">
-<<<<<<< HEAD
-            <p className="text-xs text-gray-700 mb-2">
-              Total Registered Barangay Officials
-            </p>
-=======
             <div className="flex justify-between items-start mb-2">
               <p className="text-xs text-gray-700 font-semibold">New Residents</p>
               <UserPlus className="w-4 h-4 text-green-600" />
@@ -439,7 +302,6 @@ export function DashboardHome({
               <p className="text-xs text-gray-700">Total Barangay Officials</p>
               <Users className="w-4 h-4 text-orange-500" />
             </div>
->>>>>>> main
             <p className="text-[20px] font-semibold text-[#2957a1]">
               {statText(stats.totalOfficials)}
             </p>
@@ -476,13 +338,8 @@ export function DashboardHome({
         </Card>
       </div>
 
-<<<<<<< HEAD
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-=======
       {/* Charts Section - Reordered */}
       <div className="space-y-6">
->>>>>>> main
         {/* Residents Bar Chart */}
         <Card className="border-[#5ce36c] bg-white">
           <CardHeader>
@@ -495,22 +352,11 @@ export function DashboardHome({
                   <BarChart data={residentData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="category" tick={{ fontSize: 10 }} />
-<<<<<<< HEAD
-                    <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="value">
-                      {residentData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={RESIDENT_TYPE_COLOR[entry.category] ?? "#949494"}
-                        />
-=======
                     <YAxis tick={{ fontSize: 10 }} />
                     <Tooltip cursor={{ fill: 'transparent' }} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {residentData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.fill} />
->>>>>>> main
                       ))}
                     </Bar>
                   </BarChart>
@@ -521,113 +367,6 @@ export function DashboardHome({
                 </div>
               )}
             </div>
-<<<<<<< HEAD
-
-            {hasResidentChart && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-4">
-                {residentData.map((item, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3"
-                      style={{
-                        backgroundColor:
-                          RESIDENT_TYPE_COLOR[item.category] ?? "#949494",
-                      }}
-                    />
-                    <span className="text-[11px] text-gray-600">{item.category}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Voters Pie Chart (Enhanced: Total + % Labels) */}
-        <Card className="border-[#5ce36c] bg-white">
-          <CardHeader>
-            <CardTitle className="text-center text-base">Voters</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[250px] w-full flex items-center justify-center">
-              {hasVoterChart ? (
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie
-                      data={voterData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={90}
-                      labelLine={false}
-                      label={renderPieLabel}
-                      dataKey="value"
-                    >
-                      {voterData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-
-                    {/* Center total */}
-                    <text
-                      x="50%"
-                      y="48%"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontSize={18}
-                      fontWeight={800}
-                      fill="#111827"
-                    >
-                      {totalVoters.toLocaleString()}
-                    </text>
-                    <text
-                      x="50%"
-                      y="58%"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontSize={11}
-                      fontWeight={500}
-                      fill="#6B7280"
-                    >
-                      Total Voters
-                    </text>
-
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[250px] flex items-center justify-center text-sm text-gray-500">
-                  No voter chart data available.
-                </div>
-              )}
-            </div>
-
-            {/* Legend with count + percent */}
-            {hasVoterChart && totalVoters > 0 && (
-              <div className="flex justify-center gap-6 mt-4 flex-wrap">
-                {voterData.map((item, index) => {
-                  const value = Number(item.value) || 0;
-                  const pct = (value / totalVoters) * 100;
-                  return (
-                    <div key={index} className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3"
-                        style={{ backgroundColor: item.fill }}
-                      />
-                      <span className="text-[11px] text-gray-600">
-                        {item.name}:{" "}
-                        <span className="font-semibold text-gray-900">
-                          {value.toLocaleString()}
-                        </span>{" "}
-                        <span className="text-gray-500">({pct.toFixed(0)}%)</span>
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-=======
           </CardContent>
         </Card>
 
@@ -714,7 +453,6 @@ export function DashboardHome({
             </CardContent>
           </Card>
         </div>
->>>>>>> main
       </div>
 
       {/* Recent Activities (Dynamic) */}
@@ -727,15 +465,8 @@ export function DashboardHome({
         </CardHeader>
 
         <CardContent>
-<<<<<<< HEAD
-          {loadingActivities ? (
-            <div className="text-sm text-gray-500">Loading recent activities…</div>
-          ) : activities.length === 0 ? (
-            <div className="text-sm text-gray-500">No recent activities yet.</div>
-=======
           {activities.length === 0 ? (
             <div className="text-sm text-gray-500 text-center py-4">No recent activities yet.</div>
->>>>>>> main
           ) : (
             <div className="space-y-3">
               {activities.map((activity, index) => (
@@ -751,16 +482,7 @@ export function DashboardHome({
                     <p className="text-sm font-medium">{activity.action}</p>
                     {activity.name && <p className="text-xs text-gray-600">{activity.name}</p>}
                   </div>
-<<<<<<< HEAD
-
-                  {activity.time ? (
-                    <span className="text-xs text-gray-500 whitespace-nowrap">
-                      {activity.time}
-                    </span>
-                  ) : null}
-=======
                   {activity.time && <span className="text-xs text-gray-500">{activity.time}</span>}
->>>>>>> main
                 </div>
               ))}
             </div>
