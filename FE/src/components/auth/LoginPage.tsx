@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import {
@@ -23,46 +23,39 @@ interface LoginPageProps {
   onForgotPassword: () => void;
 }
 
-// Mock data for barangay officials
-const officials = [
-  {
-    name: 'Roberto Martinez',
-    position: 'Barangay Captain',
-    image: 'https://images.unsplash.com/photo-1717985498747-f081679d2c33?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBmaWxpcGluYSUyMG1hbiUyMHBvcnRyYWl0fGVufDF8fHx8MTc2OTc0NTg0OHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  },
-  {
-    name: 'Maria Santos',
-    position: 'Barangay Kagawad',
-    image: 'https://images.unsplash.com/photo-1718006915613-bcb972cabdb1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBmaWxpcGluYSUyMHdvbWFuJTIwcG9ydHJhaXR8ZW58MXx8fHwxNzY5NzQ1ODQ4fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  },
-  {
-    name: 'Juan Dela Cruz',
-    position: 'Barangay Kagawad',
-    image: 'https://images.unsplash.com/photo-1738566061505-556830f8b8f5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxidXNpbmVzcyUyMG1hbiUyMHBvcnRyYWl0JTIwYXNpYW58ZW58MXx8fHwxNzY5NzQ1ODQ5fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  },
-  {
-    name: 'Ana Reyes',
-    position: 'Barangay Secretary',
-    image: 'https://images.unsplash.com/photo-1581065178026-390bc4e78dad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjB3b21hbiUyMHBvcnRyYWl0JTIwYXNpYW58ZW58MXx8fHwxNzY5NjgyMTk0fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  },
-  {
-    name: 'Pedro Garcia',
-    position: 'Barangay Treasurer',
-    image: 'https://images.unsplash.com/photo-1532272278764-53cd1fe53f72?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx5b3VuZyUyMHByb2Zlc3Npb25hbCUyMG1hbiUyMHBvcnRyYWl0fGVufDF8fHx8MTc2OTc0NTg0OXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  },
-  {
-    name: 'Linda Ramos',
-    position: 'SK Chairperson',
-    image: 'https://images.unsplash.com/photo-1758600587839-56ba05596c69?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx5b3VuZyUyMHByb2Zlc3Npb25hbCUyMHdvbWFuJTIwcG9ydHJhaXQlMjBhc2lhbnxlbnwxfHx8fDE3Njk3NDU4NDl8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  }
-];
-
 export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [mobileTab, setMobileTab] = useState<'login' | 'about'>('login');
+
+  // State to hold the real officials from the database
+  const [officials, setOfficials] = useState<any[]>([]);
+
+  // Fetch officials when the page loads
+  useEffect(() => {
+    const fetchOfficials = async () => {
+      try {
+        const response = await fetch("http://localhost:5001/api/officials");
+        if (response.ok) {
+          const data = await response.json();
+          const officialsList = Array.isArray(data) ? data : (data.officials || []);
+          
+          // Optional: Log the first official so you can see exactly what the database columns are named
+          if (officialsList.length > 0) {
+            console.log("Database Columns for Official:", officialsList[0]);
+          }
+          
+          setOfficials(officialsList);
+        }
+      } catch (err) {
+        console.error("Failed to fetch officials:", err);
+      }
+    };
+
+    fetchOfficials();
+  }, []);
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -89,10 +82,8 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
         return;
       }
 
-      // Supports either { user: {...} } or direct user object {...}
       const u = data?.user ?? data;
 
-      // Normalize keys (backend likely returns PascalCase from SQL aliases)
       const role = u?.Role ?? u?.role ?? "";
       const displayName = u?.DisplayName ?? u?.displayName ?? "User";
 
@@ -100,7 +91,6 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
       const barangayAdminId = u?.BarangayAdminID ?? u?.barangayAdminId ?? null;
       const superAdminId = u?.SuperAdminID ?? u?.superAdminId ?? null;
 
-      // Canonical identity + type
       const userId = superAdminId || barangayAdminId || residentId;
       const userType = superAdminId
         ? "superadmin"
@@ -113,7 +103,6 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
         return;
       }
 
-      // Save session
       localStorage.setItem("userId", String(userId));
       localStorage.setItem("userType", userType);
       localStorage.setItem("role", String(role));
@@ -319,7 +308,7 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
                 </div>
               </div>
 
-              {/* Barangay Officials */}
+              {/* Barangay Officials (Desktop) */}
               <div className="bg-gradient-to-br from-[#2957a1] to-[#1e4380] rounded-3xl shadow-xl p-8 mb-8">
                 <div className="flex items-center gap-4 mb-3 text-white">
                   <div className="bg-white/20 p-3 rounded-xl">
@@ -334,29 +323,47 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
                 </p>
 
                 <div className="space-y-4">
-                  {officials.map((official, index) => (
-                    <div key={index} className="bg-white/10 backdrop-blur-sm border border-white/20 p-5 rounded-xl hover:bg-white/20 transition-all group">
-                      <div className="flex items-center gap-5">
-                        <div className="flex-shrink-0 relative">
-                          <div className="absolute inset-0 bg-white/20 rounded-full blur-md" />
-                          <img
-                            src={official.image}
-                            alt={official.name}
-                            className="w-16 h-16 rounded-full object-cover border-2 border-white/40 relative z-10 group-hover:scale-110 transition-transform"
-                          />
-                        </div>
+                  {officials.length > 0 ? officials.map((official, index) => {
+                    // Hyper-robust fallback for Name
+                    const officialName = official.AdminName || official.adminname || official.name || official.Name || official.fullName || official.fullname || "Unknown Official";
+                    
+                    // Hyper-robust fallback for Position/Role
+                    const officialPosition = official.Position || official.position || official.Role || official.role || "Barangay Official";
+                    
+                    // Hyper-robust fallback for Image
+                    const imageUrl = official.ProfileImage || official.profileimage || official.image || official.Image || official.profileImage;
+                    
+                    // Smart Image Logic: Use DB image, OR generate a nice initials avatar if missing
+                    const finalImage = imageUrl 
+                      ? (imageUrl.startsWith('http') || imageUrl.startsWith('data:') ? imageUrl : `http://localhost:5001${imageUrl}`) 
+                      : `https://ui-avatars.com/api/?name=${encodeURIComponent(officialName)}&background=ffffff&color=2957a1&bold=true`;
 
-                        <div className="flex-1">
-                          <h3 className="text-white text-[16px] font-bold">
-                            {official.name}
-                          </h3>
-                          <p className="text-white/80 text-[14px] font-medium mt-1">
-                            {official.position}
-                          </p>
+                    return (
+                      <div key={index} className="bg-white/10 backdrop-blur-sm border border-white/20 p-5 rounded-xl hover:bg-white/20 transition-all group">
+                        <div className="flex items-center gap-5">
+                          <div className="flex-shrink-0 relative">
+                            <div className="absolute inset-0 bg-white/20 rounded-full blur-md" />
+                            <img
+                              src={finalImage}
+                              alt={officialName}
+                              className="w-16 h-16 rounded-full object-cover border-2 border-white/40 relative z-10 group-hover:scale-110 transition-transform bg-white"
+                            />
+                          </div>
+
+                          <div className="flex-1">
+                            <h3 className="text-white text-[16px] font-bold capitalize">
+                              {officialName}
+                            </h3>
+                            <p className="text-white/80 text-[14px] font-medium mt-1 capitalize">
+                              {officialPosition}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  }) : (
+                    <p className="text-white/70 italic text-sm">Loading officials...</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -528,9 +535,100 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
             {/* About Content - Mobile */}
             {mobileTab === 'about' && (
               <div className="md:hidden w-full px-4 py-6">
-                {/* (same as your version 1 about content) */}
-                {/* Keeping this section unchanged */}
-                {/* ... */}
+                {/* About Overview Card */}
+              <div className="bg-gradient-to-br from-[#2957a1] to-[#1e4380] p-8 rounded-3xl shadow-xl text-white mb-8">
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="bg-white/20 p-3.5 rounded-xl">
+                    <Shield className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-[20px] font-bold">
+                    About Barangay 160
+                  </h3>
+                </div>
+                <p className="text-white/95 text-[15px] leading-relaxed">
+                  A progressive community dedicated to serving residents with excellence, integrity, and compassion since 1985. We strive to create a safe, sustainable, and thriving neighborhood for all families and individuals.
+                </p>
+              </div>
+
+              {/* Mission & Vision */}
+              <div className="bg-white border-2 border-[#2957a1]/20 rounded-3xl shadow-lg p-8 mb-8">
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="bg-[#2957a1]/10 p-3 rounded-xl">
+                    <Heart className="w-7 h-7 text-[#2957a1]" />
+                  </div>
+                  <h3 className="text-[#2957a1] text-[19px] font-bold">
+                    Our Mission
+                  </h3>
+                </div>
+                <p className="text-gray-700 text-[15px] leading-relaxed mb-8">
+                  To provide quality services, promote community development, and ensure the safety and welfare of all residents through transparent governance and active citizen participation.
+                </p>
+
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="bg-[#2957a1]/10 p-3 rounded-xl">
+                    <FileText className="w-7 h-7 text-[#2957a1]" />
+                  </div>
+                  <h3 className="text-[#2957a1] text-[19px] font-bold">
+                    Our Vision
+                  </h3>
+                </div>
+                <p className="text-gray-700 text-[15px] leading-relaxed">
+                  A united, prosperous, and peaceful barangay where every resident has access to opportunities for growth, development, and a better quality of life.
+                </p>
+              </div>
+
+              {/* Barangay Officials (Mobile) */}
+              <div className="bg-gradient-to-br from-[#2957a1] to-[#1e4380] rounded-3xl shadow-xl p-8 mb-8">
+                <div className="flex items-center gap-4 mb-3 text-white">
+                  <div className="bg-white/20 p-3 rounded-xl">
+                    <Users className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-[20px] font-bold">
+                    Meet Our Leaders
+                  </h3>
+                </div>
+                <p className="text-white/80 text-[14px] mb-6">
+                  Dedicated public servants working for our community
+                </p>
+
+                <div className="space-y-4">
+                  {officials.length > 0 ? officials.map((official, index) => {
+                    const officialName = official.AdminName || official.adminname || official.name || official.Name || official.fullName || official.fullname || "Unknown Official";
+                    const officialPosition = official.Position || official.position || official.Role || official.role || "Barangay Official";
+                    
+                    const imageUrl = official.ProfileImage || official.profileimage || official.image || official.Image || official.profileImage;
+                    const finalImage = imageUrl 
+                      ? (imageUrl.startsWith('http') || imageUrl.startsWith('data:') ? imageUrl : `http://localhost:5001${imageUrl}`) 
+                      : `https://ui-avatars.com/api/?name=${encodeURIComponent(officialName)}&background=ffffff&color=2957a1&bold=true`;
+
+                    return (
+                      <div key={index} className="bg-white/10 backdrop-blur-sm border border-white/20 p-5 rounded-xl hover:bg-white/20 transition-all group">
+                        <div className="flex items-center gap-5">
+                          <div className="flex-shrink-0 relative">
+                            <div className="absolute inset-0 bg-white/20 rounded-full blur-md" />
+                            <img
+                              src={finalImage}
+                              alt={officialName}
+                              className="w-16 h-16 rounded-full object-cover border-2 border-white/40 relative z-10 group-hover:scale-110 transition-transform bg-white"
+                            />
+                          </div>
+
+                          <div className="flex-1">
+                            <h3 className="text-white text-[16px] font-bold capitalize">
+                              {officialName}
+                            </h3>
+                            <p className="text-white/80 text-[14px] font-medium mt-1 capitalize">
+                              {officialPosition}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }) : (
+                    <p className="text-white/70 italic text-sm">Loading officials...</p>
+                  )}
+                </div>
+              </div>
               </div>
             )}
 
