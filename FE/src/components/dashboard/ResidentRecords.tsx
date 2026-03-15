@@ -1574,26 +1574,23 @@ export function ResidentRecords({
           }}
         >
           <DialogContent
-            className="
-      w-[96vw] sm:w-[92vw] md:w-[86vw] lg:w-[78vw]
-      max-w-5xl
-      max-h-[90vh] overflow-y-auto
-      p-0
-    "
+            // ✅ FIX 1: Override Shadcn's narrow defaults using specific breakpoints
+            className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto p-0"
           >
             {/* Sticky header */}
             <div className="sticky top-0 z-10 bg-white border-b">
               <DialogHeader className="px-4 sm:px-6 py-4">
-                <DialogTitle className="text-lg font-semibold">Resident Details</DialogTitle>
+                <DialogTitle className="text-xl font-bold text-[#2957a1]">Resident Details</DialogTitle>
               </DialogHeader>
             </div>
 
             {viewingResident && (
-              <div className="p-4 sm:p-6 space-y-6">
+              <div className="p-4 sm:p-6 space-y-8">
                 {/* Top Profile Section */}
-                <div className="flex flex-col md:flex-row gap-6">
+                <div className="flex flex-col md:flex-row gap-8">
                   {/* Avatar */}
-                  <div className="flex items-center justify-center md:justify-start md:w-44">
+                  {/* ✅ FIX 2: Give the avatar column a fixed width (280px) so buttons fit nicely */}
+                  <div className="flex flex-col items-center justify-start md:w-[280px] flex-shrink-0">
                     <ProfileImageUpload
                       residentId={viewingResident.residentNo}
                       currentImage={viewingResident.profileImage}
@@ -1607,68 +1604,68 @@ export function ResidentRecords({
 
                   {/* Header Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-xl font-semibold text-gray-900 break-words">
+                    <p className="text-3xl font-bold text-gray-900 break-words capitalize">
                       {viewingResident.firstName}{" "}
                       {viewingResident.middleName ? viewingResident.middleName + " " : ""}
                       {viewingResident.lastName}
                     </p>
 
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <span className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="text-xs px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 font-semibold">
                         Resident No: {formatId(viewingResident.residentNo)}
                       </span>
 
-                      {viewingResident.residentType ? (
-                        <span className="text-xs px-2 py-1 rounded-full bg-green-50 text-green-700 border border-green-100">
+                      {viewingResident.residentType && (
+                        <span className="text-xs px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold">
                           Type: {viewingResident.residentType}
                         </span>
-                      ) : null}
+                      )}
 
-                      {typeof viewingResident.voterStatus !== "undefined" ? (
-                        <span className="text-xs px-2 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-100">
+                      {typeof viewingResident.voterStatus !== "undefined" && (
+                        <span className="text-xs px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-100 font-semibold">
                           Voter: {viewingResident.voterStatus ? "Registered" : "Not Registered"}
                         </span>
-                      ) : null}
+                      )}
 
-                      {viewingResident.status ? (
+                      {viewingResident.status && (
                         <span
-                          className={`text-xs px-2 py-1 rounded-full border ${String(viewingResident.status).toLowerCase() === "active"
+                          className={`text-xs px-3 py-1.5 rounded-full border font-semibold ${String(viewingResident.status).toLowerCase() === "active"
                               ? "bg-emerald-50 text-emerald-700 border-emerald-100"
                               : "bg-red-50 text-red-700 border-red-100"
                             }`}
                         >
                           {viewingResident.status}
                         </span>
-                      ) : null}
+                      )}
                     </div>
 
                     {/* Quick Info Cards */}
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="p-3 rounded-lg border bg-white">
-                        <p className="text-[11px] text-gray-500">Gender</p>
-                        <p className="text-sm font-medium text-gray-900">
+                    {/* ✅ FIX 3: Change to a 4-column grid so these sit side-by-side */}
+                    <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-3 rounded-xl border bg-gray-50/50">
+                        <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Gender</p>
+                        <p className="text-sm font-bold text-gray-900">
                           {viewingResident.gender || "—"}
                         </p>
                       </div>
 
-                      <div className="p-3 rounded-lg border bg-white">
-                        <p className="text-[11px] text-gray-500">Age</p>
-                        <p className="text-sm font-medium text-gray-900">
+                      <div className="p-3 rounded-xl border bg-gray-50/50">
+                        <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Age</p>
+                        <p className="text-sm font-bold text-gray-900">
                           {typeof viewingResident.age !== "undefined" ? viewingResident.age : "—"}
                         </p>
                       </div>
 
-                      <div className="p-3 rounded-lg border bg-white">
-                        <p className="text-[11px] text-gray-500">Birthday</p>
-                        <p className="text-sm font-medium text-gray-900 break-words">
+                      <div className="p-3 rounded-xl border bg-gray-50/50">
+                        <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Birthday</p>
+                        <p className="text-sm font-bold text-gray-900 break-words">
                           {viewingResident.birthday || "—"}
                         </p>
                       </div>
 
-                      {/* ✅ Missing field #1 */}
-                      <div className="p-3 rounded-lg border bg-white">
-                        <p className="text-[11px] text-gray-500">Civil Status</p>
-                        <p className="text-sm font-medium text-gray-900">
+                      <div className="p-3 rounded-xl border bg-gray-50/50">
+                        <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Civil Status</p>
+                        <p className="text-sm font-bold text-gray-900">
                           {viewingResident.civilStatus || "—"}
                         </p>
                       </div>
@@ -1677,73 +1674,71 @@ export function ResidentRecords({
                 </div>
 
                 {/* Details Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Family Information */}
-                  <div className="rounded-lg border bg-white">
-                    <div className="px-4 py-3 border-b">
-                      <p className="text-sm font-semibold text-gray-900">Family Information</p>
-                      <p className="text-xs text-gray-500">Parents and spouse details</p>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+                  {/* Family Information Card */}
+                  <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 bg-gray-50/80 border-b">
+                      <p className="text-sm font-bold text-[#2957a1]">Family Information</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Parents and spouse details</p>
                     </div>
 
-                    <div className="p-4 space-y-3">
-                      {/* ✅ Missing field #2 */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
-                        <p className="text-sm text-gray-600">Father</p>
-                        <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
+                    <div className="p-5 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">Father</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
                           {viewingResident.fatherName || "—"}
                         </p>
                       </div>
 
-                      {/* ✅ Missing field #3 */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
-                        <p className="text-sm text-gray-600">Mother</p>
-                        <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">Mother</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
                           {viewingResident.motherName || "—"}
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
-                        <p className="text-sm text-gray-600">Spouse</p>
-                        <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">Spouse</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
                           {viewingResident.spouseName || "—"}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Contact & Address */}
-                  <div className="rounded-lg border bg-white">
-                    <div className="px-4 py-3 border-b">
-                      <p className="text-sm font-semibold text-gray-900">Contact & Address</p>
-                      <p className="text-xs text-gray-500">How to reach this resident</p>
+                  {/* Contact & Address Card */}
+                  <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 bg-gray-50/80 border-b">
+                      <p className="text-sm font-bold text-[#2957a1]">Contact & Address</p>
+                      <p className="text-xs text-gray-500 mt-0.5">How to reach this resident</p>
                     </div>
 
-                    <div className="p-4 space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
-                        <p className="text-sm text-gray-600">Contact No.</p>
-                        <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
+                    <div className="p-5 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">Contact No.</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words">
                           {viewingResident.contactNumber || "—"}
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
-                        <p className="text-sm text-gray-600">Email</p>
-                        <p className="text-sm font-medium text-gray-900 sm:text-right break-all">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">Email</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-all">
                           {viewingResident.email || "—"}
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
-                        <p className="text-sm text-gray-600">Address</p>
-                        <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-start">
+                        <p className="text-xs font-semibold text-gray-500 uppercase mt-1">Address</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words leading-relaxed capitalize">
                           {`${viewingResident.houseNo || ""} ${viewingResident.streetAddress || ""} ${viewingResident.city || ""}`.trim() ||
                             "—"}
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
-                        <p className="text-sm text-gray-600">Barangay Card No.</p>
-                        <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">Brgy Card</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words">
                           {viewingResident.barangayCard || "—"}
                         </p>
                       </div>
@@ -1754,9 +1749,9 @@ export function ResidentRecords({
             )}
 
             {/* Sticky footer */}
-            <div className="sticky bottom-0 bg-white border-t px-4 sm:px-6 py-4">
+            <div className="sticky bottom-0 bg-gray-50 border-t px-4 sm:px-6 py-4">
               <DialogFooter className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setViewingResident(null)}>
+                <Button variant="outline" onClick={() => setViewingResident(null)} className="font-semibold shadow-sm">
                   Close
                 </Button>
               </DialogFooter>

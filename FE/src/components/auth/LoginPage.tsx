@@ -41,12 +41,6 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
         if (response.ok) {
           const data = await response.json();
           const officialsList = Array.isArray(data) ? data : (data.officials || []);
-          
-          // Optional: Log the first official so you can see exactly what the database columns are named
-          if (officialsList.length > 0) {
-            console.log("Database Columns for Official:", officialsList[0]);
-          }
-          
           setOfficials(officialsList);
         }
       } catch (err) {
@@ -324,16 +318,17 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
 
                 <div className="space-y-4">
                   {officials.length > 0 ? officials.map((official, index) => {
-                    // Hyper-robust fallback for Name
-                    const officialName = official.AdminName || official.adminname || official.name || official.Name || official.fullName || official.fullname || "Unknown Official";
+                    // Strictly grab exact lowercase names from DB
+                    const officialName = official.adminname || "Unknown Official";
+                    const officialPosition = official.position || "Barangay Official";
                     
-                    // Hyper-robust fallback for Position/Role
-                    const officialPosition = official.Position || official.position || official.Role || official.role || "Barangay Official";
+                    // Safely grab the image, preventing literal "null" or "undefined" strings
+                    let imageUrl = official.profileimage || official.ProfileImage || official.image;
+                    if (imageUrl === "null" || imageUrl === "undefined" || !imageUrl) {
+                      imageUrl = null;
+                    }
                     
-                    // Hyper-robust fallback for Image
-                    const imageUrl = official.ProfileImage || official.profileimage || official.image || official.Image || official.profileImage;
-                    
-                    // Smart Image Logic: Use DB image, OR generate a nice initials avatar if missing
+                    // Smart Image Logic: Use DB image, OR generate a nice initials avatar
                     const finalImage = imageUrl 
                       ? (imageUrl.startsWith('http') || imageUrl.startsWith('data:') ? imageUrl : `http://localhost:5001${imageUrl}`) 
                       : `https://ui-avatars.com/api/?name=${encodeURIComponent(officialName)}&background=ffffff&color=2957a1&bold=true`;
@@ -593,10 +588,14 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
 
                 <div className="space-y-4">
                   {officials.length > 0 ? officials.map((official, index) => {
-                    const officialName = official.AdminName || official.adminname || official.name || official.Name || official.fullName || official.fullname || "Unknown Official";
-                    const officialPosition = official.Position || official.position || official.Role || official.role || "Barangay Official";
+                    const officialName = official.adminname || "Unknown Official";
+                    const officialPosition = official.position || "Barangay Official";
                     
-                    const imageUrl = official.ProfileImage || official.profileimage || official.image || official.Image || official.profileImage;
+                    let imageUrl = official.profileimage || official.ProfileImage || official.image;
+                    if (imageUrl === "null" || imageUrl === "undefined" || !imageUrl) {
+                      imageUrl = null;
+                    }
+
                     const finalImage = imageUrl 
                       ? (imageUrl.startsWith('http') || imageUrl.startsWith('data:') ? imageUrl : `http://localhost:5001${imageUrl}`) 
                       : `https://ui-avatars.com/api/?name=${encodeURIComponent(officialName)}&background=ffffff&color=2957a1&bold=true`;
