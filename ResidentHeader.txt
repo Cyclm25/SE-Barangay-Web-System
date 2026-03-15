@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import imgBarangayLogo from "../../assets/barangaylogo.png";
 import imgProfile from "../../assets/profilepic.png";
@@ -8,10 +8,9 @@ interface ResidentHeaderProps {
   activePage: 'home' | 'services' | 'track' | 'about' | null;
   onNavigate: (page: 'home' | 'services' | 'track' | 'about') => void;
   onProfileClick: () => void;
-  profileImage?: string;
 }
 
-export function ResidentHeader({ residentName, activePage, onNavigate, onProfileClick, profileImage }: ResidentHeaderProps) {
+export function ResidentHeader({ residentName, activePage, onNavigate, onProfileClick }: ResidentHeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
@@ -102,19 +101,11 @@ export function ResidentHeader({ residentName, activePage, onNavigate, onProfile
                 onClick={onProfileClick} 
                 className="ml-4 hover:opacity-80 transition-opacity"
               >
-                {profileImage ? (
-                  <img 
-                    src={profileImage} 
-                    alt="Profile" 
-                    className="w-[43px] h-[43px] rounded-full object-cover border-2 border-[#2957a1]"
-                  />
-                ) : (
-                  <img 
-                    src={imgProfile} 
-                    alt="Profile" 
-                    className="w-[50px] h-[43px] object-contain"
-                  />
-                )}
+                <img 
+                  src={imgProfile} 
+                  alt="Profile" 
+                  className="w-[50px] h-[43px] object-contain"
+                />
               </button>
             </div>
 
@@ -124,19 +115,11 @@ export function ResidentHeader({ residentName, activePage, onNavigate, onProfile
                 onClick={onProfileClick} 
                 className="hover:opacity-80 transition-opacity"
               >
-                {profileImage ? (
-                  <img 
-                    src={profileImage} 
-                    alt="Profile" 
-                    className="w-[35px] h-[35px] rounded-full object-cover border-2 border-[#2957a1]"
-                  />
-                ) : (
-                  <img 
-                    src={imgProfile} 
-                    alt="Profile" 
-                    className="w-[35px] h-[30px] object-contain"
-                  />
-                )}
+                <img 
+                  src={imgProfile} 
+                  alt="Profile" 
+                  className="w-[35px] h-[30px] object-contain"
+                />
               </button>
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -194,3 +177,5 @@ export function ResidentHeader({ residentName, activePage, onNavigate, onProfile
     </>
   );
 }
+
+

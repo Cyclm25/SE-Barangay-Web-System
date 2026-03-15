@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ResidentHeader } from './ResidentHeader';
 import { ProfileSidebar } from './ProfileSidebar';
 import { ResidentHome, Announcement } from './ResidentHome';
@@ -20,6 +20,24 @@ export function ResidentPortal({ residentName, onLogout }: ResidentPortalProps) 
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   const [isProfileSidebarOpen, setIsProfileSidebarOpen] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | undefined>(undefined);
+
+  // Load resident profile image on mount
+  useEffect(() => {
+    const residentId = localStorage.getItem('residentId');
+    if (!residentId) return;
+    fetch(`http://localhost:5001/residents/${encodeURIComponent(residentId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ProfileImage) {
+          const imgUrl = data.ProfileImage.startsWith('data:')
+            ? data.ProfileImage
+            : `http://localhost:5001${data.ProfileImage}`;
+          setProfileImage(imgUrl);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleNavigate = (page: 'home' | 'services' | 'track' | 'about') => {
     setCurrentPage(page);
@@ -102,6 +120,7 @@ export function ResidentPortal({ residentName, onLogout }: ResidentPortalProps) 
         activePage={getActivePage()}
         onNavigate={handleNavigate}
         onProfileClick={() => setIsProfileSidebarOpen(true)}
+        profileImage={profileImage}
       />
       
       <ProfileSidebar

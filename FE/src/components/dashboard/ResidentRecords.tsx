@@ -46,6 +46,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs, { Dayjs } from "dayjs";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { ProfileImageUpload } from "../ui/ProfileImageUpload";
 
 // Helper: Get default cutoff date (30 days ago)
 const getDefaultCutoffDate = () => {
@@ -63,6 +64,7 @@ interface ResidentRecordsProps {
 type ResidentStatus = "Active" | "Inactive";
 
 interface Resident {
+  barangayCard: string;
   id: string;
   residentNo: string;
   profileImage?: string;
@@ -125,7 +127,11 @@ function mapRowToResident(r: ResidentRow): Resident {
   return {
     id: r.ResidentID,
     residentNo: r.ResidentID,
-    profileImage: undefined,
+    profileImage: (r as any).ProfileImage
+      ? (r as any).ProfileImage.startsWith('data:')
+        ? (r as any).ProfileImage
+        : `http://localhost:5001${(r as any).ProfileImage}`
+      : undefined,
     firstName: r.FirstName ?? "",
     middleName: r.MiddleName ?? "",
     lastName: r.LastName ?? "",
@@ -451,6 +457,7 @@ export function ResidentRecords({
       emergencyContactAddress: formData.emergencyContactAddress,
       dateRegistered: new Date().toISOString().split("T")[0],
       status: "Active",
+      barangayCard: ""
     };
 
     setPendingResident(newResident);
@@ -479,16 +486,16 @@ export function ResidentRecords({
         Math.floor(Math.random() * 9999)
       ).padStart(4, "0")}`;
 
-      const token =
-        localStorage.getItem("token") ||
-        localStorage.getItem("authToken") ||
-        localStorage.getItem("jwt") ||
-        null;
+const token =
+  localStorage.getItem("token") ||
+  localStorage.getItem("authToken") ||
+  localStorage.getItem("jwt") ||
+  null;
 
-      if (!token) {
-        toast.error("Missing login token. Please log in again.");
-        return;
-      }
+if (!token) {
+  toast.error("Missing login token. Please log in again.");
+  return;
+}
 
       const response = await fetch(`${API_BASE}/residents/register`, {
         method: "POST",
@@ -498,6 +505,7 @@ export function ResidentRecords({
         },
         body: JSON.stringify({
           residentNo: nextNo,
+          profileImage: pendingResident.profileImage,
           firstName: pendingResident.firstName,
           middleName: pendingResident.middleName,
           lastName: pendingResident.lastName,
@@ -707,32 +715,14 @@ export function ResidentRecords({
                 </div>
 
                 <div className="flex justify-center">
-                  <div className="space-y-2 text-center">
-                    <div className="w-32 h-32 mx-auto rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-[#2957a1]">
-                      {profileImagePreview ? (
-                        <img
-                          src={profileImagePreview}
-                          alt="Profile"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <User className="w-16 h-16 text-gray-400" />
-                      )}
-                    </div>
-                    <Label htmlFor="profileImage" className="cursor-pointer">
-                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#2957a1] text-white rounded-md hover:bg-[#1e3f7a] transition-colors">
-                        <Upload className="w-4 h-4" />{" "}
-                        <span className="text-sm">Upload Profile Picture</span>
-                      </div>
-                      <Input
-                        id="profileImage"
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleImageUpload}
-                      />
-                    </Label>
-                  </div>
+                  <ProfileImageUpload
+                    onImageReady={(imageUrl, previewUrl) => {
+                      setFormData({ ...formData, profileImage: imageUrl });
+                      setProfileImagePreview(previewUrl);
+                    }}
+                    currentImage={profileImagePreview || undefined}
+                    size="lg"
+                  />
                 </div>
 
                 {/* PERSONAL INFO */}
@@ -1548,17 +1538,15 @@ export function ResidentRecords({
                 <div className="flex flex-col md:flex-row gap-6">
                   {/* Avatar */}
                   <div className="flex items-center justify-center md:justify-start md:w-44">
-                    {viewingResident.profileImage ? (
-                      <img
-                        src={viewingResident.profileImage}
-                        alt="Profile"
-                        className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover border"
-                      />
-                    ) : (
-                      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border flex items-center justify-center bg-gray-50 text-gray-500 text-sm">
-                        No Photo
-                      </div>
-                    )}
+                    <ProfileImageUpload
+                      residentId={viewingResident.residentNo}
+                      currentImage={viewingResident.profileImage}
+                      onImageReady={(imageUrl, previewUrl) => {
+                        setViewingResident({ ...viewingResident, profileImage: previewUrl });
+                        loadResidents();
+                      }}
+                      size="lg"
+                    />
                   </div>
 
                   {/* Header Info */}
