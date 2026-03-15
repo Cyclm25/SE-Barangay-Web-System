@@ -38,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X } from "lucide-react";
+import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { formatId } from "../../utils/formatId";
 import OcrScanner from "../../OcrScanner";
@@ -234,7 +234,7 @@ export function ResidentRecords({
   const handleSortMenuChange = (v: SortMenuValue) => {
     setSortMenuValue(v);
 
-    // Aâ€“Z / Zâ€“A must ALWAYS sort by First Name
+    // A–Z / Z–A must ALWAYS sort by First Name
     if (v === "dir:asc") {
       setSortBy("firstName");
       setSortDirection("asc");
@@ -486,16 +486,20 @@ export function ResidentRecords({
         Math.floor(Math.random() * 9999)
       ).padStart(4, "0")}`;
 
-const token =
-  localStorage.getItem("token") ||
-  localStorage.getItem("authToken") ||
-  localStorage.getItem("jwt") ||
-  null;
+      let token =
+        localStorage.getItem("token") ||
+        localStorage.getItem("authToken") ||
+        localStorage.getItem("jwt") ||
+        null;
 
-if (!token) {
-  toast.error("Missing login token. Please log in again.");
-  return;
-}
+      if (token) {
+        token = token.replace(/^"|"$/g, ''); 
+      }
+
+      if (!token) {
+        toast.error("Missing login token. Please log in again.");
+        return;
+      }
 
       const response = await fetch(`${API_BASE}/residents/register`, {
         method: "POST",
@@ -505,7 +509,7 @@ if (!token) {
         },
         body: JSON.stringify({
           residentNo: nextNo,
-          profileImage: pendingResident.profileImage,
+          profileImage: pendingResident.profileImage, // FIXED: Sending photo to backend
           firstName: pendingResident.firstName,
           middleName: pendingResident.middleName,
           lastName: pendingResident.lastName,
@@ -600,7 +604,8 @@ if (!token) {
       const matchesSearch =
         resident.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         resident.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resident.residentNo.includes(searchTerm);
+        resident.residentNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (resident.residentType && resident.residentType.toLowerCase().includes(searchTerm.toLowerCase()));
 
       // ADDED LOGIC: FILTER BY DATE CUTOFF
       if (activeFilter === 'new') {
@@ -643,6 +648,47 @@ if (!token) {
     toast.success("Check the First Name box!");
   };
 
+  const handleGenerateList = () => {
+    // Define the headers for the CSV file
+    const headers = [
+      "Resident No", "First Name", "Middle Name", "Last Name", 
+      "Resident Type", "Age", "Gender", "Voter Status", "Status", "Date Registered"
+    ];
+
+    // Map the currently filtered residents into rows
+    const rows = filteredResidents.map(r => [
+      r.residentNo,
+      r.firstName,
+      r.middleName,
+      r.lastName,
+      r.residentType,
+      r.age,
+      r.gender,
+      r.voterStatus,
+      r.status,
+      r.dateRegistered
+    ]);
+
+    // Combine headers and rows, formatting as CSV
+    const csvContent = [
+      headers.join(","),
+      // Wrap cells in quotes to prevent commas inside names/text from breaking columns
+      ...rows.map(row => row.map(cell => `"${cell || ''}"`).join(",")) 
+    ].join("\n");
+
+    // Create a downloadable file and trigger the download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Resident_Records_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success("Resident list downloaded successfully!");
+  };
+
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <div className="p-6 space-y-6 bg-gray-50 min-h-full">
@@ -673,6 +719,17 @@ if (!token) {
           </div>
 
           <div className="flex items-center gap-2">
+            
+            {/* Generate List Button */}
+            <Button
+              variant="outline"
+              onClick={handleGenerateList}
+              className="flex items-center gap-2 border-[#2957a1] text-[#2957a1] hover:bg-blue-50"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Generate List</span>
+            </Button>
+
             {/* Settings Button */}
             <Button
               variant="outline"
@@ -837,7 +894,7 @@ if (!token) {
                       </Select>
                     </div>
 
-                    {/* âœ… BIRTHDAY */}
+                    {/* ✅ BIRTHDAY */}
                     <div className="space-y-2">
                       <Label>Birthday *</Label>
 
@@ -1003,13 +1060,13 @@ if (!token) {
 
                       {contactTooLong && (
                         <p className="text-xs text-red-500 mt-1">
-                          Contact number must not exceed 12 digits.âŒ
+                          Contact number must not exceed 12 digits.❌
                         </p>
                       )}
 
                       {contactComplete && !contactTooLong && (
                         <p className="text-xs text-green-600 mt-1">
-                          Contact number complete (11 digits)âœ…
+                          Contact number complete (11 digits)✅
                         </p>
                       )}
 
@@ -1203,8 +1260,8 @@ if (!token) {
 
                   <SelectContent>
                     {/* MUST be 1st & 2nd: direction for FIRST NAME */}
-                    <SelectItem value="dir:asc">Aâ€“Z (First Name)</SelectItem>
-                    <SelectItem value="dir:desc">Zâ€“A (First Name)</SelectItem>
+                    <SelectItem value="dir:asc">A–Z (First Name)</SelectItem>
+                    <SelectItem value="dir:desc">Z–A (First Name)</SelectItem>
 
                     {/* Resident No has its own Asc/Desc */}
                     <SelectItem value="field:residentNo:asc">Resident No (Ascending)</SelectItem>
@@ -1510,7 +1567,6 @@ if (!token) {
         </Dialog>
 
         {/* VIEW RESIDENT DETAILS */}
-        {/* VIEW RESIDENT DETAILS */}
         <Dialog
           open={!!viewingResident}
           onOpenChange={(open) => {
@@ -1591,29 +1647,29 @@ if (!token) {
                       <div className="p-3 rounded-lg border bg-white">
                         <p className="text-[11px] text-gray-500">Gender</p>
                         <p className="text-sm font-medium text-gray-900">
-                          {viewingResident.gender || "â€”"}
+                          {viewingResident.gender || "—"}
                         </p>
                       </div>
 
                       <div className="p-3 rounded-lg border bg-white">
                         <p className="text-[11px] text-gray-500">Age</p>
                         <p className="text-sm font-medium text-gray-900">
-                          {typeof viewingResident.age !== "undefined" ? viewingResident.age : "â€”"}
+                          {typeof viewingResident.age !== "undefined" ? viewingResident.age : "—"}
                         </p>
                       </div>
 
                       <div className="p-3 rounded-lg border bg-white">
                         <p className="text-[11px] text-gray-500">Birthday</p>
                         <p className="text-sm font-medium text-gray-900 break-words">
-                          {viewingResident.birthday || "â€”"}
+                          {viewingResident.birthday || "—"}
                         </p>
                       </div>
 
-                      {/* âœ… Missing field #1 */}
+                      {/* ✅ Missing field #1 */}
                       <div className="p-3 rounded-lg border bg-white">
                         <p className="text-[11px] text-gray-500">Civil Status</p>
                         <p className="text-sm font-medium text-gray-900">
-                          {viewingResident.civilStatus || "â€”"}
+                          {viewingResident.civilStatus || "—"}
                         </p>
                       </div>
                     </div>
@@ -1630,26 +1686,26 @@ if (!token) {
                     </div>
 
                     <div className="p-4 space-y-3">
-                      {/* âœ… Missing field #2 */}
+                      {/* ✅ Missing field #2 */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
                         <p className="text-sm text-gray-600">Father</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
-                          {viewingResident.fatherName || "â€”"}
+                          {viewingResident.fatherName || "—"}
                         </p>
                       </div>
 
-                      {/* âœ… Missing field #3 */}
+                      {/* ✅ Missing field #3 */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
                         <p className="text-sm text-gray-600">Mother</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
-                          {viewingResident.motherName || "â€”"}
+                          {viewingResident.motherName || "—"}
                         </p>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
                         <p className="text-sm text-gray-600">Spouse</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
-                          {viewingResident.spouseName || "â€”"}
+                          {viewingResident.spouseName || "—"}
                         </p>
                       </div>
                     </div>
@@ -1666,14 +1722,14 @@ if (!token) {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
                         <p className="text-sm text-gray-600">Contact No.</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
-                          {viewingResident.contactNumber || "â€”"}
+                          {viewingResident.contactNumber || "—"}
                         </p>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
                         <p className="text-sm text-gray-600">Email</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-all">
-                          {viewingResident.email || "â€”"}
+                          {viewingResident.email || "—"}
                         </p>
                       </div>
 
@@ -1681,14 +1737,14 @@ if (!token) {
                         <p className="text-sm text-gray-600">Address</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
                           {`${viewingResident.houseNo || ""} ${viewingResident.streetAddress || ""} ${viewingResident.city || ""}`.trim() ||
-                            "â€”"}
+                            "—"}
                         </p>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-4">
                         <p className="text-sm text-gray-600">Barangay Card No.</p>
                         <p className="text-sm font-medium text-gray-900 sm:text-right break-words">
-                          {viewingResident.barangayCard || "â€”"}
+                          {viewingResident.barangayCard || "—"}
                         </p>
                       </div>
                     </div>
