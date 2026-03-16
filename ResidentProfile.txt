@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Camera, Edit2, CreditCard } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { toast } from 'sonner';
@@ -35,18 +35,18 @@ export function ResidentProfile() {
     const userType = localStorage.getItem("userType");
     const residentId = localStorage.getItem("residentId");
 
-    console.log("🧾 ResidentProfile mounted");
+    console.log("ðŸ§¾ ResidentProfile mounted");
     console.log("userType =", userType);
     console.log("residentId =", residentId);
 
     if (userType !== "resident" || !residentId) {
-      console.warn("⛔ Skipping fetch: userType not resident OR residentId missing");
+      console.warn("â›” Skipping fetch: userType not resident OR residentId missing");
       return;
     }
 
     (async () => {
       const url = `http://localhost:5001/residents/${encodeURIComponent(residentId)}`;
-      console.log("➡️ Fetching:", url);
+      console.log("âž¡ï¸ Fetching:", url);
 
       try {
         const res = await fetch(url, {
@@ -55,8 +55,8 @@ export function ResidentProfile() {
         });
 
         const raw = await res.text();
-        console.log("✅ Response status:", res.status);
-        console.log("✅ Raw response:", raw);
+        console.log("âœ… Response status:", res.status);
+        console.log("âœ… Raw response:", raw);
 
         let data: any = null;
         try {
@@ -73,14 +73,6 @@ export function ResidentProfile() {
         if (!data) {
           toast.error("Backend did not return JSON. Check your route / server.");
           return;
-        }
-
-        // Load profile image from backend
-        if (data.ProfileImage) {
-          const imgUrl = data.ProfileImage.startsWith('data:') 
-            ? data.ProfileImage  // base64
-            : `http://localhost:5001${data.ProfileImage}`;  // file path
-          setProfileImage(imgUrl);
         }
 
         setProfileData({
@@ -107,7 +99,7 @@ export function ResidentProfile() {
           emergencyContactNumber: data.ContactPersonNo || ''
         });
       } catch (err) {
-        console.error("❌ Fetch failed:", err);
+        console.error("âŒ Fetch failed:", err);
         toast.error("Could not connect to server.");
       }
     })();
@@ -130,50 +122,15 @@ export function ResidentProfile() {
   const [contactLocal, setContactLocal] = useState('');
   const [contactError, setContactError] = useState('');
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    const residentId = localStorage.getItem("residentId");
-    let token = localStorage.getItem("token") || localStorage.getItem("authToken") || localStorage.getItem("jwt") || null;
-
-    if (token) {
-      token = token.replace(/^"|"$/g, ''); // Strip accidental quotes
-    }
-
-    if (!residentId || !token) {
-      toast.error("Session expired. Please log in again.");
-      return;
-    }
-
-    const loadingId = toast.loading("Uploading profile picture...");
-
-    try {
-      // 1. Prepare the image file for upload
-      const formData = new FormData();
-      formData.append("profileImage", file, file.name);
-
-      // 2. Send it to the backend upload route
-      const response = await fetch(`http://localhost:5001/api/upload/profile-picture/${residentId}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.error || "Upload failed");
-      }
-
-      // 3. Update the UI with the permanent backend URL
-      const fullUrl = `http://localhost:5001${data.imageUrl}`;
-      setProfileImage(fullUrl);
-      toast.success("Profile picture updated successfully!", { id: loadingId });
-
-    } catch (error: any) {
-      console.error("Upload error:", error);
-      toast.error(error.message || "Failed to upload image.", { id: loadingId });
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileImage(reader.result as string);
+        toast.success('Profile picture updated successfully!');
+      };
+      reader.readAsDataURL(file);
     }
   };
 

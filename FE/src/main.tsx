@@ -2,7 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { BrowserRouter } from 'react-router-dom';
-import './index.css'; // Ensure your styles are loaded
+import './index.css';
+import "react-day-picker/dist/style.css";
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

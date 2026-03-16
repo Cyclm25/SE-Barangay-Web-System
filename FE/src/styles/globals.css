@@ -192,14 +192,14 @@ html {
 /* make react-datepicker match shadcn-ish look */
 .react-datepicker {
   font-family: inherit;
-  border: 1px solid rgba(0,0,0,0.12);
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 10px;
   overflow: hidden;
 }
 
 .react-datepicker__header {
   background: white;
-  border-bottom: 1px solid rgba(0,0,0,0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .react-datepicker__day-name,
@@ -222,22 +222,25 @@ html {
 }
 
 .datepicker-popper {
-  z-index: 9999; /* ensure it appears above your dialog */
+  z-index: 9999;
+  /* ensure it appears above your dialog */
 }
 
 .MuiPickersPopper-root {
   z-index: 999999 !important;
 }
 
-/* ✅ Make MUI DatePicker input match shadcn Input */
+
 .shadcn-date-field .MuiOutlinedInput-root {
-  height: 40px; /* same as h-10 */
+  height: 40px;
+  /* same as h-10 */
   border-radius: var(--radius);
   background: var(--input-background);
 }
 
 .shadcn-date-field .MuiOutlinedInput-input {
-  padding: 0 12px; /* px-3 */
+  padding: 0 12px;
+  /* px-3 */
   height: 40px;
   display: flex;
   align-items: center;
@@ -265,4 +268,33 @@ html {
 /* icon alignment like your inputs */
 .shadcn-date-field .MuiIconButton-root {
   margin-right: 2px;
+}
+
+.rdp {
+  --rdp-cell-size: 40px;
+  margin: 0;
+}
+
+.rdp-months {
+  display: flex;
+}
+
+.rdp-month {
+  width: 100%;
+}
+
+.rdp-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rdp-head_row,
+.rdp-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.rdp-cell {
+  text-align: center;
+  padding: 4px;
 }

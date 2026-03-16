@@ -2,10 +2,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Calendar, Clock, UserPlus, TrendingUp, CheckCircle, Users } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line
+  PieChart, Pie, Cell, LineChart, Line,
 } from 'recharts';
 import { useState, useEffect, useMemo } from 'react';
-import { api } from "../../utils/api";
+import { api } from '../../utils/api';
 import dayjs from 'dayjs';
 
 // Helper: Get default cutoff date (30 days ago)
@@ -45,17 +45,49 @@ type DashboardStatsResponse = {
 };
 
 type RecentActivityApiRow = {
-  account?: string | null;
-  action?: string | null;
-  module?: string | null;
-  details?: string | null;
-  timestamp?: string | null;
+  timestamp: string;
+  account?: string;
+  action?: string;
+  details?: string;
+  module?: string;
 };
 
-export function DashboardHome({ 
-  adminName, 
+type ResidentRow = {
+  ResidentID: string;
+  ResidentType: string | null;
+  status?: string | null;
+};
+
+const residentTypeColors: Record<string, string> = {
+  Resident: '#4aa8cf',
+  Student: '#8b5cf6',
+  PWD: '#f59e0b',
+  'Senior Citizen': '#10b981',
+  Indigenous: '#ef4444',
+  Other: '#6b7280',
+};
+
+const buildResidentTypeChartData = (rows: ResidentRow[]) => {
+  const counts: Record<string, number> = {};
+
+  rows.forEach((r) => {
+    if ((r.status ?? 'Active') !== 'Active') return;
+
+    const type = (r.ResidentType || 'Other').trim() || 'Other';
+    counts[type] = (counts[type] || 0) + 1;
+  });
+
+  return Object.entries(counts).map(([category, value]) => ({
+    category,
+    value,
+    fill: residentTypeColors[category] || residentTypeColors.Other,
+  }));
+};
+
+export function DashboardHome({
+  adminName,
   onNavigate,
-  registrationCutoffDate = getDefaultCutoffDate()
+  registrationCutoffDate = getDefaultCutoffDate(),
 }: DashboardHomeProps) {
   const [currentDateTime, setCurrentDateTime] = useState('');
 
@@ -67,87 +99,28 @@ export function DashboardHome({
     newResidents: 0,
   });
 
-  const [residentData, setResidentData] = useState<{ category: string; value: number; fill: string }[]>([]);
-  const [voterData, setVoterData] = useState<{ name: string; value: number; fill: string }[]>([]);
-  const [weeklyTrendData, setWeeklyTrendData] = useState<{ week: string; count: number }[]>([]);
+  const [residentData, setResidentData] = useState<
+    { category: string; value: number; fill: string }[]
+  >([]);
+  const [voterData, setVoterData] = useState<
+    { name: string; value: number; fill: string }[]
+  >([]);
+  const [weeklyTrendData, setWeeklyTrendData] = useState<
+    { week: string; count: number }[]
+  >([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingActivities, setLoadingActivities] = useState(true);
 
-  // ===== VOTERS UI ENHANCEMENTS (TOTAL + % LABELS) =====
   const totalVoters = useMemo(
     () => voterData.reduce((sum, v) => sum + (Number(v.value) || 0), 0),
     [voterData]
   );
 
-  const renderPieLabel = (props: any) => {
-    const { cx, cy, midAngle, innerRadius, outerRadius, percent } = props;
+  const hasResidentChart = residentData.length > 0;
+  const hasVoterChart = voterData.length > 0;
+  const hasTrendChart = weeklyTrendData.length > 0;
 
-    // avoid clutter for tiny slices
-    if (!percent || percent < 0.05) return null;
-
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.6;
-    const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
-    const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
-
-    return (
-      <text
-        x={x}
-        y={y}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize={11}
-        fontWeight={700}
-        fill="#111827"
-      >
-        {(percent * 100).toFixed(0)}%
-      </text>
-    );
-  };
-
-  // ===== RECENT ACTIVITIES (DYNAMIC) =====
-  const fetchRecentActivities = async () => {
-    setLoadingActivities(true);
-    try {
-      const res = await api.get<RecentActivityApiRow[]>(
-        "/api/transactions/recent?limit=5"
-      );
-
-      const rows = Array.isArray(res.data) ? res.data : [];
-
-      const mapped = rows.map((r) => ({
-        action: `${r.account ?? "Someone"} ${String(r.action ?? "")
-          .toLowerCase()
-          .trim()} ${r.module ?? ""}`.trim(),
-        name: r.details,
-        time: r.timestamp
-          ? new Date(r.timestamp).toLocaleString("en-US", {
-              month: "short",
-              day: "2-digit",
-              year: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-              hour12: true,
-            })
-          : "",
-      }));
-
-      setActivities(mapped);
-    } catch (e) {
-      console.error("Failed to fetch recent activities:", e);
-      setActivities([]);
-    } finally {
-      setLoadingActivities(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRecentActivities(); // first load
-    const interval = setInterval(fetchRecentActivities, 10000); // refresh every 10s
-    return () => clearInterval(interval);
-  }, []);
-
-  // Default weekly trend data (will be replaced by backend data if available)
   const defaultWeeklyTrend = [
     { week: 'Week 1', count: 12 },
     { week: 'Week 2', count: 18 },
@@ -155,18 +128,54 @@ export function DashboardHome({
     { week: 'Week 4', count: 22 },
   ];
 
+  const fetchRecentActivities = async () => {
+    setLoadingActivities(true);
+    try {
+      const res = await api.get<RecentActivityApiRow[]>('/api/transactions/recent?limit=5');
+      const rows = Array.isArray(res.data) ? res.data : [];
+
+      const mapped = rows.map((r) => ({
+        action: `${r.account ?? 'Someone'} ${String(r.action ?? '').toLowerCase().trim()} ${r.module ?? ''}`.trim(),
+        name: r.details,
+        time: r.timestamp
+          ? new Date(r.timestamp).toLocaleString('en-US', {
+            month: 'short',
+            day: '2-digit',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          })
+          : '',
+      }));
+
+      setActivities(mapped);
+    } catch (e) {
+      console.error('Failed to fetch recent activities:', e);
+      setActivities([]);
+    } finally {
+      setLoadingActivities(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecentActivities();
+    const interval = setInterval(fetchRecentActivities, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const updateDateTime = () => {
       const now = new Date();
-      const date = now.toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
+      const date = now.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
       });
-      const time = now.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        second: "2-digit",
+      const time = now.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
         hour12: true,
       });
       setCurrentDateTime(`${date} | ${time}`);
@@ -184,9 +193,12 @@ export function DashboardHome({
       setLoadingStats(true);
 
       try {
-        // Pass the admin's cutoff date to the backend
-        const res = await api.get<DashboardStatsResponse>(`/api/dashboard/stats?cutoff=${registrationCutoffDate}`);
+        const res = await api.get<DashboardStatsResponse>(
+          `/api/dashboard/stats?cutoff=${registrationCutoffDate}`
+        );
         const data = res.data || {};
+
+        if (!isMounted) return;
 
         setStats({
           totalResidents: Number(data.totalResidents ?? 0),
@@ -202,15 +214,10 @@ export function DashboardHome({
         );
 
         setVoterData([
-          { name: "Registered", value: registered, fill: "#2dadfc" },
-          { name: "Not Registered", value: notRegistered, fill: "#ffa62e" },
+          { name: 'Registered', value: registered, fill: '#2dadfc' },
+          { name: 'Not Registered', value: notRegistered, fill: '#ffa62e' },
         ]);
 
-        setResidentData([
-          { category: 'Total Residents', value: Number(data.totalResidents ?? 0), fill: '#4aa8cf' },
-        ]);
-
-        // Set weekly trend data from backend or use default
         if (Array.isArray(data.weeklyTrend) && data.weeklyTrend.length > 0) {
           setWeeklyTrendData(data.weeklyTrend);
         } else {
@@ -218,8 +225,18 @@ export function DashboardHome({
         }
 
         setActivities(data.activities || []);
+
+        const residentsRes = await api.get('/residents');
+        const residentRows: ResidentRow[] = Array.isArray(residentsRes.data)
+          ? residentsRes.data
+          : residentsRes.data?.residents ?? [];
+
+        if (!isMounted) return;
+        setResidentData(buildResidentTypeChartData(residentRows));
       } catch (err) {
-        console.error("Failed to fetch dashboard stats:", err);
+        console.error('Failed to fetch dashboard stats:', err);
+        if (!isMounted) return;
+
         setStats({
           totalResidents: 0,
           totalOfficials: 0,
@@ -230,23 +247,22 @@ export function DashboardHome({
         setResidentData([]);
         setVoterData([]);
         setWeeklyTrendData(defaultWeeklyTrend);
-        setActivities([]);
       } finally {
         if (isMounted) setLoadingStats(false);
       }
     };
 
     fetchDashboardStats();
+
+    return () => {
+      isMounted = false;
+    };
   }, [registrationCutoffDate]);
 
-  const statText = (n: number) => (loadingStats ? "—" : String(n));
-  const hasResidentChart = residentData.length > 0;
-  const hasVoterChart = voterData.length > 0;
-  const hasTrendChart = weeklyTrendData.length > 0;
+  const statText = (n: number) => (loadingStats ? '—' : String(n));
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-full">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
@@ -258,92 +274,118 @@ export function DashboardHome({
         </div>
       </div>
 
-      {/* Stats Cards - All Clickable with Navigation */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+
         {/* Total Registered Residents */}
-        <Card 
-          className="border-[#51c55f] bg-white cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200" 
-          onClick={() => onNavigate?.('residents', 'all')}
-        >
+        <Card className="border-[#2957a1] bg-white">
           <CardContent className="p-4">
             <p className="text-xs text-gray-700 mb-2">Total Registered Residents</p>
+
             <p className="text-[20px] font-semibold text-[#2957a1]">
               {statText(stats.totalResidents)}
             </p>
-            <p className="text-[9px] text-gray-500 mt-2 italic">→ View all residents</p>
+
+            <p
+              onClick={() => onNavigate?.('residents', 'all')}
+              className="text-[14px] text-black mt-2 cursor-pointer hover:underline hover:text-[#2957a1]"
+            >
+              → View all residents
+            </p>
           </CardContent>
         </Card>
 
-        {/* New Residents - Green Card */}
-        <Card 
-          className="border-[#4ade80] bg-gradient-to-br from-green-50 to-white cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200 border-2" 
-          onClick={() => onNavigate?.('residents', 'new')}
-        >
+
+        {/* New Residents */}
+        <Card className="border-[#51c55f] bg-gradient-to-br from-green-50 to-white border-2">
           <CardContent className="p-4">
             <div className="flex justify-between items-start mb-2">
               <p className="text-xs text-gray-700 font-semibold">New Residents</p>
               <UserPlus className="w-4 h-4 text-green-600" />
             </div>
+
             <p className="text-[20px] font-semibold text-green-600">
               {statText(stats.newResidents)}
             </p>
-            <p className="text-[9px] text-gray-500 mt-2">Since {dayjs(registrationCutoffDate).format('MM/DD/YYYY')}</p>
-            <p className="text-[9px] text-green-600 mt-1 italic">→ View new residents</p>
+
+            <p className="text-[9px] text-gray-500 mt-2">
+              Since {dayjs(registrationCutoffDate).format('MM/DD/YYYY')}
+            </p>
+
+            <p
+              onClick={() => onNavigate?.('residents', 'new')}
+              className="text-[14px] text-black mt-2 cursor-pointer hover:underline hover:text-[#16a34a]"
+            >
+              → View new residents
+            </p>
           </CardContent>
         </Card>
 
+
         {/* Total Barangay Officials */}
-        <Card 
-          className="border-[#ffa62e] bg-white cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200" 
-          onClick={() => onNavigate?.('officials')}
-        >
+        <Card className="border-[#ffa62e] bg-white">
           <CardContent className="p-4">
             <div className="flex justify-between items-start mb-2">
               <p className="text-xs text-gray-700">Total Barangay Officials</p>
               <Users className="w-4 h-4 text-orange-500" />
             </div>
+
             <p className="text-[20px] font-semibold text-[#2957a1]">
               {statText(stats.totalOfficials)}
             </p>
-            <p className="text-[9px] text-gray-500 mt-2 italic">→ Manage officials</p>
+
+            <p
+              onClick={() => onNavigate?.('officials')}
+              className="text-[14px] text-black mt-2 cursor-pointer hover:underline hover:text-[#f97316]"
+            >
+              → Manage officials
+            </p>
           </CardContent>
         </Card>
 
+
         {/* Total Pending Requests */}
-        <Card 
-          className="border-[#ea4d48] bg-white cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200" 
-          onClick={() => onNavigate?.('requests', 'pending')}
-        >
+        <Card className="border-[#ea4d48] bg-white">
           <CardContent className="p-4">
             <p className="text-xs text-gray-700 mb-2">Total Pending Requests</p>
+
             <p className="text-[20px] font-semibold text-[#2957a1]">
               {statText(stats.pendingRequests)}
             </p>
-            <p className="text-[9px] text-gray-500 mt-2 italic">→ View pending</p>
+
+            <p
+              onClick={() => onNavigate?.('requests', 'pending')}
+              className="text-[14px] text-black mt-2 cursor-pointer hover:underline hover:text-[#ef4444]"
+            >
+              → View pending
+            </p>
           </CardContent>
         </Card>
 
+
         {/* Total Documents to Pickup */}
-        <Card 
-          className="border-[#2957a1] bg-white cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-200" 
-          onClick={() => onNavigate?.('requests', 'pickup')}
-        >
+        <Card className="border-[#2957a1] bg-white">
           <CardContent className="p-4">
             <p className="text-xs text-gray-700 mb-2">Total Documents to Pickup</p>
+
             <p className="text-[20px] font-semibold text-[#2957a1]">
               {statText(stats.documentsToPickup)}
             </p>
-            <p className="text-[9px] text-gray-500 mt-2 italic">→ View documents</p>
+
+            <p
+              onClick={() => onNavigate?.('requests', 'pickup')}
+              className="text-[14px] text-black mt-2 cursor-pointer hover:underline hover:text-[#2957a1]"
+            >
+              → View documents
+            </p>
           </CardContent>
         </Card>
+
       </div>
 
-      {/* Charts Section - Reordered */}
       <div className="space-y-6">
-        {/* Residents Bar Chart */}
         <Card className="border-[#5ce36c] bg-white">
           <CardHeader>
-            <CardTitle className="text-center text-base">Total Residents Overview</CardTitle>
+            <CardTitle className="text-center text-base">Residents by Type</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[250px] w-full">
@@ -352,7 +394,7 @@ export function DashboardHome({
                   <BarChart data={residentData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="category" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                     <Tooltip cursor={{ fill: 'transparent' }} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {residentData.map((entry, index) => (
@@ -370,9 +412,7 @@ export function DashboardHome({
           </CardContent>
         </Card>
 
-        {/* Charts Grid - Growth Trend and Voters */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* New Residents Growth Trend */}
           <Card className="border-[#4ade80] bg-white">
             <CardHeader>
               <CardTitle className="text-center text-base flex items-center justify-center gap-2">
@@ -389,12 +429,12 @@ export function DashboardHome({
                       <XAxis dataKey="week" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} />
                       <Tooltip cursor={{ fill: 'rgba(74, 222, 128, 0.1)' }} />
-                      <Line 
-                        type="monotone" 
-                        dataKey="count" 
-                        stroke="#4ade80" 
-                        strokeWidth={2} 
-                        dot={{ fill: '#16a34a', r: 4 }} 
+                      <Line
+                        type="monotone"
+                        dataKey="count"
+                        stroke="#4ade80"
+                        strokeWidth={2}
+                        dot={{ fill: '#16a34a', r: 4 }}
                         activeDot={{ r: 6 }}
                       />
                     </LineChart>
@@ -408,7 +448,6 @@ export function DashboardHome({
             </CardContent>
           </Card>
 
-          {/* Voters Pie Chart */}
           <Card className="border-[#5ce36c] bg-white">
             <CardHeader>
               <CardTitle className="text-center text-base">Voters Distribution</CardTitle>
@@ -442,12 +481,22 @@ export function DashboardHome({
 
               {hasVoterChart && (
                 <div className="flex justify-center gap-6 mt-4">
-                  {voterData.map((item, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.fill }} />
-                      <span className="text-[11px] text-gray-600">{item.name}</span>
-                    </div>
-                  ))}
+                  {voterData.map((item, index) => {
+                    const percent =
+                      totalVoters > 0 ? Math.round((Number(item.value) / totalVoters) * 100) : 0;
+
+                    return (
+                      <div key={index} className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-sm"
+                          style={{ backgroundColor: item.fill }}
+                        />
+                        <span className="text-[11px] text-gray-600">
+                          {item.name} ({percent}%)
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -455,7 +504,6 @@ export function DashboardHome({
         </div>
       </div>
 
-      {/* Recent Activities (Dynamic) */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -463,14 +511,18 @@ export function DashboardHome({
             Recent Activities
           </CardTitle>
         </CardHeader>
-
         <CardContent>
-          {activities.length === 0 ? (
+          {loadingActivities ? (
+            <div className="text-sm text-gray-500">Loading recent activities…</div>
+          ) : activities.length === 0 ? (
             <div className="text-sm text-gray-500 text-center py-4">No recent activities yet.</div>
           ) : (
             <div className="space-y-3">
               {activities.map((activity, index) => (
-                <div key={index} className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                <div
+                  key={index}
+                  className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                >
                   <div className="mt-1">
                     {activity.action.toLowerCase().includes('resident') ? (
                       <UserPlus className="w-4 h-4 text-green-500" />
@@ -482,7 +534,11 @@ export function DashboardHome({
                     <p className="text-sm font-medium">{activity.action}</p>
                     {activity.name && <p className="text-xs text-gray-600">{activity.name}</p>}
                   </div>
-                  {activity.time && <span className="text-xs text-gray-500">{activity.time}</span>}
+                  {activity.time && (
+                    <span className="text-xs text-gray-500 whitespace-nowrap">
+                      {activity.time}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

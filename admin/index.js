@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 require("dotenv").config();
 
 const app = express();
@@ -8,79 +9,99 @@ const pool = require("./db");
 /* ================================
    ANNOUNCEMENT AUTOMATION
 ================================ */
-// Import utilities
-const { publishScheduledAnnouncements } = require("./utils/publishScheduledAnnouncements");
-const { archiveExpiredAnnouncements } = require("./utils/archiveExpiredAnnouncements");
+const {
+  router: announcementsRouter,
+  publishScheduledAnnouncements,
+  archiveExpiredAnnouncements,
+} = require("./routes/announcements");
 
-// Run checks immediately on startup
 (async () => {
   try {
     console.log("[AUTO] Running initial scheduled announcements check...");
     const pubResult = await publishScheduledAnnouncements();
-    if (pubResult.published > 0) {
-      console.log(`[AUTO] Published ${pubResult.published} scheduled announcement(s) on startup`);
+    if (pubResult.rowCount > 0) {
+      console.log(
+        `[AUTO] Published ${pubResult.rowCount} scheduled announcement(s) on startup`
+      );
     }
 
     console.log("[AUTO] Running initial expired announcements check...");
     const archResult = await archiveExpiredAnnouncements();
-    if (archResult.archived > 0) {
-      console.log(`[AUTO] Archived ${archResult.archived} expired announcement(s) on startup`);
+    if (archResult.rowCount > 0) {
+      console.log(
+        `[AUTO] Archived ${archResult.rowCount} expired announcement(s) on startup`
+      );
     }
   } catch (err) {
     console.error("[AUTO] Error during startup checks:", err.message);
   }
 })();
 
-// Run scheduled announcements check every 1 minute
 setInterval(async () => {
   try {
     const result = await publishScheduledAnnouncements();
-    if (result.published > 0) {
-      console.log(`[AUTO] Published ${result.published} scheduled announcement(s)`);
+    if (result.rowCount > 0) {
+      console.log(
+        `[AUTO] Published ${result.rowCount} scheduled announcement(s)`
+      );
     }
   } catch (err) {
     console.error("[AUTO] Error publishing scheduled announcements:", err.message);
   }
-}, 1 * 60 * 1000); // 1 minute
+}, 60 * 1000);
 
-// Run expired announcements check every 1 minute
 setInterval(async () => {
   try {
+    console.log("[Announcement Expiration] Checking for expired announcements...");
     const result = await archiveExpiredAnnouncements();
-    if (result.archived > 0) {
-      console.log(`[AUTO] Archived ${result.archived} expired announcement(s)`);
+    if (result.rowCount > 0) {
+      console.log(
+        `[AUTO] Archived ${result.rowCount} expired announcement(s)`
+      );
     }
   } catch (err) {
     console.error("[AUTO] Error archiving expired announcements:", err.message);
   }
-}, 1 * 60 * 1000); // 1 minute
+}, 60 * 1000);
 
 console.log("[AUTO] Announcement automation started - checking every 1 minute");
 
 /* ================================
    MIDDLEWARE
 ================================ */
-// Find this in your backend index.js/server.js
-app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:3001"],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:3002",
+    ],
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /* ================================
    API ROUTES
 ================================ */
 const dashboardRoutes = require("./routes/dashboard");
-
-// Frontend is calling /api/dashboard/stats
 app.use("/api/dashboard", dashboardRoutes);
 
-console.log("Loading route '/api/officials' from:", require.resolve("./routes/officials"));
+console.log(
+  "Loading route '/api/officials' from:",
+  require.resolve("./routes/officials")
+);
 app.use("/api/officials", require("./routes/officials"));
 
-console.log("Loading route '/api/announcements' from:", require.resolve("./routes/announcements"));
-app.use("/api/announcements", require("./routes/announcements"));
+console.log(
+  "Loading route '/api/announcements' from:",
+  require.resolve("./routes/announcements")
+);
+app.use("/api/announcements", announcementsRouter);
 
 try {
   const authRoutes = require("./routes/auth");
@@ -93,15 +114,18 @@ app.use("/residents", require("./routes/residents"));
 app.use("/requests", require("./routes/requests"));
 app.use("/api/otp", require("./routes/otp"));
 
-// TRANSACTION ROUTES
+console.log(
+  "Loading route '/api/transactions' from:",
+  require.resolve("./routes/transactions")
+);
 app.use("/api/transactions", require("./routes/transactions"));
-console.log("Loading route '/api/transactions' from:", require.resolve("./routes/transactions"));
 
-// STATS ROUTES
 const statsRoutes = require("./routes/stats");
 app.use("/api/stats", statsRoutes);
 
-// STATS: Resident types (inline to avoid routing/file-path issues)
+console.log("Loading route '/api/upload'");
+app.use("/api/upload", require("./routes/upload"));
+
 app.get("/api/stats/resident-types", async (req, res) => {
   try {
     const q = `
@@ -118,7 +142,6 @@ app.get("/api/stats/resident-types", async (req, res) => {
     return res.status(500).json({ error: "Failed to fetch resident type stats" });
   }
 });
-
 
 /* ================================
    HEALTH CHECK ROUTES
@@ -154,8 +177,6 @@ app.get("/_dbinfo", async (req, res) => {
   }
 });
 
-
-
 /* ================================
    START SERVER
 ================================ */
@@ -164,4 +185,3 @@ const PORT = 5001;
 app.listen(PORT, () => {
   console.log(`Server started on http://localhost:${PORT}`);
 });
-
