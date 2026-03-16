@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -30,8 +30,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
-import { User, Lock, Eye, EyeOff } from "lucide-react";
-import { ProfileImageUpload } from "../ui/ProfileImageUpload";
+import { User, Upload, Lock, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../utils/api";
 
@@ -238,7 +237,6 @@ export function BarangayOfficials() {
         contactnumber: formData.contactNumber.trim() || "",
         password: finalPassword,
         superadminid: superAdminId,
-        profileImage: formData.profileImage || null,
       };
 
       console.log("Sending payload:", payload);
@@ -249,20 +247,11 @@ export function BarangayOfficials() {
       const created = (res.data?.official || res.data) as Official;
       console.log("Created official:", created);
 
-      if (!created || (!created.barangayadminid && !created.BarangayAdminID)) {
+      if (!created || !created.barangayadminid) {
         throw new Error("Invalid response from server");
       }
 
-      // Normalize keys (backend may return PascalCase or lowercase)
-      const normalized: Official = {
-        barangayadminid: created.barangayadminid || created.BarangayAdminID || "",
-        adminname: created.adminname || created.AdminName || "",
-        position: created.position || created.Position || null,
-        email: created.email || created.Email || "",
-        status: created.status ?? created.Status ?? true,
-        profileimage: created.profileimage || created.ProfileImage || formData.profileImage || undefined,
-      };
-      setOfficials((prev) => [normalized, ...prev]);
+      setOfficials((prev) => [created, ...prev]);
 
       setShowPasswordDialog(false);
       setShowDataPrivacyDialog(false);
@@ -339,7 +328,7 @@ export function BarangayOfficials() {
           <Input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search name / position / ID…"
+            placeholder="Search name / position / IDâ€¦"
             className="w-64"
           />
 
@@ -370,14 +359,33 @@ export function BarangayOfficials() {
               <div className="space-y-4 py-4">
                 {/* Profile Image Upload */}
                 <div className="flex justify-center">
-                  <ProfileImageUpload
-                    onImageReady={(imageUrl, previewUrl) => {
-                      setFormData((prev) => ({ ...prev, profileImage: imageUrl }));
-                      setProfileImagePreview(previewUrl);
-                    }}
-                    currentImage={profileImagePreview || undefined}
-                    size="lg"
-                  />
+                  <div className="space-y-2 text-center">
+                    <div className="w-32 h-32 mx-auto rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-[#2957a1]">
+                      {profileImagePreview ? (
+                        <img
+                          src={profileImagePreview}
+                          alt="Profile"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <User className="w-16 h-16 text-gray-400" />
+                      )}
+                    </div>
+
+                    <Label htmlFor="profileImage" className="cursor-pointer">
+                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#2957a1] text-white rounded-md hover:bg-[#1e3f7a] transition-colors">
+                        <Upload className="w-4 h-4" />
+                        <span className="text-sm">Upload Profile Picture</span>
+                      </div>
+                      <Input
+                        id="profileImage"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageUpload}
+                      />
+                    </Label>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -525,7 +533,7 @@ export function BarangayOfficials() {
           <AlertDialogHeader>
             <AlertDialogTitle>Data Privacy Agreement</AlertDialogTitle>
             <AlertDialogDescription>
-              Do you agree to process this barangay official’s information for
+              Do you agree to process this barangay officialâ€™s information for
               management and record-keeping purposes?
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -560,7 +568,7 @@ export function BarangayOfficials() {
               </DialogTitle>
             </div>
             <DialogDescription className="text-xs text-gray-500">
-              Create and confirm the password for this barangay official’s
+              Create and confirm the password for this barangay officialâ€™s
               account.
             </DialogDescription>
           </DialogHeader>
@@ -639,7 +647,7 @@ export function BarangayOfficials() {
       {loading ? (
         <Card>
           <CardContent className="p-12 text-center text-gray-600">
-            Loading officials…
+            Loading officialsâ€¦
           </CardContent>
         </Card>
       ) : filteredOfficials.length === 0 ? (
@@ -661,20 +669,8 @@ export function BarangayOfficials() {
               >
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
-                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#2957a1] bg-[#2957a1] flex items-center justify-center">
-                      {official.profileimage ? (
-                        <img
-                          src={
-                            official.profileimage.startsWith('data:')
-                              ? official.profileimage
-                              : `http://localhost:5001${official.profileimage}`
-                          }
-                          alt={official.adminname}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <User className="w-8 h-8 text-white" />
-                      )}
+                    <div className="w-16 h-16 bg-[#2957a1] rounded-full flex items-center justify-center overflow-hidden">
+                      <User className="w-8 h-8 text-white" />
                     </div>
 
                     <div className="flex gap-2">
@@ -722,7 +718,7 @@ export function BarangayOfficials() {
                           </AlertDialogContent>
                         </AlertDialog>
                       ) : (
-                        // ✅ ADDED CONFIRMATION FOR REACTIVATE
+                        // âœ… ADDED CONFIRMATION FOR REACTIVATE
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
@@ -743,7 +739,7 @@ export function BarangayOfficials() {
                               <AlertDialogDescription>
                                 Are you sure you want to reactivate{" "}
                                 {official.adminname}'s record? This will restore
-                                the official’s active status.
+                                the officialâ€™s active status.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
 
@@ -775,7 +771,7 @@ export function BarangayOfficials() {
                       {official.adminname}
                     </h3>
                     <p className="text-sm font-semibold text-[#2957a1]">
-                      {official.position ?? "—"}
+                      {official.position ?? "â€”"}
                     </p>
                     <p className="text-xs text-gray-500">
                       {official.barangayadminid}
@@ -783,7 +779,7 @@ export function BarangayOfficials() {
 
                     <div className="pt-2 space-y-1">
                       {official.email ? (
-                        <p className="text-xs text-gray-600">📧 {official.email}</p>
+                        <p className="text-xs text-gray-600">ðŸ“§ {official.email}</p>
                       ) : null}
                     </div>
 
