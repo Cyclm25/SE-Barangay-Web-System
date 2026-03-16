@@ -1742,6 +1742,16 @@ export function ResidentRecords({
                           {viewingResident.barangayCard || "—"}
                         </p>
                       </div>
+
+                        <div className="flex flex-col gap-1">
+                          <p className="text-xs font-semibold text-gray-500 uppercase">Date Registered</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {viewingResident?.dateRegistered
+                              ? dayjs(viewingResident.dateRegistered).format('MMMM DD, YYYY')
+                              : "—"}
+                          </p>
+                        </div>
+
                     </div>
                   </div>
                 </div>

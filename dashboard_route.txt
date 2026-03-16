@@ -1,0 +1,119 @@
+﻿// backend/routes/dashboard.js
+const express = require("express");
+const router = express.Router();
+const pool = require("../db");
+
+// GET /api/dashboard/stats
+router.get("/stats", async (req, res) => {
+  try {
+    // Cutoff date for "new residents" (passed from frontend, default 30 days ago)
+    const cutoff = req.query.cutoff || (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 30);
+      return d.toISOString().split('T')[0];
+    })();
+
+    // 1) totals
+    const totalResidentsQ = pool.query(
+      `SELECT COUNT(*)::int AS count FROM resident`
+    );
+
+    const totalOfficialsQ = pool.query(
+      `SELECT COUNT(*)::int AS count FROM barangayadmin`
+    );
+
+    // 2) requests by status
+    const pendingRequestsQ = pool.query(`
+      SELECT COUNT(*)::int AS count
+      FROM request
+      WHERE "RequestStatus" = 'Pending'
+    `);
+
+    const readyPickupQ = pool.query(`
+      SELECT COUNT(*)::int AS count
+      FROM request
+      WHERE "RequestStatus" = 'Ready for Pickup'
+    `);
+
+    // 3) voter stats
+    const voterStatsQ = pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE "VoterStatus" IS TRUE)::int  AS registered,
+        COUNT(*) FILTER (WHERE "VoterStatus" IS FALSE OR "VoterStatus" IS NULL)::int AS not_registered
+      FROM resident
+      WHERE COALESCE(status, 'Active') = 'Active'
+    `);
+
+    // 4) new residents since cutoff date
+    const newResidentsQ = pool.query(
+      `SELECT COUNT(*)::int AS count
+       FROM resident
+       WHERE "dateRegistered"::date >= $1::date`,
+      [cutoff]
+    );
+
+    // 5) weekly trend - residents registered per week for the last 4 weeks
+    const weeklyTrendQ = pool.query(`
+      SELECT
+        'Week ' || week_num AS week,
+        COUNT(*)::int AS count
+      FROM (
+        SELECT
+          CEIL(
+            EXTRACT(DAY FROM (CURRENT_DATE - "dateRegistered"::date)) / 7.0
+          )::int AS week_num
+        FROM resident
+        WHERE "dateRegistered"::date >= CURRENT_DATE - INTERVAL '28 days'
+          AND "dateRegistered" IS NOT NULL
+      ) sub
+      WHERE week_num BETWEEN 1 AND 4
+      GROUP BY week_num
+      ORDER BY week_num DESC
+    `);
+
+    const [
+      totalResidents,
+      totalOfficials,
+      pendingRequests,
+      readyPickup,
+      voterStats,
+      newResidents,
+      weeklyTrend,
+    ] = await Promise.all([
+      totalResidentsQ,
+      totalOfficialsQ,
+      pendingRequestsQ,
+      readyPickupQ,
+      voterStatsQ,
+      newResidentsQ,
+      weeklyTrendQ,
+    ]);
+
+    // Build weekly trend - fill missing weeks with 0
+    const trendMap = {};
+    weeklyTrend.rows.forEach((r) => {
+      trendMap[r.week] = r.count;
+    });
+
+    const fullTrend = ['Week 4', 'Week 3', 'Week 2', 'Week 1'].map((w) => ({
+      week: w,
+      count: trendMap[w] || 0,
+    }));
+
+    res.json({
+      totalResidents: totalResidents.rows[0].count,
+      totalOfficials: totalOfficials.rows[0].count,
+      pendingRequests: pendingRequests.rows[0].count,
+      readyPickup: readyPickup.rows[0].count,
+      voters: voterStats.rows[0],
+      newResidents: newResidents.rows[0].count,
+      weeklyTrend: fullTrend,
+    });
+  } catch (err) {
+    console.error("Dashboard fetch failed:", err);
+    res.status(500).json({ error: "Dashboard fetch failed" });
+  }
+});
+
+module.exports = router;
+
