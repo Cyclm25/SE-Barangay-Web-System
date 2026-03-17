@@ -52,36 +52,13 @@ type RecentActivityApiRow = {
   module?: string;
 };
 
-type ResidentRow = {
-  ResidentID: string;
-  ResidentType: string | null;
-  status?: string | null;
-};
-
-const residentTypeColors: Record<string, string> = {
-  Resident: '#4aa8cf',
-  Student: '#8b5cf6',
-  PWD: '#f59e0b',
-  'Senior Citizen': '#10b981',
-  Indigenous: '#ef4444',
-  Other: '#6b7280',
-};
-
-const buildResidentTypeChartData = (rows: ResidentRow[]) => {
-  const counts: Record<string, number> = {};
-
-  rows.forEach((r) => {
-    if ((r.status ?? 'Active') !== 'Active') return;
-
-    const type = (r.ResidentType || 'Other').trim() || 'Other';
-    counts[type] = (counts[type] || 0) + 1;
-  });
-
-  return Object.entries(counts).map(([category, value]) => ({
-    category,
-    value,
-    fill: residentTypeColors[category] || residentTypeColors.Other,
-  }));
+// Color map for resident types
+const RESIDENT_TYPE_COLORS: Record<string, string> = {
+  'Resident': '#4aa8cf',
+  'Student': '#5f913f',
+  'Senior Citizen': '#ffa62e',
+  'PWD': '#ea4d48',
+  'Indigenous': '#2957a1',
 };
 
 export function DashboardHome({
@@ -99,19 +76,16 @@ export function DashboardHome({
     newResidents: 0,
   });
 
-  const [residentData, setResidentData] = useState<
-    { category: string; value: number; fill: string }[]
-  >([]);
-  const [voterData, setVoterData] = useState<
-    { name: string; value: number; fill: string }[]
-  >([]);
-  const [weeklyTrendData, setWeeklyTrendData] = useState<
-    { week: string; count: number }[]
-  >([]);
+  const [residentData, setResidentData] = useState<{ category: string; value: number; fill: string }[]>([]);
+
+
+  const [voterData, setVoterData] = useState<{ name: string; value: number; fill: string }[]>([]);
+  const [weeklyTrendData, setWeeklyTrendData] = useState<{ week: string; count: number }[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingActivities, setLoadingActivities] = useState(true);
 
+  // Voters total for pie label calculation
   const totalVoters = useMemo(
     () => voterData.reduce((sum, v) => sum + (Number(v.value) || 0), 0),
     [voterData]
@@ -121,6 +95,7 @@ export function DashboardHome({
   const hasVoterChart = voterData.length > 0;
   const hasTrendChart = weeklyTrendData.length > 0;
 
+  // Default weekly trend data (used when backend returns nothing)
   const defaultWeeklyTrend = [
     { week: 'Week 1', count: 12 },
     { week: 'Week 2', count: 18 },
@@ -128,6 +103,7 @@ export function DashboardHome({
     { week: 'Week 4', count: 22 },
   ];
 
+  // ===== RECENT ACTIVITIES (DYNAMIC, POLLING) =====
   const fetchRecentActivities = async () => {
     setLoadingActivities(true);
     try {
@@ -164,6 +140,7 @@ export function DashboardHome({
     return () => clearInterval(interval);
   }, []);
 
+  // ===== CLOCK =====
   useEffect(() => {
     const updateDateTime = () => {
       const now = new Date();
@@ -186,6 +163,7 @@ export function DashboardHome({
     return () => clearInterval(interval);
   }, []);
 
+  // ===== DASHBOARD STATS =====
   useEffect(() => {
     let isMounted = true;
 
@@ -217,6 +195,28 @@ export function DashboardHome({
           { name: 'Registered', value: registered, fill: '#2dadfc' },
           { name: 'Not Registered', value: notRegistered, fill: '#ffa62e' },
         ]);
+
+        // Fetch resident types breakdown
+        try {
+          const typeRes = await api.get<{ data: { type: string; count: number }[] }>('/api/stats/resident-types');
+          const rows = Array.isArray(typeRes.data?.data) ? typeRes.data.data : [];
+          if (rows.length > 0) {
+            const chart = rows.map((r) => ({
+              category: String(r.type ?? '').trim(),
+              value: Number(r.count ?? 0),
+              fill: RESIDENT_TYPE_COLORS[String(r.type ?? '').trim()] ?? '#949494',
+            }));
+            setResidentData(chart);
+          } else {
+            setResidentData([
+              { category: 'Total Residents', value: Number(data.totalResidents ?? 0), fill: '#4aa8cf' },
+            ]);
+          }
+        } catch {
+          setResidentData([
+            { category: 'Total Residents', value: Number(data.totalResidents ?? 0), fill: '#4aa8cf' },
+          ]);
+        }
 
         if (Array.isArray(data.weeklyTrend) && data.weeklyTrend.length > 0) {
           setWeeklyTrendData(data.weeklyTrend);
@@ -274,6 +274,7 @@ export function DashboardHome({
         </div>
       </div>
 
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
 
         {/* Total Registered Residents */}
@@ -293,7 +294,6 @@ export function DashboardHome({
             </p>
           </CardContent>
         </Card>
-
 
         {/* New Residents */}
         <Card className="border-[#51c55f] bg-gradient-to-br from-green-50 to-white border-2">
@@ -320,7 +320,6 @@ export function DashboardHome({
           </CardContent>
         </Card>
 
-
         {/* Total Barangay Officials */}
         <Card className="border-[#ffa62e] bg-white">
           <CardContent className="p-4">
@@ -342,7 +341,6 @@ export function DashboardHome({
           </CardContent>
         </Card>
 
-
         {/* Total Pending Requests */}
         <Card className="border-[#ea4d48] bg-white">
           <CardContent className="p-4">
@@ -360,7 +358,6 @@ export function DashboardHome({
             </p>
           </CardContent>
         </Card>
-
 
         {/* Total Documents to Pickup */}
         <Card className="border-[#2957a1] bg-white">
@@ -382,6 +379,7 @@ export function DashboardHome({
 
       </div>
 
+      {/* Charts Section */}
       <div className="space-y-6">
         <Card className="border-[#5ce36c] bg-white">
           <CardHeader>
@@ -412,6 +410,7 @@ export function DashboardHome({
           </CardContent>
         </Card>
 
+        {/* Growth Trend + Voters Distribution */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="border-[#4ade80] bg-white">
             <CardHeader>
@@ -448,6 +447,7 @@ export function DashboardHome({
             </CardContent>
           </Card>
 
+          {/* Voters Distribution */}
           <Card className="border-[#5ce36c] bg-white">
             <CardHeader>
               <CardTitle className="text-center text-base">Voters Distribution</CardTitle>
@@ -504,6 +504,7 @@ export function DashboardHome({
         </div>
       </div>
 
+      {/* Recent Activities */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">

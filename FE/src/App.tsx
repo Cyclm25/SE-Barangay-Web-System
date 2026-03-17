@@ -43,7 +43,7 @@ type ActiveTab =
 type AuthView = 'login' | 'forgot-password' | 'set-new-password' | 'dashboard';
 
 type ResetIdentity = {
-  type: 'resident' | 'barangayadmin';
+  type: 'resident' | 'barangayadmin' | 'superadmin';
   email: string;
   firstName: string;
   username: string;

@@ -208,10 +208,39 @@ export function ResidentRecords({
   registrationCutoffDate = getDefaultCutoffDate(),
   onUpdateCutoffDate,
 }: ResidentRecordsProps) {
+  const initialFormData = {
+    profileImage: "",
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    age: "",
+    birthday: "",
+    gender: "Male" as "Male" | "Female",
+    civilStatus: "Single",
+    religion: "",
+    residentType: "Resident",
+    voterStatus: "No" as "Yes" | "No",
+    houseNo: "",
+    streetAddress: "",
+    city: "Manila City",
+    postalCode: "1013",
+    country: "Philippines",
+    contactNumber: "",
+    email: "",
+    fatherName: "",
+    motherName: "",
+    spouseName: "",
+    numberOfChildren: "",
+    emergencyContactName: "",
+    emergencyContactNumber: "",
+    emergencyContactAddress: "",
+  };
+
   const [residents, setResidents] = useState<Resident[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [viewingResident, setViewingResident] = useState<Resident | null>(null);
+  const [isResidentDetailsOpen, setIsResidentDetailsOpen] = useState(false);
   const [showDataPrivacyDialog, setShowDataPrivacyDialog] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [password, setPassword] = useState("");
@@ -226,7 +255,8 @@ export function ResidentRecords({
     | "firstName"
     | "lastName"
     | "residentType"
-    | "status";
+    | "status"
+    | "dateRegistered";
   type SortDirection = "asc" | "desc";
 
   type SortMenuValue =
@@ -237,7 +267,8 @@ export function ResidentRecords({
     | "field:firstName"
     | "field:lastName"
     | "field:residentType"
-    | "field:status";
+    | "field:status"
+    | "field:dateRegistered";
 
   const [sortBy, setSortBy] = useState<SortField>("residentNo");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -250,7 +281,7 @@ export function ResidentRecords({
   const handleSortMenuChange = (v: SortMenuValue) => {
     setSortMenuValue(v);
 
-    // A–Z / Z–A must ALWAYS sort by First Name
+    // Aâ€“Z / Zâ€“A must ALWAYS sort by First Name
     if (v === "dir:asc") {
       setSortBy("firstName");
       setSortDirection("asc");
@@ -286,34 +317,13 @@ export function ResidentRecords({
   const [activeFilter, setActiveFilter] = useState<'all' | 'new'>(initialFilter);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [tempCutoffDate, setTempCutoffDate] = useState(registrationCutoffDate);
+  const [showDiscardResidentDialog, setShowDiscardResidentDialog] = useState(false);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [emailAlreadyExists, setEmailAlreadyExists] = useState(false);
+  const [isCheckingContactNumber, setIsCheckingContactNumber] = useState(false);
+  const [contactNumberAlreadyExists, setContactNumberAlreadyExists] = useState(false);
 
-  const [formData, setFormData] = useState({
-    profileImage: "",
-    firstName: "",
-    middleName: "",
-    lastName: "",
-    age: "",
-    birthday: "", // YYYY-MM-DD
-    gender: "Male" as "Male" | "Female",
-    civilStatus: "Single",
-    religion: "",
-    residentType: "Resident",
-    voterStatus: "No" as "Yes" | "No",
-    houseNo: "",
-    streetAddress: "",
-    city: "Manila City",
-    postalCode: "1013",
-    country: "Philippines",
-    contactNumber: "",
-    email: "",
-    fatherName: "",
-    motherName: "",
-    spouseName: "",
-    numberOfChildren: "",
-    emergencyContactName: "",
-    emergencyContactNumber: "",
-    emergencyContactAddress: "",
-  });
+  const [formData, setFormData] = useState(initialFormData);
 
   // required-field helpers
   const isBlank = (v: string) => !v || !v.trim();
@@ -335,14 +345,50 @@ export function ResidentRecords({
   const firstNameError = saveAttempted && isBlank(formData.firstName);
   const lastNameError = saveAttempted && isBlank(formData.lastName);
   const birthdayError = saveAttempted && isBlank(formData.birthday);
-  const contactError = saveAttempted && invalidContact(formData.contactNumber);
-  const emailError = saveAttempted && invalidEmail(formData.email);
+  const contactError =
+    saveAttempted &&
+    (invalidContact(formData.contactNumber) || contactNumberAlreadyExists);
+  const emailError =
+    saveAttempted && (invalidEmail(formData.email) || emailAlreadyExists);
 
   // ADDED FEATURE: SETTINGS HANDLER
   const handleSaveSettings = () => {
     onUpdateCutoffDate?.(tempCutoffDate);
     setShowSettingsDialog(false);
     toast.success("Settings updated");
+  };
+
+  const hasUnsavedResidentForm =
+    JSON.stringify(formData) !== JSON.stringify(initialFormData) ||
+    !!profileImagePreview ||
+    !!password ||
+    !!confirmPassword;
+
+  const handleAddDialogOpenChange = (open: boolean) => {
+    if (open) {
+      setShowDiscardResidentDialog(false);
+      setIsAddDialogOpen(true);
+      return;
+    }
+
+    if (showDataPrivacyDialog || showPasswordDialog) {
+      setIsAddDialogOpen(true);
+      return;
+    }
+
+    if (hasUnsavedResidentForm) {
+      setShowDiscardResidentDialog(true);
+      return;
+    }
+
+    resetForm();
+    setIsAddDialogOpen(false);
+  };
+
+  const handleConfirmDiscardResident = () => {
+    setShowDiscardResidentDialog(false);
+    resetForm();
+    setIsAddDialogOpen(false);
   };
 
   const loadResidents = async () => {
@@ -378,43 +424,119 @@ export function ResidentRecords({
     loadResidents();
   }, []);
 
+  useEffect(() => {
+    const trimmedEmail = formData.email.trim().toLowerCase();
+
+    if (!trimmedEmail || !gmailRegex.test(trimmedEmail)) {
+      setEmailAlreadyExists(false);
+      setIsCheckingEmail(false);
+      return;
+    }
+
+    let cancelled = false;
+    const localDuplicate = residents.some(
+      (resident) => resident.email?.trim().toLowerCase() === trimmedEmail
+    );
+
+    if (localDuplicate) {
+      setEmailAlreadyExists(true);
+      setIsCheckingEmail(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        setIsCheckingEmail(true);
+        const response = await fetch(
+          `${API_BASE}/residents/check-email/${encodeURIComponent(trimmedEmail)}`
+        );
+        const data = await response.json();
+
+        if (!cancelled) {
+          setEmailAlreadyExists(Boolean(data?.exists));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setEmailAlreadyExists(false);
+        }
+        console.error(err);
+      } finally {
+        if (!cancelled) {
+          setIsCheckingEmail(false);
+        }
+      }
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [formData.email, residents]);
+
+  useEffect(() => {
+    const trimmedContactNumber = formData.contactNumber.trim();
+
+    if (!trimmedContactNumber || trimmedContactNumber.length !== 11) {
+      setContactNumberAlreadyExists(false);
+      setIsCheckingContactNumber(false);
+      return;
+    }
+
+    let cancelled = false;
+    const localDuplicate = residents.some(
+      (resident) => resident.contactNumber?.trim() === trimmedContactNumber
+    );
+
+    if (localDuplicate) {
+      setContactNumberAlreadyExists(true);
+      setIsCheckingContactNumber(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        setIsCheckingContactNumber(true);
+        const response = await fetch(
+          `${API_BASE}/residents/check-contact/${encodeURIComponent(trimmedContactNumber)}`
+        );
+        const data = await response.json();
+
+        if (!cancelled) {
+          setContactNumberAlreadyExists(Boolean(data?.exists));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setContactNumberAlreadyExists(false);
+        }
+        console.error(err);
+      } finally {
+        if (!cancelled) {
+          setIsCheckingContactNumber(false);
+        }
+      }
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [formData.contactNumber, residents]);
+
   // Sync activeFilter with initialFilter prop changes
   useEffect(() => {
     setActiveFilter(initialFilter);
   }, [initialFilter]);
 
   const resetForm = () => {
-    setFormData({
-      profileImage: "",
-      firstName: "",
-      middleName: "",
-      lastName: "",
-      age: "",
-      birthday: "",
-      gender: "Male",
-      civilStatus: "Single",
-      religion: "",
-      residentType: "Resident",
-      voterStatus: "No",
-      houseNo: "",
-      streetAddress: "",
-      city: "Manila City",
-      postalCode: "1013",
-      country: "Philippines",
-      contactNumber: "",
-      email: "",
-      fatherName: "",
-      motherName: "",
-      spouseName: "",
-      numberOfChildren: "",
-      emergencyContactName: "",
-      emergencyContactNumber: "",
-      emergencyContactAddress: "",
-    });
+    setFormData(initialFormData);
     setProfileImagePreview("");
     setPassword("");
     setConfirmPassword("");
     setSaveAttempted(false);
+    setIsCheckingContactNumber(false);
+    setContactNumberAlreadyExists(false);
+    setIsCheckingEmail(false);
+    setEmailAlreadyExists(false);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -438,7 +560,9 @@ export function ResidentRecords({
       isBlank(formData.lastName) ||
       isBlank(formData.birthday) ||
       invalidContact(formData.contactNumber) ||
-      invalidEmail(formData.email)
+      contactNumberAlreadyExists ||
+      invalidEmail(formData.email) ||
+      emailAlreadyExists
     ) {
       toast.error("Please fill in all required fields correctly.");
       return;
@@ -563,6 +687,15 @@ export function ResidentRecords({
         setPendingResident(null);
         resetForm();
       } else {
+        if (response.status === 409) {
+          const message = String(data?.error || "").toLowerCase();
+          if (message.includes("email")) {
+            setEmailAlreadyExists(true);
+          }
+          if (message.includes("contact")) {
+            setContactNumberAlreadyExists(true);
+          }
+        }
         toast.error(data?.error || "Database failed to save record.");
       }
     } catch (err) {
@@ -573,8 +706,8 @@ export function ResidentRecords({
 
   const handleCancelDataPrivacy = () => {
     setShowDataPrivacyDialog(false);
-    setPendingResident(null);
-    resetForm();
+    setShowDiscardResidentDialog(false);
+    setIsAddDialogOpen(true);
   };
 
   const handleInactivate = async (id: string) => {
@@ -650,6 +783,11 @@ export function ResidentRecords({
           break;
         case "status":
           comparison = a.status.localeCompare(b.status);
+          break;
+        case "dateRegistered":
+          comparison =
+            new Date(a.dateRegistered).getTime() -
+            new Date(b.dateRegistered).getTime();
           break;
         default:
           comparison = a.residentNo.localeCompare(b.residentNo);
@@ -764,10 +902,7 @@ export function ResidentRecords({
           {/* Add New Resident Dialog */}
           <Dialog
             open={isAddDialogOpen}
-            onOpenChange={(open) => {
-              if (!open) resetForm();
-              setIsAddDialogOpen(open);
-            }}
+            onOpenChange={handleAddDialogOpenChange}
           >
             <DialogTrigger asChild>
               <Button className="bg-[#2957a1] hover:bg-[#1e3f7a] text-white">
@@ -775,8 +910,18 @@ export function ResidentRecords({
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="max-w-[1200px] w-[95vw] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
+            <DialogContent
+              className="w-[95vw] max-w-6xl max-h-[90vh] overflow-y-auto"
+              onInteractOutside={(event) => {
+                event.preventDefault();
+                handleAddDialogOpenChange(false);
+              }}
+              onEscapeKeyDown={(event) => {
+                event.preventDefault();
+                handleAddDialogOpenChange(false);
+              }}
+            >
+              <DialogHeader className="-mx-6 -mt-6 border-b bg-gray-50 px-6 py-4 rounded-t-[inherit]">
                 <DialogTitle className="text-xl">Add New Resident</DialogTitle>
                 <DialogDescription>
                   Fill in the resident's information to register them in the
@@ -877,7 +1022,8 @@ export function ResidentRecords({
                           variant="outline"
                           className={cn(
                             "w-full justify-start text-left font-normal bg-gray-100",
-                            !formData.birthday && "text-muted-foreground"
+                            !formData.birthday && "text-muted-foreground",
+                            birthdayError && "border-red-500 ring-red-500"
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
@@ -912,7 +1058,7 @@ export function ResidentRecords({
                     </Popover>
                   </div>
 
-                  <div className="grid grid-cols-5 gap-4">
+                  <div className="grid grid-cols-4 gap-4">
                     <div className="space-y-2">
                       <Label>Age</Label>
                       <Input
@@ -964,6 +1110,7 @@ export function ResidentRecords({
                     <div className="space-y-2">
                       <Label>Religion</Label>
                       <Input
+                        className="text-sm"
                         value={formData.religion}
                         onChange={(e) =>
                           setFormData({
@@ -1089,35 +1236,43 @@ export function ResidentRecords({
                       <Input
                         type="text"
                         inputMode="numeric"
-                        maxLength={12}
+                        maxLength={11}
                         value={formData.contactNumber}
                         onChange={(e) => {
                           const value = e.target.value.replace(/\D/g, "");
                           setFormData({ ...formData, contactNumber: value });
                         }}
                         className={
-                          contactTooLong
-                            ? "border-red-500 ring-red-500"
-                            : contactComplete
-                              ? "border-green-500 ring-green-500"
-                              : ""
+                          contactNumberAlreadyExists
+                            ? "border-yellow-400 ring-yellow-400"
+                            : contactError || contactTooLong
+                              ? "border-red-500 ring-red-500"
+                              : contactComplete
+                                ? "border-green-500 ring-green-500"
+                                : ""
                         }
                         placeholder="09XX XXX XXXX"
                       />
 
-                      {contactTooLong && (
-                        <p className="text-xs text-red-500 mt-1">
-                          Contact number must not exceed 12 digits.❌
+                      {contactNumberAlreadyExists && (
+                        <p className="text-xs text-yellow-600 mt-1">
+                          This contact number is already registered. Please use a different number.
                         </p>
                       )}
 
-                      {contactComplete && !contactTooLong && (
+                      {isCheckingContactNumber && contactComplete && !contactTooLong && !contactNumberAlreadyExists && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Checking contact number availability...
+                        </p>
+                      )}
+
+                      {contactComplete && !contactTooLong && !isCheckingContactNumber && !contactNumberAlreadyExists && (
                         <p className="text-xs text-green-600 mt-1">
-                          Contact number complete (11 digits)✅
+                          Contact number complete (11 digits)âœ…
                         </p>
                       )}
 
-                      {contactError && (
+                      {contactError && !contactNumberAlreadyExists && (
                         <p className="text-xs text-red-500 mt-1">
                           Contact number must be exactly 11 digits.
                         </p>
@@ -1135,7 +1290,11 @@ export function ResidentRecords({
                         }
                         placeholder="example@gmail.com"
                         className={
-                          emailInvalidFormat ? "border-red-500 ring-red-500" : ""
+                          emailAlreadyExists
+                            ? "border-yellow-400 ring-yellow-400"
+                            : emailError || emailInvalidFormat
+                            ? "border-red-500 ring-red-500"
+                            : ""
                         }
                       />
 
@@ -1145,13 +1304,25 @@ export function ResidentRecords({
                         </p>
                       )}
 
-                      {emailValidFormat && !emailInvalidFormat && (
-                        <p className="text-xs text-green-600 mt-1">
-                          Valid email format
+                      {emailAlreadyExists && (
+                        <p className="text-xs text-yellow-600 mt-1">
+                          This Gmail address is already registered. Please use a different email.
                         </p>
                       )}
 
-                      {emailError && (
+                      {isCheckingEmail && emailValidFormat && !emailInvalidFormat && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Checking email availability...
+                        </p>
+                      )}
+
+                      {emailValidFormat && !emailInvalidFormat && !isCheckingEmail && !emailAlreadyExists && (
+                        <p className="text-xs text-green-600 mt-1">
+                          Valid and available Gmail address
+                        </p>
+                      )}
+
+                      {emailError && !emailAlreadyExists && !emailInvalidFormat && (
                         <p className="text-xs text-red-500 mt-1">
                           Email is required.
                         </p>
@@ -1238,10 +1409,11 @@ export function ResidentRecords({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Contact No.</Label>
+                      <Label>Emergency Contact Number</Label>
                       <Input
                         type="text"
                         inputMode="numeric"
+                        maxLength={11}
                         value={formData.emergencyContactNumber}
                         onChange={(e) => {
                           const value = e.target.value.replace(/\D/g, "");
@@ -1280,8 +1452,8 @@ export function ResidentRecords({
                 </div>
               </div>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              <DialogFooter className="-mx-6 -mb-6 mt-6 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
+                <Button variant="outline" onClick={() => handleAddDialogOpenChange(false)}>
                   Cancel
                 </Button>
                 <Button
@@ -1303,23 +1475,19 @@ export function ResidentRecords({
             <div className="flex items-center gap-2">
               <Label className="font-semibold text-sm">Sort by:</Label>
               <Select value={sortMenuValue} onValueChange={(v) => handleSortMenuChange(v as SortMenuValue)}>
-                <SelectTrigger className="w-64 h-9">
+                <SelectTrigger className="w-[205px] h-9">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
 
-                <SelectContent>
-                  {/* MUST be 1st & 2nd: direction for FIRST NAME */}
-                  <SelectItem value="dir:asc">A–Z (First Name)</SelectItem>
-                  <SelectItem value="dir:desc">Z–A (First Name)</SelectItem>
-
-                  {/* Resident No has its own Asc/Desc */}
+                <SelectContent className="min-w-[205px]">
+                  <SelectItem value="field:dateRegistered">Newly Added Resident</SelectItem>
+                  <SelectItem value="field:status">Status</SelectItem>
                   <SelectItem value="field:residentNo:asc">Resident No (Ascending)</SelectItem>
                   <SelectItem value="field:residentNo:desc">Resident No (Descending)</SelectItem>
-
-                  {/* Other fields (default Asc) */}
+                  <SelectItem value="dir:asc">Alphabetical (A-Z)</SelectItem>
+                  <SelectItem value="dir:desc">Alphabetical (Z-A)</SelectItem>
                   <SelectItem value="field:lastName">Last Name</SelectItem>
                   <SelectItem value="field:residentType">Resident Type</SelectItem>
-                  <SelectItem value="field:status">Status</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1416,7 +1584,10 @@ export function ResidentRecords({
                       <Button
                         size="sm"
                         className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors"
-                        onClick={() => setViewingResident(resident)}
+                        onClick={() => {
+                          setViewingResident(resident);
+                          setIsResidentDetailsOpen(true);
+                        }}
                       >
                         <Eye className="w-6 h-6" />
                         <span>View Info</span>
@@ -1571,59 +1742,266 @@ export function ResidentRecords({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-gray-700">
-                Confirm Password *
-              </Label>
-              <Input
-                type={showPassword ? "text" : "password"}
-                maxLength={50}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-type password"
-                className={`h-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1] ${confirmPassword && password !== confirmPassword
-                  ? "border-red-500 ring-red-500"
-                  : ""
-                  }`}
-              />
-              {confirmPassword && password !== confirmPassword && (
-                <p className="text-[10px] text-red-500 mt-1">
-                  Passwords do not match
-                </p>
-              )}
-            </div>
+            <DialogFooter className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowPasswordDialog(false);
+                  setConfirmPassword("");
+                  setShowDiscardResidentDialog(false);
+                  setIsAddDialogOpen(true);
+                }}
+                className="h-9 px-4 text-xs font-semibold text-gray-600"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleFinalSubmit}
+                className="h-9 px-4 bg-[#2957a1] text-white text-xs font-bold rounded-md hover:bg-[#1e3f7a]"
+              >
+                Create Account & Save
+              </Button>
+            </DialogFooter>
           </div>
+          </DialogContent>
+        </Dialog>
 
-          <DialogFooter className="mt-6 flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowPasswordDialog(false);
-                setConfirmPassword("");
-              }}
-              className="h-9 px-4 text-xs font-semibold text-gray-600"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleFinalSubmit}
-              className="h-9 px-4 bg-[#2957a1] text-white text-xs font-bold rounded-md hover:bg-[#1e3f7a]"
-            >
-              Create Account & Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <AlertDialog
+          open={showDiscardResidentDialog}
+          onOpenChange={setShowDiscardResidentDialog}
+        >
+          <AlertDialogContent className="max-w-[400px]">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Discard account creation?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Your unsaved resident information will be lost if you continue.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep Editing</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDiscardResident}
+                className="bg-[#2957a1]"
+              >
+                Discard
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* VIEW RESIDENT DETAILS */}
+        <Dialog
+          open={false}
+          onOpenChange={(open) => {
+            if (!open) setViewingResident(null);
+          }}
+        >
+          <DialogContent
+            // âœ… FIX 1: Override Shadcn's narrow defaults using specific breakpoints
+            className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto p-0"
+          >
+            {/* Sticky header */}
+            <div className="sticky top-0 z-10 bg-white border-b">
+              <DialogHeader className="px-4 sm:px-6 py-4">
+                <DialogTitle className="text-xl font-bold text-[#2957a1]">Resident Details</DialogTitle>
+              </DialogHeader>
+            </div>
+
+            {false && viewingResident && (
+              <div className="p-4 sm:p-6 space-y-8">
+                {/* Top Profile Section */}
+                <div className="flex flex-col md:flex-row gap-8">
+                  {/* Avatar */}
+                  {/* âœ… FIX 2: Give the avatar column a fixed width (280px) so buttons fit nicely */}
+                  <div className="flex flex-col items-center justify-start md:w-[280px] flex-shrink-0">
+                    <ProfileImageUpload
+                      residentId={viewingResident.residentNo}
+                      currentImage={viewingResident.profileImage}
+                      onImageReady={(imageUrl, previewUrl) => {
+                        setViewingResident({ ...viewingResident, profileImage: previewUrl });
+                        loadResidents();
+                      }}
+                      size="lg"
+                    />
+                  </div>
+
+                  {/* Header Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-3xl font-bold text-gray-900 break-words capitalize">
+                      {viewingResident.firstName}{" "}
+                      {viewingResident.middleName ? viewingResident.middleName + " " : ""}
+                      {viewingResident.lastName}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="text-xs px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 font-semibold">
+                        Resident No: {formatId(viewingResident.residentNo)}
+                      </span>
+
+                      {viewingResident.residentType && (
+                        <span className="text-xs px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold">
+                          Type: {viewingResident.residentType}
+                        </span>
+                      )}
+
+                      {typeof viewingResident.voterStatus !== "undefined" && (
+                        <span className="text-xs px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-100 font-semibold">
+                          Voter: {viewingResident.voterStatus ? "Registered" : "Not Registered"}
+                        </span>
+                      )}
+
+                      {viewingResident.status && (
+                        <span
+                          className={`text-xs px-3 py-1.5 rounded-full border font-semibold ${String(viewingResident.status).toLowerCase() === "active"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                              : "bg-red-50 text-red-700 border-red-100"
+                            }`}
+                        >
+                          {viewingResident.status}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Quick Info Cards */}
+                    {/* âœ… FIX 3: Change to a 4-column grid so these sit side-by-side */}
+                    <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-3 rounded-xl border bg-gray-50/50">
+                        <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Gender</p>
+                        <p className="text-sm font-bold text-gray-900">
+                          {viewingResident.gender || "â€”"}
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl border bg-gray-50/50">
+                        <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Age</p>
+                        <p className="text-sm font-bold text-gray-900">
+                          {typeof viewingResident.age !== "undefined" ? viewingResident.age : "â€”"}
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl border bg-gray-50/50">
+                        <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Birthday</p>
+                        <p className="text-sm font-bold text-gray-900 break-words">
+                          {viewingResident.birthday || "â€”"}
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl border bg-gray-50/50">
+                        <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Civil Status</p>
+                        <p className="text-sm font-bold text-gray-900">
+                          {viewingResident.civilStatus || "â€”"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Details Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+                  {/* Family Information Card */}
+                  <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 bg-gray-50/80 border-b">
+                      <p className="text-sm font-bold text-[#2957a1]">Family Information</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Parents and spouse details</p>
+                    </div>
+
+                    <div className="p-5 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">Father</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
+                          {viewingResident.fatherName || "â€”"}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">Mother</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
+                          {viewingResident.motherName || "â€”"}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">Spouse</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
+                          {viewingResident.spouseName || "â€”"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact & Address Card */}
+                  <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 bg-gray-50/80 border-b">
+                      <p className="text-sm font-bold text-[#2957a1]">Contact & Address</p>
+                      <p className="text-xs text-gray-500 mt-0.5">How to reach this resident</p>
+                    </div>
+
+                    <div className="p-5 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">Contact No.</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words">
+                          {viewingResident.contactNumber || "â€”"}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">Email</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-all">
+                          {viewingResident.email || "â€”"}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-start">
+                        <p className="text-xs font-semibold text-gray-500 uppercase mt-1">Address</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words leading-relaxed capitalize">
+                          {`${viewingResident.houseNo || ""} ${viewingResident.streetAddress || ""} ${viewingResident.city || ""}`.trim() ||
+                            "â€”"}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">Brgy Card</p>
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words">
+                          {viewingResident.barangayCard || "â€”"}
+                        </p>
+                      </div>
+
+                        <div className="flex flex-col gap-1">
+                          <p className="text-xs font-semibold text-gray-500 uppercase">Date Registered</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {viewingResident?.dateRegistered
+                              ? dayjs(viewingResident.dateRegistered).format('MMMM DD, YYYY')
+                              : "â€”"}
+                          </p>
+                        </div>
+
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Sticky footer */}
+            <div className="sticky bottom-0 bg-gray-50 border-t px-4 sm:px-6 py-4">
+              <DialogFooter className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setViewingResident(null)} className="font-semibold shadow-sm">
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
 
       {/* VIEW RESIDENT DETAILS */}
       <Dialog
-        open={!!viewingResident}
+        open={isResidentDetailsOpen && !!viewingResident}
         onOpenChange={(open) => {
+          setIsResidentDetailsOpen(open);
           if (!open) setViewingResident(null);
         }}
       >
         <DialogContent
-          // ✅ FIX 1: Override Shadcn's narrow defaults using specific breakpoints
+          // âœ… FIX 1: Override Shadcn's narrow defaults using specific breakpoints
           className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto p-0"
         >
           {/* Sticky header */}
@@ -1638,7 +2016,7 @@ export function ResidentRecords({
               {/* Top Profile Section */}
               <div className="flex flex-col md:flex-row gap-8">
                 {/* Avatar */}
-                {/* ✅ FIX 2: Give the avatar column a fixed width (280px) so buttons fit nicely */}
+                {/* âœ… FIX 2: Give the avatar column a fixed width (280px) so buttons fit nicely */}
                 <div className="flex flex-col items-center justify-start md:w-[280px] flex-shrink-0">
                   <ProfileImageUpload
                     residentId={viewingResident.residentNo}
@@ -1689,33 +2067,40 @@ export function ResidentRecords({
                   </div>
 
                   {/* Quick Info Cards */}
-                  {/* ✅ FIX 3: Change to a 4-column grid so these sit side-by-side */}
-                  <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {/* âœ… FIX 3: Change to a 4-column grid so these sit side-by-side */}
+                  <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div className="p-3 rounded-xl border bg-gray-50/50">
                       <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Gender</p>
                       <p className="text-sm font-bold text-gray-900">
-                        {viewingResident.gender || "—"}
+                        {viewingResident.gender || "â€”"}
                       </p>
                     </div>
 
                     <div className="p-3 rounded-xl border bg-gray-50/50">
                       <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Age</p>
                       <p className="text-sm font-bold text-gray-900">
-                        {typeof viewingResident.age !== "undefined" ? viewingResident.age : "—"}
+                        {typeof viewingResident.age !== "undefined" ? viewingResident.age : "â€”"}
                       </p>
                     </div>
 
                     <div className="p-3 rounded-xl border bg-gray-50/50">
                       <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Birthday</p>
                       <p className="text-sm font-bold text-gray-900 break-words">
-                        {viewingResident.birthday || "—"}
+                        {viewingResident.birthday || "â€”"}
                       </p>
                     </div>
 
                     <div className="p-3 rounded-xl border bg-gray-50/50">
                       <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Civil Status</p>
                       <p className="text-sm font-bold text-gray-900">
-                        {viewingResident.civilStatus || "—"}
+                        {viewingResident.civilStatus || "â€”"}
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-xl border bg-gray-50/50">
+                      <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Religion</p>
+                      <p className="text-sm font-bold text-gray-900 break-words">
+                        {viewingResident.religion || "Not provided"}
                       </p>
                     </div>
                   </div>
@@ -1735,21 +2120,21 @@ export function ResidentRecords({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Father</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
-                        {viewingResident.fatherName || "—"}
+                        {viewingResident.fatherName || "â€”"}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Mother</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
-                        {viewingResident.motherName || "—"}
+                        {viewingResident.motherName || "â€”"}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Spouse</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
-                        {viewingResident.spouseName || "—"}
+                        {viewingResident.spouseName || "â€”"}
                       </p>
                     </div>
                   </div>
@@ -1766,14 +2151,14 @@ export function ResidentRecords({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Contact No.</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words">
-                        {viewingResident.contactNumber || "—"}
+                        {viewingResident.contactNumber || "â€”"}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Email</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-all">
-                        {viewingResident.email || "—"}
+                        {viewingResident.email || "â€”"}
                       </p>
                     </div>
 
@@ -1781,14 +2166,14 @@ export function ResidentRecords({
                       <p className="text-xs font-semibold text-gray-500 uppercase mt-1">Address</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words leading-relaxed capitalize">
                         {`${viewingResident.houseNo || ""} ${viewingResident.streetAddress || ""} ${viewingResident.city || ""}`.trim() ||
-                          "—"}
+                          "â€”"}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Brgy Card</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words">
-                        {viewingResident.barangayCard || "—"}
+                        {viewingResident.barangayCard || "â€”"}
                       </p>
                     </div>
                   </div>
@@ -1800,7 +2185,14 @@ export function ResidentRecords({
           {/* Sticky footer */}
           <div className="sticky bottom-0 bg-gray-50 border-t px-4 sm:px-6 py-4">
             <DialogFooter className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setViewingResident(null)} className="font-semibold shadow-sm">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsResidentDetailsOpen(false);
+                  setViewingResident(null);
+                }}
+                className="font-semibold shadow-sm"
+              >
                 Close
               </Button>
             </DialogFooter>
@@ -1827,13 +2219,13 @@ export function ResidentRecords({
                     variant="outline"
                     className={cn(
                       "w-full justify-start text-left font-normal bg-gray-100",
-                      !formData.birthday && "text-muted-foreground"
+                      !tempCutoffDate && "text-muted-foreground"
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
 
-                    {formData.birthday ? (
-                      format(new Date(formData.birthday), "MM/dd/yyyy")
+                    {tempCutoffDate ? (
+                      format(new Date(tempCutoffDate), "MM/dd/yyyy")
                     ) : (
                       <span>MM/DD/YYYY</span>
                     )}
@@ -1843,17 +2235,11 @@ export function ResidentRecords({
                 <PopoverContent className="w-auto p-0">
                   <Calendar
                     mode="single"
-                    selected={formData.birthday ? new Date(formData.birthday) : undefined}
+                    selected={tempCutoffDate ? new Date(tempCutoffDate) : undefined}
                     onSelect={(date) => {
                       if (!date) return;
 
-                      const ymd = date.toISOString().split("T")[0];
-
-                      setFormData({
-                        ...formData,
-                        birthday: ymd,
-                        age: calculateAge(ymd),
-                      });
+                      setTempCutoffDate(date.toISOString().split("T")[0]);
                     }}
                     disabled={(date) => date > new Date()}
                     initialFocus

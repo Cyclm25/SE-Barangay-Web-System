@@ -8,7 +8,7 @@ import imgImage2 from "../../assets/barangaylogo.png";
 import { api } from "../../utils/api";
 
 type Identity = {
-  type: "resident" | "barangayadmin";
+  type: "resident" | "barangayadmin" | "superadmin";
   email: string;
   firstName: string;
   username: string;

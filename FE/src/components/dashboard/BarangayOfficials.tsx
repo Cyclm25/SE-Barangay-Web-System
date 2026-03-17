@@ -30,7 +30,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
-import { User, Upload, Lock, Eye, EyeOff } from "lucide-react";
+import { User, Lock, Eye, EyeOff } from "lucide-react";
+import { ProfileImageUpload } from "../ui/ProfileImageUpload";
 import { toast } from "sonner";
 import { api } from "../../utils/api";
 
@@ -51,16 +52,145 @@ interface Official {
   profileimage?: string;
 }
 
+interface OfficialEditForm {
+  adminname: string;
+  position: string;
+  email: string;
+  contactnumber: string;
+  termstart: string;
+  termend: string;
+  status: boolean;
+  profileimage: string;
+}
+
 function toStatusText(statusBool: boolean): StatusText {
   return statusBool ? "Active" : "Inactive";
 }
 
+function formatDateOnly(value?: string | null) {
+  if (!value) return "";
+  const normalized = String(value).trim();
+  if (!normalized) return "";
+  return normalized.includes("T") ? normalized.split("T")[0] : normalized;
+}
+
+function normalizeDateInputValue(value?: string | null) {
+  if (!value) return "";
+  const raw = String(value).trim();
+  if (!raw) return "";
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return formatDateOnly(raw);
+  }
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(parsed);
+
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  return year && month && day ? `${year}-${month}-${day}` : formatDateOnly(raw);
+}
+
+function formatDisplayDate(value?: string | null) {
+  const dateOnly = normalizeDateInputValue(value);
+  if (!dateOnly) return "";
+
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  if (!year || !month || !day) return dateOnly;
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "Asia/Manila",
+  }).format(new Date(Date.UTC(year, month - 1, day, 12)));
+}
+
+function normalizeOfficialRecord(source: any, fallback?: Official): Official {
+  return {
+    barangayadminid:
+      source?.barangayadminid || source?.BarangayAdminID || fallback?.barangayadminid || "",
+    adminname:
+      source?.adminname || source?.AdminName || fallback?.adminname || "",
+    position:
+      source?.position || source?.Position || fallback?.position || null,
+    email:
+      source?.email || source?.Email || fallback?.email || "",
+    status:
+      typeof source?.status === "boolean"
+        ? source.status
+        : typeof source?.Status === "boolean"
+        ? source.Status
+        : !!fallback?.status,
+    datecreated:
+      normalizeDateInputValue(source?.datecreated || source?.DateCreated) ||
+      fallback?.datecreated,
+    contactnumber:
+      source?.contactnumber || source?.ContactNumber || fallback?.contactnumber || "",
+    termstart:
+      normalizeDateInputValue(source?.termstart || source?.TermStart) ||
+      fallback?.termstart ||
+      undefined,
+    termend:
+      normalizeDateInputValue(source?.termend || source?.TermEnd) ||
+      fallback?.termend ||
+      undefined,
+    profileimage:
+      source?.profileimage || source?.ProfileImage || fallback?.profileimage || undefined,
+  };
+}
+
+function formatStatusLabel(status: boolean) {
+  return status ? "Active" : "Inactive";
+}
+
+function buildOfficialEditForm(official: Official): OfficialEditForm {
+  return {
+    adminname: official.adminname || "",
+    position: official.position || "Kagawad",
+    email: official.email || "",
+    contactnumber: official.contactnumber || "",
+    termstart: normalizeDateInputValue(official.termstart),
+    termend: normalizeDateInputValue(official.termend),
+    status: !!official.status,
+    profileimage: official.profileimage || "",
+  };
+}
+
 export function BarangayOfficials() {
+  const initialFormData = {
+    profileImage: "",
+    name: "",
+    position: "Kagawad",
+    contactNumber: "",
+    email: "",
+    termStart: "",
+    termEnd: "",
+    status: "Active" as StatusText,
+  };
+
   const [officials, setOfficials] = useState<Official[]>([]);
   const [loading, setLoading] = useState(false);
+  const [resettingOfficialId, setResettingOfficialId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [viewingOfficial, setViewingOfficial] = useState<Official | null>(null);
+  const [editingOfficial, setEditingOfficial] = useState<OfficialEditForm | null>(null);
+  const [showDiscardEditDialog, setShowDiscardEditDialog] = useState(false);
   const [profileImagePreview, setProfileImagePreview] = useState<string>("");
+  const [showDiscardOfficialDialog, setShowDiscardOfficialDialog] = useState(false);
+  const [saveAttempted, setSaveAttempted] = useState(false);
 
   // STEP 2 + STEP 3 dialog states
   const [showDataPrivacyDialog, setShowDataPrivacyDialog] = useState(false);
@@ -80,36 +210,52 @@ export function BarangayOfficials() {
     termStart: string;
     termEnd: string;
     status: StatusText;
-  }>({
-    profileImage: "",
-    name: "",
-    position: "Kagawad",
-    contactNumber: "",
-    email: "",
-    termStart: "",
-    termEnd: "",
-    status: "Active",
-  });
+  }>(initialFormData);
 
   const resetForm = () => {
-    setFormData({
-      profileImage: "",
-      name: "",
-      position: "Kagawad",
-      contactNumber: "",
-      email: "",
-      termStart: "",
-      termEnd: "",
-      status: "Active",
-    });
+    setFormData(initialFormData);
 
     setProfileImagePreview("");
+    setSaveAttempted(false);
 
     setShowDataPrivacyDialog(false);
     setShowPasswordDialog(false);
     setPassword("");
     setConfirmPassword("");
     setShowPassword(false);
+  };
+
+  const hasUnsavedOfficialForm =
+    JSON.stringify(formData) !== JSON.stringify(initialFormData) ||
+    !!profileImagePreview ||
+    !!password ||
+    !!confirmPassword;
+
+  const handleOfficialDialogOpenChange = (open: boolean) => {
+    if (open) {
+      setShowDiscardOfficialDialog(false);
+      setIsDialogOpen(true);
+      return;
+    }
+
+    if (showDataPrivacyDialog || showPasswordDialog) {
+      setIsDialogOpen(true);
+      return;
+    }
+
+    if (hasUnsavedOfficialForm) {
+      setShowDiscardOfficialDialog(true);
+      return;
+    }
+
+    resetForm();
+    setIsDialogOpen(false);
+  };
+
+  const handleConfirmDiscardOfficial = () => {
+    setShowDiscardOfficialDialog(false);
+    resetForm();
+    setIsDialogOpen(false);
   };
 
   // read SuperAdminID from localStorage (as stored in App.tsx -> app_user.id)
@@ -130,7 +276,11 @@ export function BarangayOfficials() {
       try {
         setLoading(true);
         const res = await api.get("/api/officials");
-        setOfficials(Array.isArray(res.data) ? res.data : []);
+        setOfficials(
+          Array.isArray(res.data)
+            ? res.data.map((official) => normalizeOfficialRecord(official))
+            : []
+        );
       } catch (err) {
         console.error("Fetch error:", err);
         toast.error("Failed to load officials");
@@ -155,8 +305,21 @@ export function BarangayOfficials() {
     });
   }, [officials, searchTerm]);
 
+  const gmailRegex = /^[a-z0-9](\.?[a-z0-9]){5,29}@gmail\.com$/i;
+  const emailInvalidFormat =
+    formData.email.trim().length > 0 && !gmailRegex.test(formData.email.trim());
+  const emailValidFormat =
+    formData.email.trim().length > 0 && gmailRegex.test(formData.email.trim());
+  const contactDigits = formData.contactNumber.replace(/\D/g, "");
+  const contactTooLong = contactDigits.length > 11;
+  const contactComplete = contactDigits.length === 11;
+  const contactInvalid =
+    saveAttempted && (!contactDigits || contactDigits.length !== 11);
+
   // STEP 1: start submit -> show privacy
   const handleStartSubmit = () => {
+    setSaveAttempted(true);
+
     if (!formData.name.trim()) {
       toast.error("Full Name is required");
       return;
@@ -165,10 +328,12 @@ export function BarangayOfficials() {
       toast.error("Email is required");
       return;
     }
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email.trim())) {
-      toast.error("Invalid email format");
+    if (!gmailRegex.test(formData.email.trim())) {
+      toast.error("Only Gmail addresses are allowed");
+      return;
+    }
+    if (contactDigits.length !== 11) {
+      toast.error("Contact number must be exactly 11 digits");
       return;
     }
     if (!formData.position) {
@@ -181,6 +346,8 @@ export function BarangayOfficials() {
 
   const handleCancelDataPrivacy = () => {
     setShowDataPrivacyDialog(false);
+    setShowDiscardOfficialDialog(false);
+    setIsDialogOpen(true);
   };
 
   const handleConfirmPrivacy = () => {
@@ -235,8 +402,11 @@ export function BarangayOfficials() {
         position: formData.position || null,
         email: formData.email.trim(),
         contactnumber: formData.contactNumber.trim() || "",
+        termStart: formData.termStart || null,
+        termEnd: formData.termEnd || null,
         password: finalPassword,
         superadminid: superAdminId,
+        profileImage: formData.profileImage || null,
       };
 
       console.log("Sending payload:", payload);
@@ -247,11 +417,23 @@ export function BarangayOfficials() {
       const created = (res.data?.official || res.data) as Official;
       console.log("Created official:", created);
 
-      if (!created || !created.barangayadminid) {
+      if (!created || (!created.barangayadminid && !created.BarangayAdminID)) {
         throw new Error("Invalid response from server");
       }
 
-      setOfficials((prev) => [created, ...prev]);
+      // Normalize keys (backend may return PascalCase or lowercase)
+      const normalized = normalizeOfficialRecord(created, {
+        barangayadminid: "",
+        adminname: formData.name.trim(),
+        position: formData.position || null,
+        email: formData.email.trim(),
+        status: true,
+        contactnumber: formData.contactNumber.trim(),
+        termstart: normalizeDateInputValue(formData.termStart) || undefined,
+        termend: normalizeDateInputValue(formData.termEnd) || undefined,
+        profileimage: formData.profileImage || undefined,
+      });
+      setOfficials((prev) => [normalized, ...prev]);
 
       setShowPasswordDialog(false);
       setShowDataPrivacyDialog(false);
@@ -311,6 +493,128 @@ export function BarangayOfficials() {
     }
   };
 
+  const handleForgotPassword = async (official: Official) => {
+    if (!official.email?.trim()) {
+      toast.error("No Gmail address found for this official.");
+      return;
+    }
+
+    try {
+      setResettingOfficialId(official.barangayadminid);
+      await api.post("/auth/forgot-password", {
+        email: official.email.trim().toLowerCase(),
+      });
+
+      toast.success("Password reset OTP sent.", {
+        description: `An OTP has been sent to ${official.email}.`,
+      });
+    } catch (err: any) {
+      const errorMessage =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        "Failed to send the password reset OTP.";
+
+      toast.error("Unable to send password reset OTP.", {
+        description: errorMessage,
+      });
+    } finally {
+      setResettingOfficialId(null);
+    }
+  };
+
+  const openEditOfficial = (official: Official) => {
+    setViewingOfficial(official);
+    setEditingOfficial(buildOfficialEditForm(official));
+    setShowDiscardEditDialog(false);
+  };
+
+  const hasUnsavedEditChanges = !!(
+    viewingOfficial &&
+    editingOfficial &&
+    JSON.stringify(editingOfficial) !== JSON.stringify(buildOfficialEditForm(viewingOfficial))
+  );
+
+  const handleCancelEdit = () => {
+    setShowDiscardEditDialog(true);
+  };
+
+  const handleConfirmDiscardEdit = () => {
+    setShowDiscardEditDialog(false);
+    setViewingOfficial(null);
+    setEditingOfficial(null);
+  };
+
+  const handleSaveOfficialEdit = async () => {
+    if (!viewingOfficial || !editingOfficial) return;
+
+    const trimmedEmail = editingOfficial.email.trim();
+    const trimmedName = editingOfficial.adminname.trim();
+    const digits = editingOfficial.contactnumber.replace(/\D/g, "");
+
+    if (!trimmedName) {
+      toast.error("Full Name is required.");
+      return;
+    }
+    if (!trimmedEmail) {
+      toast.error("Email is required.");
+      return;
+    }
+    if (!gmailRegex.test(trimmedEmail)) {
+      toast.error("Only Gmail addresses are allowed.");
+      return;
+    }
+    if (digits && digits.length !== 11) {
+      toast.error("Contact number must be exactly 11 digits.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await api.put(`/api/officials/${viewingOfficial.barangayadminid}`, {
+        adminname: trimmedName,
+        position: editingOfficial.position,
+        email: trimmedEmail,
+        contactnumber: digits,
+        termStart: editingOfficial.termstart || null,
+        termEnd: editingOfficial.termend || null,
+        status: editingOfficial.status,
+        profileImage: editingOfficial.profileimage || null,
+      });
+
+      const updated = res.data || {};
+      const normalized = normalizeOfficialRecord(updated, {
+        ...viewingOfficial,
+        adminname: trimmedName,
+        position: editingOfficial.position || null,
+        email: trimmedEmail,
+        status: editingOfficial.status,
+        contactnumber: digits,
+        termstart: normalizeDateInputValue(editingOfficial.termstart) || undefined,
+        termend: normalizeDateInputValue(editingOfficial.termend) || undefined,
+        profileimage: editingOfficial.profileimage || undefined,
+      });
+
+      setOfficials((prev) =>
+        prev.map((official) =>
+          official.barangayadminid === normalized.barangayadminid ? normalized : official
+        )
+      );
+      setViewingOfficial(normalized);
+      setEditingOfficial(buildOfficialEditForm(normalized));
+      toast.success("Official information updated.");
+    } catch (err: any) {
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        "Failed to update official information.";
+      toast.error("Unable to update official.", {
+        description: errorMessage,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-full">
       {/* Header */}
@@ -334,10 +638,7 @@ export function BarangayOfficials() {
 
           <Dialog
             open={isDialogOpen}
-            onOpenChange={(open) => {
-              setIsDialogOpen(open);
-              if (!open) resetForm();
-            }}
+            onOpenChange={handleOfficialDialogOpenChange}
           >
             <DialogTrigger asChild>
               <Button
@@ -348,44 +649,35 @@ export function BarangayOfficials() {
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
+            <DialogContent
+              className="max-w-2xl"
+              onInteractOutside={(event) => {
+                event.preventDefault();
+                handleOfficialDialogOpenChange(false);
+              }}
+              onEscapeKeyDown={(event) => {
+                event.preventDefault();
+                handleOfficialDialogOpenChange(false);
+              }}
+            >
+              <DialogHeader className="-mx-6 -mt-6 border-b bg-gray-50 px-6 py-4 rounded-t-[inherit]">
                 <DialogTitle>Add New Official</DialogTitle>
               </DialogHeader>
-              <DialogDescription>
+              <DialogDescription className="px-0 pt-2">
                 Add a new barangay official to the system.
               </DialogDescription>
 
               <div className="space-y-4 py-4">
                 {/* Profile Image Upload */}
                 <div className="flex justify-center">
-                  <div className="space-y-2 text-center">
-                    <div className="w-32 h-32 mx-auto rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-[#2957a1]">
-                      {profileImagePreview ? (
-                        <img
-                          src={profileImagePreview}
-                          alt="Profile"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <User className="w-16 h-16 text-gray-400" />
-                      )}
-                    </div>
-
-                    <Label htmlFor="profileImage" className="cursor-pointer">
-                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#2957a1] text-white rounded-md hover:bg-[#1e3f7a] transition-colors">
-                        <Upload className="w-4 h-4" />
-                        <span className="text-sm">Upload Profile Picture</span>
-                      </div>
-                      <Input
-                        id="profileImage"
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleImageUpload}
-                      />
-                    </Label>
-                  </div>
+                  <ProfileImageUpload
+                    onImageReady={(imageUrl, previewUrl) => {
+                      setFormData((prev) => ({ ...prev, profileImage: imageUrl }));
+                      setProfileImagePreview(previewUrl);
+                    }}
+                    currentImage={profileImagePreview || undefined}
+                    size="lg"
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -427,7 +719,7 @@ export function BarangayOfficials() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">Email *</Label>
                     <Input
                       id="email"
                       type="email"
@@ -435,23 +727,62 @@ export function BarangayOfficials() {
                       onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
                       }
-                      placeholder="email@example.com"
+                      placeholder="example@gmail.com"
+                      className={
+                        saveAttempted && (!formData.email.trim() || emailInvalidFormat)
+                          ? "border-red-500 ring-red-500"
+                          : ""
+                      }
                     />
+                    {emailInvalidFormat && (
+                      <p className="text-xs text-red-500 mt-1">
+                        Only Gmail addresses are allowed (example@gmail.com).
+                      </p>
+                    )}
+                    {emailValidFormat && !emailInvalidFormat && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Valid Gmail format
+                      </p>
+                    )}
+                    {saveAttempted && !formData.email.trim() && (
+                      <p className="text-xs text-red-500 mt-1">
+                        Email is required.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="contactNumber">Contact Number</Label>
+                    <Label htmlFor="contactNumber">Contact Number *</Label>
                     <Input
                       id="contactNumber"
                       value={formData.contactNumber}
+                      inputMode="numeric"
+                      maxLength={11}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          contactNumber: e.target.value,
+                          contactNumber: e.target.value.replace(/\D/g, ""),
                         })
                       }
                       placeholder="09XX XXX XXXX"
+                      className={
+                        contactTooLong || contactInvalid
+                          ? "border-red-500 ring-red-500"
+                          : contactComplete
+                            ? "border-green-500 ring-green-500"
+                            : ""
+                      }
                     />
+                    {contactComplete && !contactTooLong && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Contact number is valid.
+                      </p>
+                    )}
+                    {contactInvalid && !contactTooLong && (
+                      <p className="text-xs text-red-500 mt-1">
+                        Please enter the contact number.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -503,10 +834,10 @@ export function BarangayOfficials() {
                 </div>
               </div>
 
-              <DialogFooter>
+              <DialogFooter className="-mx-6 -mb-6 mt-6 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
                 <Button
                   variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
+                  onClick={() => handleOfficialDialogOpenChange(false)}
                   disabled={loading}
                 >
                   Cancel
@@ -521,6 +852,30 @@ export function BarangayOfficials() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          <AlertDialog
+            open={showDiscardOfficialDialog}
+            onOpenChange={setShowDiscardOfficialDialog}
+          >
+            <AlertDialogContent className="max-w-[400px]">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Discard official creation?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Your unsaved barangay official information will be lost if you continue.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={loading}>Keep Editing</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleConfirmDiscardOfficial}
+                  className="bg-[#2957a1]"
+                  disabled={loading}
+                >
+                  Discard
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 
@@ -621,14 +976,16 @@ export function BarangayOfficials() {
           </div>
 
           <DialogFooter className="mt-6 flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowPasswordDialog(false);
-                setConfirmPassword("");
-              }}
-              className="h-9 px-4 text-xs font-semibold text-gray-600"
-              disabled={loading}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowPasswordDialog(false);
+                  setConfirmPassword("");
+                  setShowDiscardOfficialDialog(false);
+                  setIsDialogOpen(true);
+                }}
+                className="h-9 px-4 text-xs font-semibold text-gray-600"
+                disabled={loading}
             >
               Cancel
             </Button>
@@ -642,6 +999,246 @@ export function BarangayOfficials() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={!!viewingOfficial}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCancelEdit();
+            return;
+          }
+        }}
+      >
+        <DialogContent
+          className="w-[95vw] sm:w-[45vw] max-w-none sm:max-w-[1400px] max-h-[100vh] overflow-y-auto overflow-x-hidden"
+          onInteractOutside={(event) => {
+            event.preventDefault();
+            handleCancelEdit();
+          }}
+          onEscapeKeyDown={(event) => {
+            event.preventDefault();
+            handleCancelEdit();
+          }}
+        >
+          <DialogHeader className="-mx-6 -mt-6 border-b bg-gray-50 px-6 py-4 rounded-t-[inherit]">
+            <DialogTitle>Edit Official Information</DialogTitle>
+            <DialogDescription>
+              Review and update the saved barangay official information.
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewingOfficial && editingOfficial && (
+            <div className="space-y-6 py-4">
+              <div className="flex flex-col items-center gap-4 text-center md:flex-row md:items-start md:text-left">
+                <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#2957a1] bg-[#2957a1]">
+                  {editingOfficial.profileimage ? (
+                    <img
+                      src={
+                        editingOfficial.profileimage.startsWith("data:")
+                          ? editingOfficial.profileimage
+                          : `http://localhost:5001${editingOfficial.profileimage}`
+                      }
+                      alt={viewingOfficial.adminname}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <User className="h-12 w-12 text-white" />
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex flex-wrap justify-center gap-2 md:justify-start">
+                    <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+                      {viewingOfficial.barangayadminid}
+                    </span>
+                    <span
+                      className={`rounded-full px-3 py-1 text-sm font-medium ${
+                        editingOfficial.status
+                          ? "bg-green-100 text-green-700"
+                          : "bg-gray-200 text-gray-700"
+                      }`}
+                    >
+                      {formatStatusLabel(editingOfficial.status)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-8 lg:grid-cols-[1.45fr_1.1fr]">
+                <Card className="bg-gray-50">
+                  <CardContent className="space-y-4 p-9">
+                    <h4 className="text-base font-semibold text-[#2957a1]">
+                      Account Information
+                    </h4>
+                    <div className="space-y-4 rounded-xl bg-gray-100 p-4 text-sm">
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-gray-500">
+                          Full Name
+                        </Label>
+                        <Input
+                          value={editingOfficial.adminname}
+                          readOnly
+                          disabled
+                          className="mt-1 bg-white text-black disabled:opacity-100 disabled:text-black disabled:bg-white cursor-default"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-gray-500">
+                          Position
+                        </Label>
+                        <Input
+                          value={editingOfficial.position}
+                          readOnly
+                          disabled
+                          className="mt-1 bg-white text-black disabled:opacity-100 disabled:text-black disabled:bg-white cursor-default"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-gray-500">
+                          Email
+                        </Label>
+                        <Input
+                          type="email"
+                          value={editingOfficial.email}
+                          onChange={(e) =>
+                            setEditingOfficial((prev) =>
+                              prev ? { ...prev, email: e.target.value } : prev
+                            )
+                          }
+                          className="mt-1 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-gray-500">
+                          Contact Number
+                        </Label>
+                        <Input
+                          value={editingOfficial.contactnumber}
+                          inputMode="numeric"
+                          maxLength={11}
+                          onChange={(e) =>
+                            setEditingOfficial((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    contactnumber: e.target.value.replace(/\D/g, ""),
+                                  }
+                                : prev
+                            )
+                          }
+                          className="mt-1 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-500">
+                          Date Created
+                        </p>
+                        <p className="font-medium text-gray-900">
+                          {formatDisplayDate(viewingOfficial.datecreated) || "Not available"}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gray-50">
+                  <CardContent className="space-y-4 p-5">
+                    <h4 className="text-base font-semibold text-[#2957a1]">
+                      Term Information
+                    </h4>
+                    <div className="space-y-4 rounded-xl bg-gray-100 p-4 text-sm">
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-gray-500">
+                          Status
+                        </Label>
+                        <Select
+                          value={editingOfficial.status ? "Active" : "Inactive"}
+                          onValueChange={(value) =>
+                            setEditingOfficial((prev) =>
+                              prev ? { ...prev, status: value === "Active" } : prev
+                            )
+                          }
+                        >
+                          <SelectTrigger className="mt-1 bg-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Active">Active</SelectItem>
+                            <SelectItem value="Inactive">Inactive</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-gray-500">
+                          Term Start
+                        </Label>
+                        <Input
+                          type="date"
+                          value={editingOfficial.termstart}
+                          readOnly
+                          disabled
+                          className="mt-1 bg-white text-black disabled:opacity-100 disabled:text-black disabled:bg-white cursor-default"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-gray-500">
+                          Term End
+                        </Label>
+                        <Input
+                          type="date"
+                          value={editingOfficial.termend}
+                          readOnly
+                          disabled
+                          className="mt-1 bg-white text-black disabled:opacity-100 disabled:text-black disabled:bg-white cursor-default"
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="-mx-6 -mb-6 mt-4 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
+            <Button
+              variant="outline"
+              onClick={handleCancelEdit}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+              onClick={handleSaveOfficialEdit}
+              disabled={loading}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={showDiscardEditDialog}
+        onOpenChange={setShowDiscardEditDialog}
+      >
+        <AlertDialogContent className="max-w-[420px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              If you continue, the edit dialog will be closed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Editing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDiscardEdit}
+              className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+            >
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Officials Grid */}
       {loading ? (
@@ -669,11 +1266,42 @@ export function BarangayOfficials() {
               >
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
-                    <div className="w-16 h-16 bg-[#2957a1] rounded-full flex items-center justify-center overflow-hidden">
-                      <User className="w-8 h-8 text-white" />
+                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#2957a1] bg-[#2957a1] flex items-center justify-center">
+                      {official.profileimage ? (
+                        <img
+                          src={
+                            official.profileimage.startsWith('data:')
+                              ? official.profileimage
+                              : `http://localhost:5001${official.profileimage}`
+                          }
+                          alt={official.adminname}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <User className="w-8 h-8 text-white" />
+                      )}
                     </div>
 
                     <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                        onClick={() => openEditOfficial(official)}
+                      >
+                        Edit Info
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-3 text-[#2957a1] hover:text-[#1e3f7a] hover:bg-blue-50"
+                        onClick={() => handleForgotPassword(official)}
+                        disabled={loading || resettingOfficialId === official.barangayadminid}
+                      >
+                        {resettingOfficialId === official.barangayadminid
+                          ? "Sending..."
+                          : "Forgot Password"}
+                      </Button>
                       {statusText === "Active" ? (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -776,6 +1404,20 @@ export function BarangayOfficials() {
                     <p className="text-xs text-gray-500">
                       {official.barangayadminid}
                     </p>
+                    {(official.termstart || official.termend) && (
+                      <div className="space-y-1">
+                        {official.termstart && (
+                          <p className="text-sm text-gray-600">
+                            Term Start: {formatDisplayDate(official.termstart)}
+                          </p>
+                        )}
+                        {official.termend && (
+                          <p className="text-sm text-gray-600">
+                            Term End: {formatDisplayDate(official.termend)}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     <div className="pt-2 space-y-1">
                       {official.email ? (

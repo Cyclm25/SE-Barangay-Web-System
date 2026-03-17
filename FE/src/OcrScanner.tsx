@@ -16,6 +16,25 @@ export default function OcrScanner({ onDataExtracted }: OcrScannerProps) {
   const [progress, setProgress] = useState('');
   const webcamRef = useRef<Webcam>(null);
 
+  const requestCameraAccess = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error("Camera access is not supported in this browser.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+
+      stream.getTracks().forEach((track) => track.stop());
+      setShowCamera(true);
+    } catch (err) {
+      console.error(err);
+      toast.error("Camera permission was denied. Please allow access to continue.");
+    }
+  }, []);
+
 
   // 1. This function takes the screenshot from the webcam
   const captureAndScan = useCallback(async () => {
@@ -66,11 +85,11 @@ export default function OcrScanner({ onDataExtracted }: OcrScannerProps) {
 
 
   return (
-    <div className="w-full flex flex-col items-center gap-4 p-4 border-2 border-dashed border-[#2957a1] rounded-xl bg-blue-50/50">
+    <div className="inline-flex max-w-full flex-col items-center gap-4 px-6 py-4 border-2 border-dashed border-[#2957a1] rounded-xl bg-blue-50/50">
       {!showCamera ? (
         <button
           type="button"
-          onClick={() => setShowCamera(true)}
+          onClick={requestCameraAccess}
           className="flex items-center gap-2 px-6 py-3 bg-[#2957a1] text-white rounded-lg font-bold shadow-md hover:bg-[#1e3f7a] transition-all"
         >
           <Camera className="w-5 h-5" />

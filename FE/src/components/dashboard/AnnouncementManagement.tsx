@@ -516,9 +516,9 @@ export function AnnouncementManagement() {
           }}
         >
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2 bg-[#2957a1] text-white hover:bg-[#1e3f7a]">
               <Plus className="w-4 h-4" />
-              Add New Announcement
+              ADD NEW ANNOUNCEMENT
             </Button>
           </DialogTrigger>
 

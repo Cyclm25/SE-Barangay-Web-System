@@ -7,7 +7,7 @@ import { api } from "../../utils/api";
 
 
 type Identity = {
-  type: "resident" | "barangayadmin";
+  type: "resident" | "barangayadmin" | "superadmin";
   email: string;
   firstName: string;
   username: string;

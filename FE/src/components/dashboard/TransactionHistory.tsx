@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { History, Search, User, Shield, Calendar } from "lucide-react";
+import { History, Search, User, Shield, Calendar, UserPlus, FileCheck, ShieldAlert, UserX } from "lucide-react";
 
 interface Transaction {
   id: string;
@@ -18,6 +18,13 @@ interface Transaction {
 interface ApiResponse {
   transactions: Transaction[];
 }
+
+type ActivityKind =
+  | "resident_created"
+  | "account_deactivated"
+  | "request_approved"
+  | "failed_login"
+  | "general";
 
 function formatTimestamp(value: string) {
   const d = new Date(value);
@@ -90,7 +97,77 @@ export function TransactionHistory() {
 
     const residentActions = total - adminActions;
 
-    return { total, adminActions, residentActions };
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const residentsAddedThisMonth = transactions.filter((t) => {
+      const action = String(t.action ?? "").toLowerCase();
+      if (!action.includes("created resident account") && !action.includes("created resident")) {
+        return false;
+      }
+
+      const timestamp = new Date(t.timestamp);
+      return !Number.isNaN(timestamp.getTime()) && timestamp >= startOfMonth;
+    }).length;
+
+    return { total, adminActions, residentActions, residentsAddedThisMonth };
+  }, [transactions]);
+
+  const recentActivityFeed = useMemo(() => {
+    const classifyActivity = (transaction: Transaction): ActivityKind => {
+      const action = String(transaction.action ?? "").toLowerCase();
+      const details = String(transaction.details ?? "").toLowerCase();
+      const module = String(transaction.module ?? "").toLowerCase();
+      const combined = `${action} ${details} ${module}`;
+
+      if (combined.includes("created resident account") || combined.includes("created resident")) {
+        return "resident_created";
+      }
+      if (combined.includes("deactivate") || combined.includes("inactive")) {
+        return "account_deactivated";
+      }
+      if (combined.includes("approved")) {
+        return "request_approved";
+      }
+      if (combined.includes("failed login") || combined.includes("login failed")) {
+        return "failed_login";
+      }
+      return "general";
+    };
+
+    const buildLabel = (transaction: Transaction, kind: ActivityKind) => {
+      switch (kind) {
+        case "resident_created":
+          return `${transaction.account} created a resident account`;
+        case "account_deactivated":
+          return `${transaction.account} deactivated an account`;
+        case "request_approved":
+          return `${transaction.account} approved a request`;
+        case "failed_login":
+          return `${transaction.account} had a failed login attempt`;
+        default:
+          return `${transaction.account} ${String(transaction.action ?? "").toLowerCase()}`.trim();
+      }
+    };
+
+    return transactions
+      .map((transaction) => {
+        const kind = classifyActivity(transaction);
+        return {
+          ...transaction,
+          kind,
+          label: buildLabel(transaction, kind),
+        };
+      })
+      .filter(
+        (transaction) =>
+          transaction.kind === "resident_created" ||
+          transaction.kind === "account_deactivated" ||
+          transaction.kind === "request_approved" ||
+          transaction.kind === "failed_login"
+      )
+      .slice(0, 6);
   }, [transactions]);
 
   return (
@@ -106,7 +183,7 @@ export function TransactionHistory() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -150,6 +227,22 @@ export function TransactionHistory() {
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                 <User className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Residents Added This Month</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {loading ? "…" : computedStats.residentsAddedThisMonth}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <UserPlus className="w-6 h-6 text-emerald-600" />
               </div>
             </div>
           </CardContent>

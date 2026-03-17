@@ -180,12 +180,13 @@ router.post("/forgot-password", async (req, res) => {
         ra."ResidentID"        AS "ResidentID",
         ra."BarangayAdminID"   AS "BarangayAdminID",
         ra."SuperAdminID"      AS "SuperAdminID",
-        LOWER(COALESCE(r."Email", ba."Email")) AS "Email",
-        COALESCE(r."FirstName", ba."AdminName") AS "DisplayName"
+        LOWER(COALESCE(r."Email", ba."Email", sa."Email")) AS "Email",
+        COALESCE(r."FirstName", ba."AdminName", 'Super Admin') AS "DisplayName"
       FROM residentaccount ra
       LEFT JOIN resident r ON ra."ResidentID" = r."ResidentID"
       LEFT JOIN barangayadmin ba ON ra."BarangayAdminID" = ba."BarangayAdminID"
-      WHERE LOWER(r."Email") = $1 OR LOWER(ba."Email") = $1
+      LEFT JOIN superadmin sa ON ra."SuperAdminID" = sa."SuperAdminID"
+      WHERE LOWER(r."Email") = $1 OR LOWER(ba."Email") = $1 OR LOWER(sa."Email") = $1
       LIMIT 1
       `,
       [e]
@@ -198,15 +199,11 @@ router.post("/forgot-password", async (req, res) => {
     const row = q.rows[0];
 
     // ❌ Block Super Admin
-    if (row.SuperAdminID) {
-      return res.status(403).json({ error: "Super Admin password reset is not allowed." });
-    }
-
-    // must be either resident or barangay admin
     const isResident = !!row.ResidentID;
     const isAdmin = !!row.BarangayAdminID;
+    const isSuperAdmin = !!row.SuperAdminID;
 
-    if (!isResident && !isAdmin) {
+    if (!isResident && !isAdmin && !isSuperAdmin) {
       return res.status(400).json({ error: "Account type not supported for password reset" });
     }
 
@@ -242,15 +239,23 @@ router.post("/forgot-password", async (req, res) => {
         type: "resident",
         email: row.Email,
         firstName: row.DisplayName || "",
-        username: row.ResidentID, // show as ResidentID
-        residentAccountId: row.ResidentAccountID, // internal id for reset
+        username: row.ResidentID,
+        residentAccountId: row.ResidentAccountID,
       }
-      : {
+      : isAdmin
+      ? {
         type: "barangayadmin",
         email: row.Email,
-        firstName: row.DisplayName || "", // admin name
-        username: row.BarangayAdminID, // show as BarangayAdminID
-        residentAccountId: row.ResidentAccountID, // internal id for reset
+        firstName: row.DisplayName || "",
+        username: row.BarangayAdminID,
+        residentAccountId: row.ResidentAccountID,
+      }
+      : {
+        type: "superadmin",
+        email: row.Email,
+        firstName: row.DisplayName || "",
+        username: row.SuperAdminID,
+        residentAccountId: row.ResidentAccountID,
       };
 
     return res.json({ message: "OTP sent", identity });
@@ -284,12 +289,13 @@ router.post("/verify-otp", async (req, res) => {
         ra."SuperAdminID"      AS "SuperAdminID",
         ra."OtpCode"           AS "OtpCode",
         ra."OtpExpiry"         AS "OtpExpiry",
-        LOWER(COALESCE(r."Email", ba."Email")) AS "Email",
-        COALESCE(r."FirstName", ba."AdminName") AS "DisplayName"
+        LOWER(COALESCE(r."Email", ba."Email", sa."Email")) AS "Email",
+        COALESCE(r."FirstName", ba."AdminName", 'Super Admin') AS "DisplayName"
       FROM residentaccount ra
       LEFT JOIN resident r ON ra."ResidentID" = r."ResidentID"
       LEFT JOIN barangayadmin ba ON ra."BarangayAdminID" = ba."BarangayAdminID"
-      WHERE LOWER(r."Email") = $1 OR LOWER(ba."Email") = $1
+      LEFT JOIN superadmin sa ON ra."SuperAdminID" = sa."SuperAdminID"
+      WHERE LOWER(r."Email") = $1 OR LOWER(ba."Email") = $1 OR LOWER(sa."Email") = $1
       LIMIT 1
       `,
       [e]
@@ -299,17 +305,16 @@ router.post("/verify-otp", async (req, res) => {
 
     const row = q.rows[0];
 
-    if (row.SuperAdminID) {
-      return res.status(403).json({ error: "Super Admin password reset is not allowed." });
-    }
-
     if (!row.OtpCode || String(row.OtpCode) !== code) return res.status(400).json({ error: "Invalid OTP" });
     if (!row.OtpExpiry || new Date() > new Date(row.OtpExpiry)) return res.status(400).json({ error: "OTP has expired" });
 
     const isResident = !!row.ResidentID;
+    const isAdmin = !!row.BarangayAdminID;
     const identity = isResident
       ? { type: "resident", firstName: row.DisplayName || "", username: row.ResidentID, email: row.Email }
-      : { type: "barangayadmin", firstName: row.DisplayName || "", username: row.BarangayAdminID, email: row.Email };
+      : isAdmin
+      ? { type: "barangayadmin", firstName: row.DisplayName || "", username: row.BarangayAdminID, email: row.Email }
+      : { type: "superadmin", firstName: row.DisplayName || "", username: row.SuperAdminID, email: row.Email };
 
     return res.json({
       message: "OTP verified successfully",
@@ -365,11 +370,6 @@ router.post("/reset-password", async (req, res) => {
 
     const row = q.rows[0];
 
-    if (row.SuperAdminID) {
-      await client.query("ROLLBACK");
-      return res.status(403).json({ error: "Super Admin password reset is not allowed." });
-    }
-
     if (!row.OtpCode) {
       await client.query("ROLLBACK");
       return res.status(400).json({ error: "No OTP found. Request OTP again." });
@@ -396,6 +396,17 @@ router.post("/reset-password", async (req, res) => {
       `,
       [hashed, accId]
     );
+
+    if (row.SuperAdminID) {
+      await client.query(
+        `
+        UPDATE superadmin
+        SET "Password" = $1
+        WHERE "SuperAdminID" = $2
+        `,
+        [hashed, row.SuperAdminID]
+      );
+    }
 
     await client.query("COMMIT");
 

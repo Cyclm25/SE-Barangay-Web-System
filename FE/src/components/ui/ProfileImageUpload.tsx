@@ -171,6 +171,28 @@ useEffect(() => {
     setTimeout(() => startCamera(), 300);
   };
 
+  const requestCameraAccess = useCallback(
+    async (mode: 'photo' | 'ocr') => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        toast.error('Camera access is not supported in this browser.');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: mode === 'photo' ? 'user' : 'environment' },
+        });
+
+        stream.getTracks().forEach((track) => track.stop());
+        openCamera(mode);
+      } catch (err) {
+        console.error(err);
+        toast.error('Camera permission was denied. Please allow access to continue.');
+      }
+    },
+    []
+  );
+
   const closeCamera = () => {
     stopCamera();
     setShowCameraDialog(false);
@@ -199,7 +221,7 @@ useEffect(() => {
           type="button"
           size="sm"
           variant="outline"
-          className="flex items-center gap-1 text-xs border-[#2957a1] text-[#2957a1] hover:bg-blue-50"
+          className="flex items-center gap-1 text-xs border-[#2957a1] bg-gray-50 text-[#2957a1] hover:bg-gray-100"
           onClick={() => fileInputRef.current?.click()}
         >
           <Upload className="w-3.5 h-3.5" />
@@ -217,8 +239,8 @@ useEffect(() => {
           type="button"
           size="sm"
           variant="outline"
-          className="flex items-center gap-1 text-xs border-green-600 text-green-700 hover:bg-green-50"
-          onClick={() => openCamera('photo')}
+          className="flex items-center gap-1 text-xs border-green-600 bg-gray-50 text-green-700 hover:bg-gray-100"
+          onClick={() => requestCameraAccess('photo')}
         >
           <Camera className="w-3.5 h-3.5" />
           Take Photo
@@ -228,8 +250,8 @@ useEffect(() => {
           type="button"
           size="sm"
           variant="outline"
-          className="flex items-center gap-1 text-xs border-orange-500 text-orange-600 hover:bg-orange-50"
-          onClick={() => openCamera('ocr')}
+          className="flex items-center gap-1 text-xs border-orange-500 bg-gray-50 text-orange-600 hover:bg-gray-100"
+          onClick={() => requestCameraAccess('ocr')}
         >
           <Camera className="w-3.5 h-3.5" />
           Scan ID
