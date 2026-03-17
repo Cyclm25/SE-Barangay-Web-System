@@ -581,7 +581,7 @@ export function AnnouncementManagement() {
                 </div>
 
                 {formData.images.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2 mt-2">
+                  <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-2 lg:grid-cols-3">
                     {formData.images.map((img, idx) => (
                       <img
                         key={idx}
@@ -649,7 +649,7 @@ export function AnnouncementManagement() {
 
                 {formData.isScheduled && (
                   <div className="space-y-3 mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="scheduledDate">Date *</Label>
                         <Input
@@ -723,7 +723,7 @@ export function AnnouncementManagement() {
 
                 {formData.hasExpiration && (
                   <div className="space-y-3 mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="expirationDate">Date *</Label>
                         <Input

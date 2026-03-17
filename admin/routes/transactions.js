@@ -49,21 +49,51 @@ router.get("/recent", async (req, res) => {
 
         COALESCE(th."Action",'') AS action,
 
-        TRIM(
-          CONCAT(
-            COALESCE(th."RequestType",''),
-            CASE
-              WHEN th."RequestPurpose" IS NOT NULL AND th."RequestPurpose" <> ''
-                THEN ' - ' || th."RequestPurpose"
-              ELSE ''
-            END,
-            CASE
-              WHEN th."RequestStatus" IS NOT NULL AND th."RequestStatus" <> ''
-                THEN ' (' || th."RequestStatus" || ')'
-              ELSE ''
-            END
-          )
-        ) AS details,
+        CASE
+          WHEN th."RequestType" = 'Resident Records'
+            AND th."RequestPurpose" LIKE 'Created resident:%'
+            AND target_resident."ResidentID" IS NOT NULL
+          THEN
+            CONCAT(
+              'Resident Records - Created resident: ',
+              TRIM(
+                CONCAT(
+                  COALESCE(target_resident."FirstName",''),
+                  CASE
+                    WHEN target_resident."MiddleName" IS NOT NULL AND target_resident."MiddleName" <> ''
+                      THEN ' ' || target_resident."MiddleName"
+                    ELSE ''
+                  END,
+                  CASE
+                    WHEN target_resident."LastName" IS NOT NULL AND target_resident."LastName" <> ''
+                      THEN ' ' || target_resident."LastName"
+                    ELSE ''
+                  END
+                )
+              ),
+              CASE
+                WHEN th."RequestStatus" IS NOT NULL AND th."RequestStatus" <> ''
+                  THEN ' (' || th."RequestStatus" || ')'
+                ELSE ''
+              END
+            )
+          ELSE
+            TRIM(
+              CONCAT(
+                COALESCE(th."RequestType",''),
+                CASE
+                  WHEN th."RequestPurpose" IS NOT NULL AND th."RequestPurpose" <> ''
+                    THEN ' - ' || th."RequestPurpose"
+                  ELSE ''
+                END,
+                CASE
+                  WHEN th."RequestStatus" IS NOT NULL AND th."RequestStatus" <> ''
+                    THEN ' (' || th."RequestStatus" || ')'
+                  ELSE ''
+                END
+              )
+            )
+        END AS details,
 
         COALESCE(th."RequestType", 'System') AS module
 
@@ -77,6 +107,10 @@ router.get("/recent", async (req, res) => {
 
       LEFT JOIN superadmin sa
         ON TRIM(sa."SuperAdminID") = TRIM(th."ResidentID")
+
+      LEFT JOIN resident target_resident
+        ON TRIM(target_resident."ResidentID") =
+           TRIM(SUBSTRING(th."RequestPurpose" FROM 'Created resident:\s*([A-Z0-9-]+)'))
 
       ORDER BY th."CreatedAt" DESC
       LIMIT $1;
@@ -141,21 +175,51 @@ router.get("/", async (req, res) => {
 
         COALESCE(th."Action",'') AS action,
 
-        TRIM(
-          CONCAT(
-            COALESCE(th."RequestType",''),
-            CASE
-              WHEN th."RequestPurpose" IS NOT NULL AND th."RequestPurpose" <> ''
-                THEN ' - ' || th."RequestPurpose"
-              ELSE ''
-            END,
-            CASE
-              WHEN th."RequestStatus" IS NOT NULL AND th."RequestStatus" <> ''
-                THEN ' (' || th."RequestStatus" || ')'
-              ELSE ''
-            END
-          )
-        ) AS details,
+        CASE
+          WHEN th."RequestType" = 'Resident Records'
+            AND th."RequestPurpose" LIKE 'Created resident:%'
+            AND target_resident."ResidentID" IS NOT NULL
+          THEN
+            CONCAT(
+              'Resident Records - Created resident: ',
+              TRIM(
+                CONCAT(
+                  COALESCE(target_resident."FirstName",''),
+                  CASE
+                    WHEN target_resident."MiddleName" IS NOT NULL AND target_resident."MiddleName" <> ''
+                      THEN ' ' || target_resident."MiddleName"
+                    ELSE ''
+                  END,
+                  CASE
+                    WHEN target_resident."LastName" IS NOT NULL AND target_resident."LastName" <> ''
+                      THEN ' ' || target_resident."LastName"
+                    ELSE ''
+                  END
+                )
+              ),
+              CASE
+                WHEN th."RequestStatus" IS NOT NULL AND th."RequestStatus" <> ''
+                  THEN ' (' || th."RequestStatus" || ')'
+                ELSE ''
+              END
+            )
+          ELSE
+            TRIM(
+              CONCAT(
+                COALESCE(th."RequestType",''),
+                CASE
+                  WHEN th."RequestPurpose" IS NOT NULL AND th."RequestPurpose" <> ''
+                    THEN ' - ' || th."RequestPurpose"
+                  ELSE ''
+                END,
+                CASE
+                  WHEN th."RequestStatus" IS NOT NULL AND th."RequestStatus" <> ''
+                    THEN ' (' || th."RequestStatus" || ')'
+                  ELSE ''
+                END
+              )
+            )
+        END AS details,
 
         COALESCE(th."RequestType", 'System') AS module
 
@@ -169,6 +233,10 @@ router.get("/", async (req, res) => {
 
       LEFT JOIN superadmin sa
         ON TRIM(sa."SuperAdminID") = TRIM(th."ResidentID")
+
+      LEFT JOIN resident target_resident
+        ON TRIM(target_resident."ResidentID") =
+           TRIM(SUBSTRING(th."RequestPurpose" FROM 'Created resident:\s*([A-Z0-9-]+)'))
 
       ORDER BY th."CreatedAt" DESC
       LIMIT 500;

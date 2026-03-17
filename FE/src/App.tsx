@@ -156,6 +156,7 @@ export default function App() {
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
+            userRole={user.role}
           />
         );
       case 'residents':
@@ -174,6 +175,7 @@ export default function App() {
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
+            userRole={user.role}
           />
         );
       case 'requests':
@@ -195,6 +197,7 @@ export default function App() {
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
+            userRole={user.role}
           />
         );
       default:
@@ -203,6 +206,7 @@ export default function App() {
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
+            userRole={user.role}
           />
         );
     }

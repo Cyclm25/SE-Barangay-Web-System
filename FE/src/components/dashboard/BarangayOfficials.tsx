@@ -32,6 +32,7 @@ import {
 } from "../ui/alert-dialog";
 import { User, Lock, Eye, EyeOff } from "lucide-react";
 import { ProfileImageUpload } from "../ui/ProfileImageUpload";
+import { OfficialForgotPasswordPage } from "./OfficialForgotPasswordPage";
 import { toast } from "sonner";
 import { api } from "../../utils/api";
 
@@ -168,6 +169,10 @@ function buildOfficialEditForm(official: Official): OfficialEditForm {
   };
 }
 
+function toUppercaseInput(value: string) {
+  return value.toUpperCase();
+}
+
 export function BarangayOfficials() {
   const initialFormData = {
     profileImage: "",
@@ -182,9 +187,11 @@ export function BarangayOfficials() {
 
   const [officials, setOfficials] = useState<Official[]>([]);
   const [loading, setLoading] = useState(false);
-  const [resettingOfficialId, setResettingOfficialId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [resetPasswordOfficial, setResetPasswordOfficial] = useState<Official | null>(null);
+  const [confirmResetOfficial, setConfirmResetOfficial] = useState<Official | null>(null);
+  const [confirmEditOfficial, setConfirmEditOfficial] = useState<Official | null>(null);
   const [viewingOfficial, setViewingOfficial] = useState<Official | null>(null);
   const [editingOfficial, setEditingOfficial] = useState<OfficialEditForm | null>(null);
   const [showDiscardEditDialog, setShowDiscardEditDialog] = useState(false);
@@ -493,33 +500,13 @@ export function BarangayOfficials() {
     }
   };
 
-  const handleForgotPassword = async (official: Official) => {
+  const handleForgotPassword = (official: Official) => {
     if (!official.email?.trim()) {
       toast.error("No Gmail address found for this official.");
       return;
     }
 
-    try {
-      setResettingOfficialId(official.barangayadminid);
-      await api.post("/auth/forgot-password", {
-        email: official.email.trim().toLowerCase(),
-      });
-
-      toast.success("Password reset OTP sent.", {
-        description: `An OTP has been sent to ${official.email}.`,
-      });
-    } catch (err: any) {
-      const errorMessage =
-        err?.response?.data?.error ||
-        err?.response?.data?.message ||
-        "Failed to send the password reset OTP.";
-
-      toast.error("Unable to send password reset OTP.", {
-        description: errorMessage,
-      });
-    } finally {
-      setResettingOfficialId(null);
-    }
+    setConfirmResetOfficial(official);
   };
 
   const openEditOfficial = (official: Official) => {
@@ -615,6 +602,15 @@ export function BarangayOfficials() {
     }
   };
 
+  if (resetPasswordOfficial) {
+    return (
+      <OfficialForgotPasswordPage
+        official={resetPasswordOfficial}
+        onBack={() => setResetPasswordOfficial(null)}
+      />
+    );
+  }
+
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-full">
       {/* Header */}
@@ -650,7 +646,7 @@ export function BarangayOfficials() {
             </DialogTrigger>
 
             <DialogContent
-              className="max-w-2xl"
+              className="w-[95vw] max-w-2xl"
               onInteractOutside={(event) => {
                 event.preventDefault();
                 handleOfficialDialogOpenChange(false);
@@ -680,14 +676,17 @@ export function BarangayOfficials() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="name">Full Name *</Label>
                     <Input
                       id="name"
                       value={formData.name}
                       onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
+                        setFormData({
+                          ...formData,
+                          name: toUppercaseInput(e.target.value),
+                        })
                       }
                       placeholder="Enter full name"
                     />
@@ -717,7 +716,7 @@ export function BarangayOfficials() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="email">Email *</Label>
                     <Input
@@ -725,7 +724,10 @@ export function BarangayOfficials() {
                       type="email"
                       value={formData.email}
                       onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
+                        setFormData({
+                          ...formData,
+                          email: e.target.value,
+                        })
                       }
                       placeholder="example@gmail.com"
                       className={
@@ -786,7 +788,7 @@ export function BarangayOfficials() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="termStart">Term Start</Label>
                     <Input
@@ -1010,7 +1012,10 @@ export function BarangayOfficials() {
         }}
       >
         <DialogContent
-          className="w-[95vw] sm:w-[45vw] max-w-none sm:max-w-[1400px] max-h-[100vh] overflow-y-auto overflow-x-hidden"
+          className="w-[95vw] max-w-[1100px] max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+          }}
           onInteractOutside={(event) => {
             event.preventDefault();
             handleCancelEdit();
@@ -1049,7 +1054,7 @@ export function BarangayOfficials() {
                 <div className="space-y-2">
                   <div className="flex flex-wrap justify-center gap-2 md:justify-start">
                     <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
-                      {viewingOfficial.barangayadminid}
+                      Username: {viewingOfficial.barangayadminid}
                     </span>
                     <span
                       className={`rounded-full px-3 py-1 text-sm font-medium ${
@@ -1105,7 +1110,11 @@ export function BarangayOfficials() {
                               prev ? { ...prev, email: e.target.value } : prev
                             )
                           }
-                          className="mt-1 bg-white"
+                          onFocus={(e) => {
+                            const end = e.target.value.length;
+                            e.target.setSelectionRange(end, end);
+                          }}
+                          className="mt-1 bg-white focus-visible:ring-0 focus-visible:ring-offset-0"
                         />
                       </div>
                       <div>
@@ -1240,6 +1249,70 @@ export function BarangayOfficials() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog
+        open={!!confirmResetOfficial}
+        onOpenChange={(open) => {
+          if (!open) setConfirmResetOfficial(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-[420px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change official password?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmResetOfficial
+                ? `Are you sure you want to edit the password of ${confirmResetOfficial.adminname}?`
+                : "Are you sure you want to edit this official's password?"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+              onClick={() => {
+                if (confirmResetOfficial) {
+                  setResetPasswordOfficial(confirmResetOfficial);
+                }
+                setConfirmResetOfficial(null);
+              }}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!confirmEditOfficial}
+        onOpenChange={(open) => {
+          if (!open) setConfirmEditOfficial(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-[420px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edit official information?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmEditOfficial
+                ? `Are you sure you want to edit the information of ${confirmEditOfficial.adminname}?`
+                : "Are you sure you want to edit this official's information?"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+              onClick={() => {
+                if (confirmEditOfficial) {
+                  openEditOfficial(confirmEditOfficial);
+                }
+                setConfirmEditOfficial(null);
+              }}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Officials Grid */}
       {loading ? (
         <Card>
@@ -1287,7 +1360,7 @@ export function BarangayOfficials() {
                         variant="ghost"
                         size="sm"
                         className="h-8 px-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                        onClick={() => openEditOfficial(official)}
+                        onClick={() => setConfirmEditOfficial(official)}
                       >
                         Edit Info
                       </Button>
@@ -1296,11 +1369,8 @@ export function BarangayOfficials() {
                         size="sm"
                         className="h-8 px-3 text-[#2957a1] hover:text-[#1e3f7a] hover:bg-blue-50"
                         onClick={() => handleForgotPassword(official)}
-                        disabled={loading || resettingOfficialId === official.barangayadminid}
                       >
-                        {resettingOfficialId === official.barangayadminid
-                          ? "Sending..."
-                          : "Forgot Password"}
+                        Forgot Password
                       </Button>
                       {statusText === "Active" ? (
                         <AlertDialog>
@@ -1402,7 +1472,7 @@ export function BarangayOfficials() {
                       {official.position ?? "—"}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {official.barangayadminid}
+                      Username: {official.barangayadminid}
                     </p>
                     {(official.termstart || official.termend) && (
                       <div className="space-y-1">

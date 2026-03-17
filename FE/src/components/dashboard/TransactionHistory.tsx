@@ -19,6 +19,13 @@ interface ApiResponse {
   transactions: Transaction[];
 }
 
+type ResidentLookupRow = {
+  ResidentID: string;
+  FirstName?: string | null;
+  MiddleName?: string | null;
+  LastName?: string | null;
+};
+
 type ActivityKind =
   | "resident_created"
   | "account_deactivated"
@@ -35,9 +42,36 @@ function formatTimestamp(value: string) {
   )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+function buildResidentDisplayName(row: ResidentLookupRow) {
+  return [row.FirstName, row.MiddleName, row.LastName]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function formatTransactionDetails(details: string, residentNames: Record<string, string>) {
+  const raw = String(details ?? "").trim();
+  const createdResidentMatch = raw.match(
+    /^Resident Records\s*-\s*Created resident:\s*([A-Z0-9-]+)\s*\(([^)]+)\)\s*$/i
+  );
+
+  if (createdResidentMatch) {
+    const residentId = createdResidentMatch[1];
+    const status = createdResidentMatch[2];
+    const residentName = residentNames[residentId];
+
+    if (residentName) {
+      return `Resident Records - Created resident: ${residentName} ${residentId} (${status})`;
+    }
+  }
+
+  return raw;
+}
+
 export function TransactionHistory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [residentNames, setResidentNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,8 +96,27 @@ export function TransactionHistory() {
 
         const data = (await res.json()) as ApiResponse;
 
+        const residentsRes = await fetch("http://localhost:5001/residents", {
+          method: "GET",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        });
+
+        let residentNameMap: Record<string, string> = {};
+        if (residentsRes.ok) {
+          const residentsData = (await residentsRes.json()) as {
+            residents?: ResidentLookupRow[];
+          };
+          residentNameMap = Object.fromEntries(
+            (residentsData.residents ?? [])
+              .map((resident) => [resident.ResidentID, buildResidentDisplayName(resident)])
+              .filter((entry) => entry[0] && entry[1])
+          );
+        }
+
         if (!alive) return;
         setTransactions(data.transactions ?? []);
+        setResidentNames(residentNameMap);
       } catch (e: any) {
         if (!alive) return;
         setError(e?.message ?? "Failed to load transactions");
@@ -83,10 +136,10 @@ export function TransactionHistory() {
       (t) =>
         (t.account ?? "").toLowerCase().includes(q) ||
         (t.action ?? "").toLowerCase().includes(q) ||
-        (t.details ?? "").toLowerCase().includes(q) ||
+        formatTransactionDetails(t.details ?? "", residentNames).toLowerCase().includes(q) ||
         (t.module ?? "").toLowerCase().includes(q)
     );
-  }, [transactions, searchTerm]);
+  }, [transactions, searchTerm, residentNames]);
 
   const computedStats = useMemo(() => {
     const total = transactions.length;
@@ -354,7 +407,7 @@ export function TransactionHistory() {
                         </TableCell>
 
                         <TableCell className="text-xs py-3 text-gray-700">
-                          {transaction.details}
+                          {formatTransactionDetails(transaction.details, residentNames)}
                         </TableCell>
 
                         <TableCell className="text-xs py-3">

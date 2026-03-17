@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -203,11 +203,322 @@ const calculateAge = (birthdate: any) => {
   return age < 0 ? "" : String(age);
 };
 
+const toUppercaseInput = (value: string) => value.toUpperCase();
+
+const parseOcrField = (text: string, labels: string[]) => {
+  for (const label of labels) {
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const inlineMatch = text.match(
+      new RegExp(`${escapedLabel}\\s*[:\\-]?\\s*([A-Z][A-Z\\s,'.-]{1,60})`, "i")
+    );
+    if (inlineMatch?.[1]) {
+      return inlineMatch[1].trim();
+    }
+
+    const nextLineMatch = text.match(
+      new RegExp(`${escapedLabel}\\s*[:\\-]?\\s*\\n\\s*([A-Z][A-Z\\s,'.-]{1,60})`, "i")
+    );
+    if (nextLineMatch?.[1]) {
+      return nextLineMatch[1].trim();
+    }
+  }
+
+  return "";
+};
+
+const parseOcrDate = (text: string) => {
+  const match = text.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
+  if (!match) return "";
+
+  const month = match[1].padStart(2, "0");
+  const day = match[2].padStart(2, "0");
+  const year = match[3].length === 2 ? `20${match[3]}` : match[3];
+  return `${year}-${month}-${day}`;
+};
+
+const getMeaningfulOcrLines = (text: string) =>
+  text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim().toUpperCase())
+    .filter(
+      (line) =>
+        line.length >= 3 &&
+        !/^[0-9\s\-\/]+$/.test(line) &&
+      !["REPUBLIC OF THE PHILIPPINES", "LAND TRANSPORTATION OFFICE", "DRIVER LICENSE", "DRIVER'S LICENSE", "PHILIPPINE IDENTIFICATION CARD"].includes(line)
+    );
+
+const looksLikePersonNameLine = (line: string) =>
+  /^[A-Z][A-Z\s,'.-]{2,}$/.test(line) &&
+  !line.includes("ADDRESS") &&
+  !line.includes("NATIONALITY") &&
+  !line.includes("SEX") &&
+  !line.includes("BIRTH") &&
+  !line.includes("HEIGHT") &&
+  !line.includes("WEIGHT") &&
+  !line.includes("EYES") &&
+  !line.includes("LICENSE");
+
+const normalizeOcrValue = (value: string) =>
+  value
+    .replace(/\s+/g, " ")
+    .replace(/\bPHL\b/g, "")
+    .replace(/\bNONE\b/g, "")
+    .replace(/\bNON[-\s]?PROFESSIONAL\b/g, "")
+    .replace(/\bUNIT\/HOUSE NO\.?\b/g, "")
+    .replace(/\bHOUSE NO\.?\b/g, "")
+    .replace(/\bBUILDING\b/g, "")
+    .replace(/\bSTREET NAME\b/g, "")
+    .replace(/\bBARANGAY\b/g, "BRGY")
+    .replace(/\bCITY\/MUNICIPALITY\b/g, "")
+    .replace(/\bDISTRICT\b/g, "")
+    .replace(/^\.*N\b[.\s,-]*/g, "")
+    .replace(/^[,.\-:\s]+|[,.\-:\s]+$/g, "")
+    .trim();
+
+const sanitizeNameField = (value: string) =>
+  normalizeOcrValue(value)
+    .replace(/[^A-Z\s.'-]/g, " ")
+    .replace(/\b(?:LTO|LTFRB|DL|LICENSE|PHILIPPINES|REPUBLIC|TRANSPORTATION|OFFICE)\b/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+const sanitizeAddressField = (value: string) =>
+  normalizeOcrValue(value)
+    .replace(/[^A-Z0-9#/\-.,\s]/g, " ")
+    .replace(/\b(?:REPUBLIC|PHILIPPINES|TRANSPORTATION|OFFICE|LICENSE|DL)\b/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[,.\-:\s]+|[,.\-:\s]+$/g, "")
+    .trim();
+
+const sanitizeHouseNoField = (value: string) =>
+  (normalizeOcrValue(value).match(/\d+/)?.[0] || "").trim();
+
+const sanitizeStreetAddressField = (value: string) =>
+  sanitizeAddressField(value)
+    .replace(/\d+/g, " ")
+    .replace(/\b(?:BRGY\.?\s*\d+|BARANGAY\s*\d+)\b/gi, "")
+    .replace(/\s*,\s*,+/g, ", ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[,.\-:\s]+|[,.\-:\s]+$/g, "")
+    .trim();
+
+const splitLicenseAddress = (rawAddress: string) => {
+  const cleaned = sanitizeAddressField(rawAddress)
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return { houseNo: "", streetAddress: "" };
+  }
+
+  const addressBeforeCity =
+    cleaned.split(
+      /\s*,\s*(?:BRGY\.?\s*\d+|BARANGAY\s*\d+|BARANGAY|DISTRICT(?:\s*\d+)?|CITY|MUNICIPALITY|MANILA(?:\s+CITY)?|METRO\s+MANILA|NCR|\d{4,})\b/i
+    )[0] || cleaned;
+  const houseNoMatch = addressBeforeCity.match(/^\s*(\d+)\s*[,\-]?\s*(.*)$/);
+
+  if (!houseNoMatch) {
+    return {
+      houseNo: "",
+      streetAddress: sanitizeStreetAddressField(addressBeforeCity)
+        .replace(/^\s*\d+\s*[,\-]?\s*/, "")
+        .trim(),
+    };
+  }
+
+  return {
+    houseNo: sanitizeHouseNoField(houseNoMatch[1]),
+    streetAddress: sanitizeStreetAddressField(houseNoMatch[2])
+      .replace(/^\s*\d+\s*[,\-]?\s*/, "")
+      .replace(/\s*,\s*(?:BRGY\.?\s*\d+|BARANGAY\s*\d+|BARANGAY|DISTRICT(?:\s*\d+)?|MANILA(?:\s+CITY)?|METRO\s+MANILA|NCR)\b.*$/i, "")
+      .replace(/\s{2,}/g, " ")
+      .replace(/^[,.\-:\s]+|[,.\-:\s]+$/g, ""),
+  };
+};
+
+const normalizeDetectedNameParts = (firstName: string, middleName: string) => {
+  const cleanedFirstName = sanitizeNameField(firstName);
+  const cleanedMiddleName = sanitizeNameField(middleName);
+
+  if (cleanedMiddleName) {
+    return {
+      firstName: cleanedFirstName,
+      middleName: cleanedMiddleName,
+    };
+  }
+
+  const words = cleanedFirstName.split(/\s+/).filter(Boolean);
+  if (words.length >= 3) {
+      return {
+      firstName: sanitizeNameField(words.slice(0, -1).join(" ")),
+      middleName: sanitizeNameField(words[words.length - 1]),
+    };
+  }
+
+  return {
+    firstName: cleanedFirstName,
+    middleName: cleanedMiddleName,
+  };
+};
+
+const parsePhilippineDriversLicense = (text: string) => {
+  const normalizedText = text.toUpperCase();
+  const lines = getMeaningfulOcrLines(normalizedText);
+  const result: {
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    houseNo?: string;
+    streetAddress?: string;
+    gender?: "Male" | "Female";
+    birthday?: string;
+  } = {};
+
+  const skipNameFragments = [
+    "REPUBLIC OF THE PHILIPPINES",
+    "DEPARTMENT OF TRANSPORTATION",
+    "LAND TRANSPORTATION OFFICE",
+    "NON-PROFESSIONAL DRIVER",
+    "PROFESSIONAL DRIVER",
+    "PHILIPPINE DRIVER",
+    "DRIVER'S LICENSE",
+    "DRIVER LICENSE",
+    "LAST NAME",
+    "FIRST NAME",
+    "MIDDLE NAME",
+    "NATIONALITY",
+    "ADDRESS",
+    "LICENSE NO",
+    "EXPIRATION",
+    "AGENCY CODE",
+    "BLOOD TYPE",
+    "EYES COLOR",
+    "RESTRICTIONS",
+    "CONDITIONS",
+    "SIGNATURE",
+  ];
+
+  const fullNameLine =
+    lines.find((line) => {
+      if (!line.includes(",")) {
+        return false;
+      }
+
+      if (skipNameFragments.some((fragment) => line.includes(fragment))) {
+        return false;
+      }
+
+      return /[A-Z]{2,},\s*[A-Z]{2,}/.test(line);
+    }) || "";
+
+  if (fullNameLine) {
+    const nameParts = fullNameLine.split(",").map((part) => sanitizeNameField(part));
+    if (nameParts[0]) result.lastName = nameParts[0];
+    if (nameParts[1]) {
+      const givenNameWords = nameParts[1].split(/\s+/).filter(Boolean);
+      if (nameParts[2]) {
+        result.firstName = nameParts[1];
+      } else if (givenNameWords.length >= 3) {
+        result.firstName = normalizeOcrValue(givenNameWords.slice(0, -1).join(" "));
+        result.middleName = sanitizeNameField(givenNameWords[givenNameWords.length - 1]);
+      } else {
+        result.firstName = nameParts[1];
+      }
+    }
+    if (nameParts[2]) {
+      result.middleName = nameParts[2];
+    }
+  }
+
+  if (!result.firstName || !result.lastName) {
+    const fallbackNameLine = lines.find((line) => {
+      if (skipNameFragments.some((fragment) => line.includes(fragment))) {
+        return false;
+      }
+
+      const words = line.split(/\s+/).filter(Boolean);
+      return words.length >= 2 && words.length <= 6 && words.every((word) => /^[A-Z.'-]{2,}$/.test(word));
+    });
+
+    if (fallbackNameLine) {
+      const fallbackWords = fallbackNameLine.split(/\s+/);
+      if (!result.lastName) {
+        result.lastName = sanitizeNameField(fallbackWords[0] || "");
+      }
+      if (!result.firstName) {
+        result.firstName = sanitizeNameField(fallbackWords.slice(1).join(" "));
+      }
+    }
+  }
+
+  const birthDateMatch =
+    normalizedText.match(/\b(\d{4})[\/\-](\d{2})[\/\-](\d{2})\b/) ||
+    normalizedText.match(/\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b/);
+  if (birthDateMatch) {
+    if (birthDateMatch[1].length === 4) {
+      result.birthday = `${birthDateMatch[1]}-${birthDateMatch[2]}-${birthDateMatch[3]}`;
+    } else {
+      result.birthday = `${birthDateMatch[3]}-${birthDateMatch[1]}-${birthDateMatch[2]}`;
+    }
+  }
+
+  if (/\bSEX\b[\s:]*F\b|\bFEMALE\b/.test(normalizedText)) {
+    result.gender = "Female";
+  } else if (/\bSEX\b[\s:]*M\b|\bMALE\b/.test(normalizedText)) {
+    result.gender = "Male";
+  }
+
+  const addressLabelIndex = lines.findIndex(
+    (line) => line.includes("ADDRESS") || line.includes("UNIT/HOUSE") || line.includes("BARANGAY")
+  );
+  if (addressLabelIndex >= 0) {
+    const addressParts = [];
+    const startsOnSameLine = lines[addressLabelIndex].includes("ADDRESS")
+      ? normalizeOcrValue(lines[addressLabelIndex].replace(/^.*ADDRESS\s*[:\-]?\s*/, ""))
+      : "";
+
+    if (startsOnSameLine && startsOnSameLine !== lines[addressLabelIndex]) {
+      addressParts.push(startsOnSameLine);
+    }
+
+    for (let i = addressLabelIndex + 1; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (
+        line.includes("LICENSE NO") ||
+        line.includes("EXPIRATION") ||
+        line.includes("AGENCY CODE") ||
+        line.includes("BLOOD TYPE") ||
+        line.includes("EYES COLOR") ||
+        line.includes("RESTRICTIONS") ||
+        line.includes("CONDITIONS")
+      ) {
+        break;
+      }
+      if (line.length > 3) {
+        addressParts.push(line);
+      }
+    }
+    if (addressParts.length > 0) {
+      const parsedAddress = splitLicenseAddress(addressParts.join(" "));
+      if (parsedAddress.houseNo) {
+        result.houseNo = parsedAddress.houseNo;
+      }
+      if (parsedAddress.streetAddress) {
+        result.streetAddress = parsedAddress.streetAddress;
+      }
+    }
+  }
+
+  return result;
+};
+
 export function ResidentRecords({
   initialFilter = 'all',
   registrationCutoffDate = getDefaultCutoffDate(),
   onUpdateCutoffDate,
 }: ResidentRecordsProps) {
+  const birthdayInputRef = useRef<HTMLInputElement | null>(null);
   const initialFormData = {
     profileImage: "",
     firstName: "",
@@ -218,13 +529,13 @@ export function ResidentRecords({
     gender: "Male" as "Male" | "Female",
     civilStatus: "Single",
     religion: "",
-    residentType: "Resident",
+    residentType: "",
     voterStatus: "No" as "Yes" | "No",
     houseNo: "",
     streetAddress: "",
-    city: "Manila City",
+    city: "MANILA CITY",
     postalCode: "1013",
-    country: "Philippines",
+    country: "PHILIPPINES",
     contactNumber: "",
     email: "",
     fatherName: "",
@@ -318,6 +629,7 @@ export function ResidentRecords({
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [tempCutoffDate, setTempCutoffDate] = useState(registrationCutoffDate);
   const [showDiscardResidentDialog, setShowDiscardResidentDialog] = useState(false);
+  const [showScannerInfoDialog, setShowScannerInfoDialog] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [emailAlreadyExists, setEmailAlreadyExists] = useState(false);
   const [isCheckingContactNumber, setIsCheckingContactNumber] = useState(false);
@@ -580,7 +892,7 @@ export function ResidentRecords({
       gender: formData.gender,
       civilStatus: formData.civilStatus,
       religion: formData.religion || undefined,
-      residentType: formData.residentType,
+      residentType: formData.residentType || "Resident",
       voterStatus: formData.voterStatus,
       houseNo: formData.houseNo,
       streetAddress: formData.streetAddress,
@@ -798,11 +1110,49 @@ export function ResidentRecords({
 
   const handleOcrData = (extractedText: string) => {
     const text = extractedText.toUpperCase();
+    const lines = getMeaningfulOcrLines(text);
+    const licenseData = parsePhilippineDriversLicense(text);
+    const firstName =
+      licenseData.firstName ||
+      parseOcrField(text, ["FIRST NAME", "GIVEN NAME"]) ||
+      lines.find((line) => looksLikePersonNameLine(line) && line.split(" ").length >= 2)?.split(" ").slice(1).join(" ") ||
+      "";
+    const middleName =
+      licenseData.middleName ||
+      parseOcrField(text, ["MIDDLE NAME", "MIDDLE INITIAL"]) ||
+      "";
+    const lastName =
+      licenseData.lastName ||
+      parseOcrField(text, ["LAST NAME", "SURNAME"]) ||
+      lines.find((line) => looksLikePersonNameLine(line) && line.split(" ").length >= 2)?.split(" ")[0] ||
+      "";
+    const houseNo = licenseData.houseNo || "";
+    const streetAddress =
+      licenseData.streetAddress ||
+      parseOcrField(text, ["ADDRESS"]);
+    const genderRaw = licenseData.gender || parseOcrField(text, ["SEX", "GENDER"]);
+    const birthday = licenseData.birthday || parseOcrDate(text);
+    const normalizedNames = normalizeDetectedNameParts(firstName, middleName);
+    const normalizedHouseNo = sanitizeHouseNoField(houseNo);
+    const normalizedStreetAddress = sanitizeStreetAddressField(streetAddress);
+
     setFormData((prev) => ({
       ...prev,
-      firstName: text.substring(0, 20),
+      firstName: normalizedNames.firstName || prev.firstName,
+      middleName: normalizedNames.middleName || prev.middleName,
+      lastName: sanitizeNameField(lastName) || prev.lastName,
+      houseNo: normalizedHouseNo || prev.houseNo,
+      streetAddress: normalizedStreetAddress || prev.streetAddress,
+      gender:
+        genderRaw === "Female" || genderRaw.includes("FEMALE")
+          ? "Female"
+          : genderRaw === "Male" || genderRaw.includes("MALE")
+          ? "Male"
+          : prev.gender,
+      birthday: birthday || prev.birthday,
+      age: birthday ? calculateAge(birthday) : prev.age,
     }));
-    toast.success("Check the First Name box!");
+    toast.success("ID text detected. Review the autofilled fields.");
   };
 
   const handleGenerateList = () => {
@@ -930,10 +1280,45 @@ export function ResidentRecords({
               </DialogHeader>
 
               <div className="space-y-6 py-4">
-                <div className="flex justify-center mb-2">
+                <div className="flex flex-col items-center gap-3 mb-2">
                   <OcrScanner onDataExtracted={handleOcrData} />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-[#2957a1] text-[#2957a1] hover:bg-blue-50"
+                    onClick={() => setShowScannerInfoDialog(true)}
+                  >
+                    WHAT'S CAMERA SCANNER?
+                  </Button>
                 </div>
               </div>
+
+              <Dialog
+                open={showScannerInfoDialog}
+                onOpenChange={setShowScannerInfoDialog}
+              >
+                <DialogContent className="w-[95vw] max-w-xl">
+                  <DialogHeader>
+                    <DialogTitle>What's Camera Scanner?</DialogTitle>
+                    <DialogDescription>
+                      The scanner automatically looks for a valid resident ID and
+                      extracts readable details from it to help fill out the form
+                      faster.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-3 text-sm text-gray-700">
+                    <p>Common government IDs in the Philippines include:</p>
+                    <ul className="list-disc space-y-1 pl-5">
+                      <li>PhilSys National ID</li>
+                      <li>UMID</li>
+                      <li>Driver's License</li>
+                      <li>Passport</li>
+                      <li>Postal ID</li>
+                    </ul>
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               <div className="flex justify-center">
                 <ProfileImageUpload
@@ -952,7 +1337,7 @@ export function ResidentRecords({
                   Personal Information
                 </h3>
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <Label>First Name *</Label>
                     <Input
@@ -960,7 +1345,7 @@ export function ResidentRecords({
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          firstName: e.target.value,
+                          firstName: toUppercaseInput(e.target.value),
                         })
                       }
                       placeholder="Enter first name"
@@ -982,7 +1367,7 @@ export function ResidentRecords({
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          middleName: e.target.value,
+                          middleName: toUppercaseInput(e.target.value),
                         })
                       }
                       placeholder="Enter middle name"
@@ -994,7 +1379,10 @@ export function ResidentRecords({
                     <Input
                       value={formData.lastName}
                       onChange={(e) =>
-                        setFormData({ ...formData, lastName: e.target.value })
+                        setFormData({
+                          ...formData,
+                          lastName: toUppercaseInput(e.target.value),
+                        })
                       }
                       placeholder="Enter last name"
                       className={
@@ -1016,49 +1404,45 @@ export function ResidentRecords({
                   <div className="space-y-2">
                     <Label>Birthday *</Label>
 
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal bg-gray-100",
-                            !formData.birthday && "text-muted-foreground",
-                            birthdayError && "border-red-500 ring-red-500"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        ref={birthdayInputRef}
+                        type="date"
+                        value={formData.birthday}
+                        max={new Date().toISOString().split("T")[0]}
+                        onChange={(e) => {
+                          const ymd = e.target.value;
+                          setFormData({
+                            ...formData,
+                            birthday: ymd,
+                            age: calculateAge(ymd),
+                          });
+                        }}
+                        className={cn(
+                          "bg-gray-100",
+                          birthdayError && "border-red-500 ring-red-500"
+                        )}
+                      />
 
-                          {formData.birthday ? (
-                            format(new Date(formData.birthday), "MM/dd/yyyy")
-                          ) : (
-                            <span>MM/DD/YYYY</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={formData.birthday ? new Date(formData.birthday) : undefined}
-                          onSelect={(date) => {
-                            if (!date) return;
-
-                            const ymd = date.toISOString().split("T")[0];
-
-                            setFormData({
-                              ...formData,
-                              birthday: ymd,
-                              age: calculateAge(ymd),
-                            });
-                          }}
-                          disabled={(date) => date > new Date()}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          birthdayInputRef.current?.focus();
+                          birthdayInputRef.current?.showPicker?.();
+                        }}
+                        className={cn(
+                          "w-full justify-center bg-gray-100 hover:bg-gray-200 sm:w-auto sm:px-4",
+                          birthdayError && "border-red-500 ring-red-500"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        Show date picker
+                      </Button>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <div className="space-y-2">
                       <Label>Age</Label>
                       <Input
@@ -1066,6 +1450,7 @@ export function ResidentRecords({
                         value={formData.age}
                         readOnly
                         placeholder="Auto-calculated"
+                        className="uppercase"
                       />
                     </div>
 
@@ -1077,12 +1462,12 @@ export function ResidentRecords({
                           setFormData({ ...formData, gender: v as any })
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="uppercase">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Male">Male</SelectItem>
-                          <SelectItem value="Female">Female</SelectItem>
+                        <SelectContent className="uppercase">
+                          <SelectItem value="Male" className="uppercase">MALE</SelectItem>
+                          <SelectItem value="Female" className="uppercase">FEMALE</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1095,14 +1480,14 @@ export function ResidentRecords({
                           setFormData({ ...formData, civilStatus: v })
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="uppercase">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Single">Single</SelectItem>
-                          <SelectItem value="Married">Married</SelectItem>
-                          <SelectItem value="Widowed">Widowed</SelectItem>
-                          <SelectItem value="Separated">Separated</SelectItem>
+                        <SelectContent className="uppercase">
+                          <SelectItem value="Single" className="uppercase">SINGLE</SelectItem>
+                          <SelectItem value="Married" className="uppercase">MARRIED</SelectItem>
+                          <SelectItem value="Widowed" className="uppercase">WIDOWED</SelectItem>
+                          <SelectItem value="Separated" className="uppercase">SEPARATED</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1110,12 +1495,12 @@ export function ResidentRecords({
                     <div className="space-y-2">
                       <Label>Religion</Label>
                       <Input
-                        className="text-sm"
+                        className="text-sm uppercase"
                         value={formData.religion}
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            religion: e.target.value,
+                            religion: toUppercaseInput(e.target.value),
                           })
                         }
                         placeholder="Enter religion"
@@ -1123,7 +1508,7 @@ export function ResidentRecords({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Resident Type</Label>
                       <Select
@@ -1132,17 +1517,16 @@ export function ResidentRecords({
                           setFormData({ ...formData, residentType: v })
                         }
                       >
-                        <SelectTrigger>
-                          <SelectValue />
+                        <SelectTrigger className="uppercase">
+                          <SelectValue placeholder="RESIDENT" />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Resident">Resident</SelectItem>
-                          <SelectItem value="Student">Student</SelectItem>
+                        <SelectContent className="uppercase">
+                          <SelectItem value="Student" className="uppercase">STUDENT</SelectItem>
                           <SelectItem value="Senior Citizen">
-                            Senior Citizen
+                            SENIOR CITIZEN
                           </SelectItem>
-                          <SelectItem value="PWD">PWD</SelectItem>
-                          <SelectItem value="Indigenous">Indigenous</SelectItem>
+                          <SelectItem value="PWD" className="uppercase">PWD</SelectItem>
+                          <SelectItem value="Indigenous" className="uppercase">INDIGENOUS</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1155,12 +1539,12 @@ export function ResidentRecords({
                           setFormData({ ...formData, voterStatus: v as any })
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="uppercase">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Yes">Yes</SelectItem>
-                          <SelectItem value="No">No</SelectItem>
+                        <SelectContent className="uppercase">
+                          <SelectItem value="Yes" className="uppercase">VOTER</SelectItem>
+                          <SelectItem value="No" className="uppercase">NON-VOTER</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1173,13 +1557,16 @@ export function ResidentRecords({
                     Address & Contact
                   </h3>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>House No.</Label>
                       <Input
                         value={formData.houseNo}
                         onChange={(e) =>
-                          setFormData({ ...formData, houseNo: e.target.value })
+                          setFormData({
+                            ...formData,
+                            houseNo: toUppercaseInput(e.target.value),
+                          })
                         }
                         placeholder="House number"
                       />
@@ -1191,7 +1578,7 @@ export function ResidentRecords({
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            streetAddress: e.target.value,
+                            streetAddress: toUppercaseInput(e.target.value),
                           })
                         }
                         placeholder="Street address"
@@ -1199,13 +1586,17 @@ export function ResidentRecords({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div className="space-y-2">
                       <Label>City</Label>
                       <Input
+                        className="uppercase"
                         value={formData.city}
                         onChange={(e) =>
-                          setFormData({ ...formData, city: e.target.value })
+                          setFormData({
+                            ...formData,
+                            city: toUppercaseInput(e.target.value),
+                          })
                         }
                       />
                     </div>
@@ -1223,13 +1614,16 @@ export function ResidentRecords({
                       <Input
                         value={formData.country}
                         onChange={(e) =>
-                          setFormData({ ...formData, country: e.target.value })
+                          setFormData({
+                            ...formData,
+                            country: toUppercaseInput(e.target.value),
+                          })
                         }
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {/* CONTACT NUMBER */}
                     <div className="space-y-2">
                       <Label>Contact Number *</Label>
@@ -1286,7 +1680,10 @@ export function ResidentRecords({
                         type="email"
                         value={formData.email}
                         onChange={(e) =>
-                          setFormData({ ...formData, email: e.target.value })
+                          setFormData({
+                            ...formData,
+                            email: e.target.value,
+                          })
                         }
                         placeholder="example@gmail.com"
                         className={
@@ -1336,13 +1733,16 @@ export function ResidentRecords({
                   <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">
                     Family Background
                   </h3>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Father's Name</Label>
                       <Input
                         value={formData.fatherName}
                         onChange={(e) =>
-                          setFormData({ ...formData, fatherName: e.target.value })
+                          setFormData({
+                            ...formData,
+                            fatherName: toUppercaseInput(e.target.value),
+                          })
                         }
                         placeholder="Father's full name"
                       />
@@ -1352,20 +1752,26 @@ export function ResidentRecords({
                       <Input
                         value={formData.motherName}
                         onChange={(e) =>
-                          setFormData({ ...formData, motherName: e.target.value })
+                          setFormData({
+                            ...formData,
+                            motherName: toUppercaseInput(e.target.value),
+                          })
                         }
                         placeholder="Mother's full name"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Spouse's Name</Label>
                       <Input
                         value={formData.spouseName}
                         onChange={(e) =>
-                          setFormData({ ...formData, spouseName: e.target.value })
+                          setFormData({
+                            ...formData,
+                            spouseName: toUppercaseInput(e.target.value),
+                          })
                         }
                         placeholder="Spouse's full name"
                       />
@@ -1394,7 +1800,7 @@ export function ResidentRecords({
                   <h3 className="text-lg font-semibold text-[#2957a1] border-b pb-2">
                     Person to Contact in Case of Emergency
                   </h3>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Name</Label>
                       <Input
@@ -1402,7 +1808,9 @@ export function ResidentRecords({
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            emergencyContactName: e.target.value,
+                            emergencyContactName: toUppercaseInput(
+                              e.target.value
+                            ),
                           })
                         }
                         placeholder="Emergency contact name"
@@ -1443,7 +1851,9 @@ export function ResidentRecords({
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          emergencyContactAddress: e.target.value,
+                          emergencyContactAddress: toUppercaseInput(
+                            e.target.value
+                          ),
                         })
                       }
                       placeholder="Emergency contact address"
@@ -1510,7 +1920,7 @@ export function ResidentRecords({
             <TableHeader className="bg-[#2957a1]">
               <TableRow className="hover:bg-[#2957a1] border-b-0">
                 <TableHead className="text-white font-bold text-xs h-10">
-                  RESIDENT NO.
+                  RESIDENT NO / USERNAME
                 </TableHead>
                 <TableHead className="text-white font-bold text-xs h-10">
                   FIRST NAME
@@ -1742,6 +2152,22 @@ export function ResidentRecords({
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-gray-700">
+                Confirm Password *
+              </Label>
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  maxLength={50}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm password"
+                  className="h-10 pr-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1]"
+                />
+              </div>
+            </div>
+
             <DialogFooter className="mt-6 flex justify-end gap-2">
               <Button
                 variant="outline"
@@ -1953,7 +2379,7 @@ export function ResidentRecords({
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-start">
                         <p className="text-xs font-semibold text-gray-500 uppercase mt-1">Address</p>
-                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words leading-relaxed capitalize">
+                        <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words leading-relaxed uppercase">
                           {`${viewingResident.houseNo || ""} ${viewingResident.streetAddress || ""} ${viewingResident.city || ""}`.trim() ||
                             "â€”"}
                         </p>
@@ -2164,7 +2590,7 @@ export function ResidentRecords({
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-start">
                       <p className="text-xs font-semibold text-gray-500 uppercase mt-1">Address</p>
-                      <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words leading-relaxed capitalize">
+                      <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words leading-relaxed uppercase">
                         {`${viewingResident.houseNo || ""} ${viewingResident.streetAddress || ""} ${viewingResident.city || ""}`.trim() ||
                           "â€”"}
                       </p>

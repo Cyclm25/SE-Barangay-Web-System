@@ -36,7 +36,7 @@ function getStatusUI(statusRaw: string) {
 
   if (s === "ready for pickup" || s === "ready") {
     return {
-      label: "Pickup",
+      label: "Ready for Pickup",
       color: "bg-[#5ce36c]",
       icon: <CheckCircle className="w-5 h-5" />,
     };
@@ -135,6 +135,12 @@ export function TrackRequest() {
       <div className="space-y-4 md:space-y-5">
         {requests.map((request) => {
           const statusUI = getStatusUI(request.RequestStatus);
+          const normalizedStatus = normalizeStatus(request.RequestStatus);
+          const showPickedUpDate =
+            !!request.PickupDate &&
+            (normalizedStatus === "pickup" ||
+              normalizedStatus === "picked up" ||
+              normalizedStatus === "completed");
 
           return (
             <div
@@ -194,7 +200,7 @@ export function TrackRequest() {
                     </div>
                   </div>
 
-                  {request.PickupDate && (
+                  {showPickedUpDate && (
                     <div className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 bg-green-50 rounded-lg border border-green-200">
                       <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-green-600 flex-shrink-0" />
                       <div>

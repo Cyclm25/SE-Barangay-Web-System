@@ -712,7 +712,7 @@ export function OnlineRequests({
                   <p className="font-semibold">{viewingRequest.residentName}</p>
                   <p className="text-xs text-gray-500">{viewingRequest.residentId}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <Label className="text-xs text-gray-500">Contact Number</Label>
                     <p className="font-semibold">{viewingRequest.contactNumber}</p>
@@ -839,7 +839,7 @@ export function OnlineRequests({
               </DialogHeader>
 
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                <div className="grid grid-cols-1 gap-4 p-4 bg-gray-50 rounded-lg sm:grid-cols-2">
                   <div>
                     <Label className="text-xs text-gray-500">Request Number</Label>
                     <p className="font-semibold">{appointmentRequest.requestNo}</p>
@@ -855,7 +855,7 @@ export function OnlineRequests({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <Label htmlFor="appointmentDate">Appointment Date *</Label>
                     <Input

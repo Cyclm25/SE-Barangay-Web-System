@@ -19,6 +19,7 @@ interface DashboardHomeProps {
   adminName: string;
   onNavigate?: (tab: string, filter?: string) => void;
   registrationCutoffDate?: string;
+  userRole?: 'admin' | 'official' | 'resident';
 }
 
 type DashboardStatsResponse = {
@@ -52,6 +53,48 @@ type RecentActivityApiRow = {
   module?: string;
 };
 
+function formatRecentActivity(row: RecentActivityApiRow) {
+  const account = String(row.account ?? 'Someone').trim();
+  const action = String(row.action ?? '').trim();
+  const module = String(row.module ?? '').trim();
+  const details = String(row.details ?? '').trim();
+
+  const createdResidentMatch = details.match(/^Resident Records\s*-\s*Created resident:\s*(.+?)\s*\(([^)]+)\)\s*$/i);
+  if (/created resident account/i.test(action) && createdResidentMatch) {
+    return {
+      action: `${account} created resident account`,
+      name: `${createdResidentMatch[1]} (${createdResidentMatch[2]})`,
+    };
+  }
+
+  const primary = [account, action, module].filter(Boolean).join(' ') || account;
+  const secondary = details && details !== primary ? details : '';
+
+  return {
+    action: primary,
+    name: secondary,
+  };
+}
+
+type AdminRequestRow = {
+  RequestStatus?: string;
+  RequestType?: string;
+};
+
+type DashboardResidentRow = {
+  ResidentType?: string | null;
+  residentType?: string | null;
+  resident_type?: string | null;
+  dateRegistered?: string | null;
+  DateRegistered?: string | null;
+  DateCreated?: string | null;
+  datecreated?: string | null;
+  CreatedAt?: string | null;
+  created_at?: string | null;
+  VoterStatus?: boolean | null;
+  status?: string | null;
+};
+
 // Color map for resident types
 const RESIDENT_TYPE_COLORS: Record<string, string> = {
   'Resident': '#4aa8cf',
@@ -61,10 +104,94 @@ const RESIDENT_TYPE_COLORS: Record<string, string> = {
   'Indigenous': '#2957a1',
 };
 
+function normalizeResidentTypeCategory(value: string) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'pwd') return 'PWD';
+  if (normalized === 'senior citizen' || normalized === 'senior') return 'Senior Citizen';
+  if (normalized === 'indigenous') return 'Indigenous';
+  if (normalized === 'student') return 'Student';
+  if (normalized === 'resident') return 'Resident';
+  return value.trim();
+}
+
+function buildResidentTypeChartData(rows: DashboardResidentRow[]) {
+  const counts = rows.reduce<Record<string, number>>((acc, row) => {
+    const residentStatus = String(row?.status ?? 'Active').trim();
+    if (residentStatus && residentStatus !== 'Active') {
+      return acc;
+    }
+
+    const category = normalizeResidentTypeCategory(
+      String(row?.ResidentType ?? row?.residentType ?? row?.resident_type ?? '')
+    );
+    if (!category) {
+      return acc;
+    }
+
+    acc[category] = (acc[category] || 0) + 1;
+    return acc;
+  }, {});
+
+  return Object.entries(counts)
+    .map(([category, value]) => ({
+      category,
+      value,
+      fill: RESIDENT_TYPE_COLORS[category] ?? '#949494',
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
+function getResidentRegisteredDate(row: DashboardResidentRow) {
+  const raw =
+    row?.dateRegistered ??
+    row?.DateRegistered ??
+    row?.DateCreated ??
+    row?.datecreated ??
+    row?.CreatedAt ??
+    row?.created_at ??
+    null;
+
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function buildWeeklyTrendFromResidents(rows: DashboardResidentRow[]) {
+  const startOfCurrentWeek = dayjs().startOf('week');
+
+  return Array.from({ length: 4 }, (_, index) => {
+    const weekStart = startOfCurrentWeek.subtract(3 - index, 'week');
+    const weekEnd = weekStart.add(1, 'week');
+
+    const count = rows.filter((row) => {
+      const residentStatus = String(row?.status ?? 'Active').trim();
+      if (residentStatus && residentStatus !== 'Active') {
+        return false;
+      }
+
+      const registeredDate = getResidentRegisteredDate(row);
+      if (!registeredDate) {
+        return false;
+      }
+
+      const d = dayjs(registeredDate);
+      return d.isAfter(weekStart.subtract(1, 'millisecond')) && d.isBefore(weekEnd);
+    }).length;
+
+    return {
+      week: `Week ${index + 1}`,
+      count,
+    };
+  });
+}
+
 export function DashboardHome({
   adminName,
   onNavigate,
   registrationCutoffDate = getDefaultCutoffDate(),
+  userRole = 'admin',
 }: DashboardHomeProps) {
   const [currentDateTime, setCurrentDateTime] = useState('');
 
@@ -110,20 +237,23 @@ export function DashboardHome({
       const res = await api.get<RecentActivityApiRow[]>('/api/transactions/recent?limit=5');
       const rows = Array.isArray(res.data) ? res.data : [];
 
-      const mapped = rows.map((r) => ({
-        action: `${r.account ?? 'Someone'} ${String(r.action ?? '').toLowerCase().trim()} ${r.module ?? ''}`.trim(),
-        name: r.details,
-        time: r.timestamp
-          ? new Date(r.timestamp).toLocaleString('en-US', {
-            month: 'short',
-            day: '2-digit',
-            year: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-          })
-          : '',
-      }));
+      const mapped = rows.map((r) => {
+        const formatted = formatRecentActivity(r);
+        return {
+          action: formatted.action,
+          name: formatted.name,
+          time: r.timestamp
+            ? new Date(r.timestamp).toLocaleString('en-US', {
+              month: 'short',
+              day: '2-digit',
+              year: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+            })
+            : '',
+        };
+      });
 
       setActivities(mapped);
     } catch (e) {
@@ -171,68 +301,108 @@ export function DashboardHome({
       setLoadingStats(true);
 
       try {
-        const res = await api.get<DashboardStatsResponse>(
-          `/api/dashboard/stats?cutoff=${registrationCutoffDate}`
+        const [statsResult, requestsResult, residentsResult, officialsResult] = await Promise.allSettled([
+          api.get<DashboardStatsResponse>(
+            `/api/dashboard/stats?cutoff=${registrationCutoffDate}`
+          ),
+          api.get<AdminRequestRow[]>('/requests/admin/all'),
+          api.get<DashboardResidentRow[] | { residents?: DashboardResidentRow[] }>('/residents'),
+          api.get<any[]>('/api/officials'),
+        ]);
+        const data =
+          statsResult.status === 'fulfilled' ? statsResult.value.data || {} : {};
+        const requestRows =
+          requestsResult.status === 'fulfilled' && Array.isArray(requestsResult.value.data)
+            ? requestsResult.value.data
+            : [];
+        const residentRows =
+          residentsResult.status === 'fulfilled'
+            ? Array.isArray(residentsResult.value.data)
+              ? residentsResult.value.data
+              : residentsResult.value.data?.residents ?? []
+            : [];
+        const officialRows =
+          officialsResult.status === 'fulfilled' && Array.isArray(officialsResult.value.data)
+            ? officialsResult.value.data
+            : [];
+        const pendingRequestsCount = requestRows.filter(
+          (row) => String(row?.RequestStatus ?? '').trim().toLowerCase() === 'pending'
+        ).length;
+        const readyForPickupCount = requestRows.filter(
+          (row) => String(row?.RequestStatus ?? '').trim().toLowerCase() === 'ready for pickup'
+        ).length;
+        const totalResidentsCount =
+          residentRows.length > 0 ? residentRows.length : Number(data.totalResidents ?? 0);
+        const totalOfficialsCount =
+          officialRows.length > 0 ? officialRows.length : Number(data.totalOfficials ?? 0);
+        const activeResidentRows = residentRows.filter(
+          (row) => String(row?.status ?? 'Active').trim() === 'Active'
         );
-        const data = res.data || {};
+        const residentsWithDates = activeResidentRows.filter((row) => getResidentRegisteredDate(row));
+        const registeredVoters = activeResidentRows.filter((row) => row?.VoterStatus === true).length;
+        const notRegisteredVoters = activeResidentRows.filter((row) => row?.VoterStatus !== true).length;
+        const residentChartData = buildResidentTypeChartData(residentRows);
+        const cutoffDate = dayjs(registrationCutoffDate);
+        const frontendNewResidentsCount = activeResidentRows.filter((row) => {
+          const registeredDate = getResidentRegisteredDate(row);
+          return registeredDate ? dayjs(registeredDate).isAfter(cutoffDate.subtract(1, 'millisecond')) : false;
+        }).length;
+        const frontendWeeklyTrend = buildWeeklyTrendFromResidents(activeResidentRows);
 
         if (!isMounted) return;
 
         setStats({
-          totalResidents: Number(data.totalResidents ?? 0),
-          totalOfficials: Number(data.totalOfficials ?? 0),
-          pendingRequests: Number(data.pendingRequests ?? 0),
-          documentsToPickup: Number(data.readyPickup ?? data.documentsToPickup ?? 0),
-          newResidents: Number(data.newResidents ?? 0),
+          totalResidents: totalResidentsCount,
+          totalOfficials: totalOfficialsCount,
+          pendingRequests: pendingRequestsCount,
+          documentsToPickup:
+            readyForPickupCount > 0
+              ? readyForPickupCount
+              : Number(data.readyPickup ?? data.documentsToPickup ?? 0),
+          newResidents:
+            residentsWithDates.length > 0
+              ? frontendNewResidentsCount
+              : Number(data.newResidents ?? 0),
         });
 
-        const registered = Number(data?.voters?.registered ?? 0);
-        const notRegistered = Number(
-          data?.voters?.not_registered ?? data?.voters?.notRegistered ?? 0
-        );
+        const registered =
+          residentRows.length > 0
+            ? registeredVoters
+            : Number(data?.voters?.registered ?? 0);
+        const notRegistered =
+          residentRows.length > 0
+            ? notRegisteredVoters
+            : Number(data?.voters?.not_registered ?? data?.voters?.notRegistered ?? 0);
 
         setVoterData([
           { name: 'Registered', value: registered, fill: '#2dadfc' },
           { name: 'Not Registered', value: notRegistered, fill: '#ffa62e' },
         ]);
 
-        // Fetch resident types breakdown
-        try {
-          const typeRes = await api.get<{ data: { type: string; count: number }[] }>('/api/stats/resident-types');
-          const rows = Array.isArray(typeRes.data?.data) ? typeRes.data.data : [];
-          if (rows.length > 0) {
-            const chart = rows.map((r) => ({
-              category: String(r.type ?? '').trim(),
-              value: Number(r.count ?? 0),
-              fill: RESIDENT_TYPE_COLORS[String(r.type ?? '').trim()] ?? '#949494',
-            }));
-            setResidentData(chart);
-          } else {
-            setResidentData([
-              { category: 'Total Residents', value: Number(data.totalResidents ?? 0), fill: '#4aa8cf' },
-            ]);
-          }
-        } catch {
-          setResidentData([
-            { category: 'Total Residents', value: Number(data.totalResidents ?? 0), fill: '#4aa8cf' },
-          ]);
-        }
+        setResidentData(residentChartData);
 
-        if (Array.isArray(data.weeklyTrend) && data.weeklyTrend.length > 0) {
+        if (residentsWithDates.length > 0) {
+          setWeeklyTrendData(frontendWeeklyTrend);
+        } else if (Array.isArray(data.weeklyTrend) && data.weeklyTrend.length > 0) {
           setWeeklyTrendData(data.weeklyTrend);
         } else {
           setWeeklyTrendData(defaultWeeklyTrend);
         }
+        if (statsResult.status === 'rejected') {
+          console.error('Failed to fetch dashboard stats:', statsResult.reason);
+        }
 
-        setActivities(data.activities || []);
+        if (requestsResult.status === 'rejected') {
+          console.error('Failed to fetch pending requests:', requestsResult.reason);
+        }
 
-        const residentsRes = await api.get('/residents');
-        const residentRows: ResidentRow[] = Array.isArray(residentsRes.data)
-          ? residentsRes.data
-          : residentsRes.data?.residents ?? [];
+        if (residentsResult.status === 'rejected') {
+          console.error('Failed to fetch residents for dashboard:', residentsResult.reason);
+        }
 
-        if (!isMounted) return;
-        setResidentData(buildResidentTypeChartData(residentRows));
+        if (officialsResult.status === 'rejected') {
+          console.error('Failed to fetch officials for dashboard:', officialsResult.reason);
+        }
       } catch (err) {
         console.error('Failed to fetch dashboard stats:', err);
         if (!isMounted) return;
@@ -253,9 +423,11 @@ export function DashboardHome({
     };
 
     fetchDashboardStats();
+    const interval = setInterval(fetchDashboardStats, 10000);
 
     return () => {
       isMounted = false;
+      clearInterval(interval);
     };
   }, [registrationCutoffDate]);
 
@@ -263,12 +435,12 @@ export function DashboardHome({
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-full">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
           <p className="text-gray-600 mt-1">Welcome back, {adminName}!</p>
         </div>
-        <div className="flex items-center gap-2 text-gray-600">
+        <div className="flex flex-wrap items-center gap-2 text-gray-600">
           <Clock className="w-5 h-5" />
           <span className="font-semibold">{currentDateTime}</span>
         </div>
@@ -278,7 +450,7 @@ export function DashboardHome({
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
 
         {/* Total Registered Residents */}
-        <Card className="border-[#2957a1] bg-white">
+        <Card className="border-[#2957a1] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
           <CardContent className="p-4">
             <p className="text-xs text-gray-700 mb-2">Total Registered Residents</p>
 
@@ -286,17 +458,18 @@ export function DashboardHome({
               {statText(stats.totalResidents)}
             </p>
 
-            <p
+            <button
+              type="button"
               onClick={() => onNavigate?.('residents', 'all')}
-              className="text-[14px] text-black mt-2 cursor-pointer hover:underline hover:text-[#2957a1]"
+              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#2957a1] px-3 py-1.5 text-[13px] font-semibold text-[#2957a1] transition-all duration-200 hover:bg-[#2957a1] hover:text-white hover:shadow-sm sm:w-auto"
             >
-              → View all residents
-            </p>
+              View all residents
+            </button>
           </CardContent>
         </Card>
 
         {/* New Residents */}
-        <Card className="border-[#51c55f] bg-gradient-to-br from-green-50 to-white border-2">
+        <Card className="border-[#51c55f] bg-gradient-to-br from-green-50 to-white border-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
           <CardContent className="p-4">
             <div className="flex justify-between items-start mb-2">
               <p className="text-xs text-gray-700 font-semibold">New Residents</p>
@@ -311,17 +484,19 @@ export function DashboardHome({
               Since {dayjs(registrationCutoffDate).format('MM/DD/YYYY')}
             </p>
 
-            <p
+            <button
+              type="button"
               onClick={() => onNavigate?.('residents', 'new')}
-              className="text-[14px] text-black mt-2 cursor-pointer hover:underline hover:text-[#16a34a]"
+              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#16a34a] px-3 py-1.5 text-[13px] font-semibold text-[#16a34a] transition-all duration-200 hover:bg-[#16a34a] hover:text-white hover:shadow-sm sm:w-auto"
             >
-              → View new residents
-            </p>
+              View new residents
+            </button>
           </CardContent>
         </Card>
 
         {/* Total Barangay Officials */}
-        <Card className="border-[#ffa62e] bg-white">
+        {userRole === 'admin' && (
+        <Card className="border-[#ffa62e] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
           <CardContent className="p-4">
             <div className="flex justify-between items-start mb-2">
               <p className="text-xs text-gray-700">Total Barangay Officials</p>
@@ -332,17 +507,19 @@ export function DashboardHome({
               {statText(stats.totalOfficials)}
             </p>
 
-            <p
+            <button
+              type="button"
               onClick={() => onNavigate?.('officials')}
-              className="text-[14px] text-black mt-2 cursor-pointer hover:underline hover:text-[#f97316]"
+              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#f97316] px-3 py-1.5 text-[13px] font-semibold text-[#f97316] transition-all duration-200 hover:bg-[#f97316] hover:text-white hover:shadow-sm sm:w-auto"
             >
-              → Manage officials
-            </p>
+              Manage officials
+            </button>
           </CardContent>
         </Card>
+        )}
 
         {/* Total Pending Requests */}
-        <Card className="border-[#ea4d48] bg-white">
+        <Card className="border-[#ea4d48] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
           <CardContent className="p-4">
             <p className="text-xs text-gray-700 mb-2">Total Pending Requests</p>
 
@@ -350,17 +527,18 @@ export function DashboardHome({
               {statText(stats.pendingRequests)}
             </p>
 
-            <p
+            <button
+              type="button"
               onClick={() => onNavigate?.('requests', 'pending')}
-              className="text-[14px] text-black mt-2 cursor-pointer hover:underline hover:text-[#ef4444]"
+              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#ef4444] px-3 py-1.5 text-[13px] font-semibold text-[#ef4444] transition-all duration-200 hover:bg-[#ef4444] hover:text-white hover:shadow-sm sm:w-auto"
             >
-              → View pending
-            </p>
+              View pending
+            </button>
           </CardContent>
         </Card>
 
         {/* Total Documents to Pickup */}
-        <Card className="border-[#2957a1] bg-white">
+        <Card className="border-[#2957a1] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
           <CardContent className="p-4">
             <p className="text-xs text-gray-700 mb-2">Total Documents to Pickup</p>
 
@@ -368,12 +546,13 @@ export function DashboardHome({
               {statText(stats.documentsToPickup)}
             </p>
 
-            <p
+            <button
+              type="button"
               onClick={() => onNavigate?.('requests', 'pickup')}
-              className="text-[14px] text-black mt-2 cursor-pointer hover:underline hover:text-[#2957a1]"
+              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#2957a1] px-3 py-1.5 text-[13px] font-semibold text-[#2957a1] transition-all duration-200 hover:bg-[#2957a1] hover:text-white hover:shadow-sm sm:w-auto"
             >
-              → View documents
-            </p>
+              View documents
+            </button>
           </CardContent>
         </Card>
 

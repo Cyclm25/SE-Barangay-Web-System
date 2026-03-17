@@ -172,21 +172,19 @@ router.post("/forgot-password", async (req, res) => {
       return res.status(400).json({ error: "Only Gmail addresses are allowed" });
     }
 
-    // ✅ Find the residentaccount row linked to this Gmail (Resident OR BarangayAdmin)
+    // Find the residentaccount row linked to this Gmail (Resident or BarangayAdmin).
     const q = await pool.query(
       `
       SELECT
         ra."ResidentAccountID" AS "ResidentAccountID",
         ra."ResidentID"        AS "ResidentID",
         ra."BarangayAdminID"   AS "BarangayAdminID",
-        ra."SuperAdminID"      AS "SuperAdminID",
-        LOWER(COALESCE(r."Email", ba."Email", sa."Email")) AS "Email",
-        COALESCE(r."FirstName", ba."AdminName", 'Super Admin') AS "DisplayName"
+        LOWER(COALESCE(r."Email", ba."Email")) AS "Email",
+        COALESCE(r."FirstName", ba."AdminName") AS "DisplayName"
       FROM residentaccount ra
       LEFT JOIN resident r ON ra."ResidentID" = r."ResidentID"
       LEFT JOIN barangayadmin ba ON ra."BarangayAdminID" = ba."BarangayAdminID"
-      LEFT JOIN superadmin sa ON ra."SuperAdminID" = sa."SuperAdminID"
-      WHERE LOWER(r."Email") = $1 OR LOWER(ba."Email") = $1 OR LOWER(sa."Email") = $1
+      WHERE LOWER(r."Email") = $1 OR LOWER(ba."Email") = $1
       LIMIT 1
       `,
       [e]
@@ -198,12 +196,10 @@ router.post("/forgot-password", async (req, res) => {
 
     const row = q.rows[0];
 
-    // ❌ Block Super Admin
     const isResident = !!row.ResidentID;
     const isAdmin = !!row.BarangayAdminID;
-    const isSuperAdmin = !!row.SuperAdminID;
 
-    if (!isResident && !isAdmin && !isSuperAdmin) {
+    if (!isResident && !isAdmin) {
       return res.status(400).json({ error: "Account type not supported for password reset" });
     }
 
@@ -233,7 +229,7 @@ router.post("/forgot-password", async (req, res) => {
       text: `Your OTP code is ${otpCode}. Do not share this code with anyone.`,
     });
 
-    // ✅ Identity for UI
+    // Identity for UI
     const identity = isResident
       ? {
         type: "resident",
@@ -250,13 +246,11 @@ router.post("/forgot-password", async (req, res) => {
         username: row.BarangayAdminID,
         residentAccountId: row.ResidentAccountID,
       }
-      : {
-        type: "superadmin",
-        email: row.Email,
-        firstName: row.DisplayName || "",
-        username: row.SuperAdminID,
-        residentAccountId: row.ResidentAccountID,
-      };
+      : null;
+
+    if (!identity) {
+      return res.status(400).json({ error: "Account type not supported for password reset" });
+    }
 
     return res.json({ message: "OTP sent", identity });
   } catch (err) {
@@ -286,16 +280,14 @@ router.post("/verify-otp", async (req, res) => {
         ra."ResidentAccountID" AS "ResidentAccountID",
         ra."ResidentID"        AS "ResidentID",
         ra."BarangayAdminID"   AS "BarangayAdminID",
-        ra."SuperAdminID"      AS "SuperAdminID",
         ra."OtpCode"           AS "OtpCode",
         ra."OtpExpiry"         AS "OtpExpiry",
-        LOWER(COALESCE(r."Email", ba."Email", sa."Email")) AS "Email",
-        COALESCE(r."FirstName", ba."AdminName", 'Super Admin') AS "DisplayName"
+        LOWER(COALESCE(r."Email", ba."Email")) AS "Email",
+        COALESCE(r."FirstName", ba."AdminName") AS "DisplayName"
       FROM residentaccount ra
       LEFT JOIN resident r ON ra."ResidentID" = r."ResidentID"
       LEFT JOIN barangayadmin ba ON ra."BarangayAdminID" = ba."BarangayAdminID"
-      LEFT JOIN superadmin sa ON ra."SuperAdminID" = sa."SuperAdminID"
-      WHERE LOWER(r."Email") = $1 OR LOWER(ba."Email") = $1 OR LOWER(sa."Email") = $1
+      WHERE LOWER(r."Email") = $1 OR LOWER(ba."Email") = $1
       LIMIT 1
       `,
       [e]
@@ -314,7 +306,11 @@ router.post("/verify-otp", async (req, res) => {
       ? { type: "resident", firstName: row.DisplayName || "", username: row.ResidentID, email: row.Email }
       : isAdmin
       ? { type: "barangayadmin", firstName: row.DisplayName || "", username: row.BarangayAdminID, email: row.Email }
-      : { type: "superadmin", firstName: row.DisplayName || "", username: row.SuperAdminID, email: row.Email };
+      : null;
+
+    if (!identity) {
+      return res.status(400).json({ error: "Account type not supported for password reset" });
+    }
 
     return res.json({
       message: "OTP verified successfully",
@@ -418,6 +414,82 @@ router.post("/reset-password", async (req, res) => {
   } catch (err) {
     try { await client.query("ROLLBACK"); } catch { }
     console.error("Reset Password Error:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
+  }
+});
+
+/* =========================
+   ADMIN DIRECT RESET FOR BARANGAY OFFICIAL
+   POST /auth/admin/reset-password
+   body: { barangayAdminId, newPassword }
+========================= */
+router.post("/admin/reset-password", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const barangayAdminId = String(req.body?.barangayAdminId || "").trim();
+    const pw = String(req.body?.newPassword || "").trim();
+
+    if (!barangayAdminId || !pw) {
+      return res.status(400).json({ error: "barangayAdminId and newPassword are required" });
+    }
+
+    if (!/^[A-Za-z0-9]{8,}$/.test(pw)) {
+      return res.status(400).json({
+        error: "Password must be at least 8 characters and contain letters/numbers only",
+      });
+    }
+
+    await client.query("BEGIN");
+
+    const q = await client.query(
+      `
+      SELECT "ResidentAccountID"
+      FROM residentaccount
+      WHERE "BarangayAdminID" = $1
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [barangayAdminId]
+    );
+
+    if (q.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Official account not found" });
+    }
+
+    const hashed = await bcrypt.hash(pw, 10);
+
+    await client.query(
+      `
+      UPDATE residentaccount
+      SET "Password" = $1,
+          "OtpCode" = NULL,
+          "OtpExpiry" = NULL
+      WHERE "BarangayAdminID" = $2
+      `,
+      [hashed, barangayAdminId]
+    );
+
+    await client.query(
+      `
+      UPDATE barangayadmin
+      SET "Password" = $1
+      WHERE "BarangayAdminID" = $2
+      `,
+      [hashed, barangayAdminId]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({
+      message: "Password updated successfully",
+      barangayAdminId,
+    });
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch { }
+    console.error("Admin Direct Reset Error:", err);
     return res.status(500).json({ error: "Internal Server Error" });
   } finally {
     client.release();
