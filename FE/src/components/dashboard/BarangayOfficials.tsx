@@ -424,7 +424,7 @@ export function BarangayOfficials() {
       const created = (res.data?.official || res.data) as Official;
       console.log("Created official:", created);
 
-      if (!created || (!created.barangayadminid && !created.BarangayAdminID)) {
+      if (!created || !created.barangayadminid) {
         throw new Error("Invalid response from server");
       }
 
