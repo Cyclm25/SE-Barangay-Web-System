@@ -34,8 +34,9 @@ const createDefaultProfileData = () => ({
   province: 'Metro Manila',
   zipCode: '1013',
   emergencyContactName: 'Contact Name',
-  emergencyContactAddress: '15 Yuseco Street',
-  emergencyContactNumber: '09123456789'
+  emergencyContactRelation: '',
+  emergencyContactAddress: '',
+  emergencyContactNumber: '09123456789',
 });
 
 type ResidentProfileData = ReturnType<typeof createDefaultProfileData>;
@@ -133,7 +134,7 @@ export function ResidentProfile() {
           province: data.Province || data.province || 'Metro Manila',
           zipCode: data.ZipCode || data.zipcode || '',
           emergencyContactName: data.ContactPerson || '',
-          emergencyContactAddress: data.ContactPersonAddress || '',
+          emergencyContactRelation: '',
           emergencyContactNumber: data.ContactPersonNo || ''
         });
         setResidentDbSnapshot({
@@ -199,11 +200,9 @@ export function ResidentProfile() {
     const loadingId = toast.loading("Uploading profile picture...");
 
     try {
-      // 1. Prepare the image file for upload
       const formData = new FormData();
       formData.append("profileImage", file, file.name);
 
-      // 2. Send it to the backend upload route
       const response = await fetch(`http://localhost:5001/api/upload/profile-picture/${residentId}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -216,7 +215,6 @@ export function ResidentProfile() {
         throw new Error(data?.error || "Upload failed");
       }
 
-      // 3. Update the UI with the permanent backend URL
       const fullUrl = `http://localhost:5001${data.imageUrl}`;
       setProfileImage(fullUrl);
       toast.success("Profile picture updated successfully!", { id: loadingId });
@@ -239,13 +237,29 @@ export function ResidentProfile() {
   };
 
   const handleCancel = () => {
-    if (isEditing) {
-      setShowCancelConfirm(true);
+    if (!isEditing) return;
+    const hasChanges = JSON.stringify(draftProfileData ?? profileData) !== JSON.stringify(profileData);
+    if (!hasChanges) {
+      setDraftProfileData(null);
+      setContactError('');
+      setIsEditing(false);
       return;
     }
-    setDraftProfileData(null);
+    setShowCancelConfirm(true);
+  };
+
+  const handleSaveClick = () => {
+    if (!isEditing || !draftProfileData) return;
+
+    const local = (contactLocal || '').trim();
+    if (!/^09\d{9}$/.test(local)) {
+      setContactError('Enter 11 digits starting with 09');
+      toast.error('Contact number must be exactly 11 digits and start with 09');
+      return;
+    }
+
     setContactError('');
-    setIsEditing(false);
+    setShowSaveConfirm(true);
   };
 
   const handleConfirmCancel = () => {
@@ -255,11 +269,6 @@ export function ResidentProfile() {
     setIsEditing(false);
   };
 
-  const handleSaveClick = () => {
-    if (!isEditing) return;
-    setShowSaveConfirm(true);
-  };
-
   const handleConfirmSave = async () => {
     if (!draftProfileData) {
       setShowSaveConfirm(false);
@@ -267,98 +276,87 @@ export function ResidentProfile() {
       return;
     }
 
-    // Validate contact number: must be 11 digits and start with 09
+    const residentId = localStorage.getItem('residentId');
+    if (!residentId) {
+      toast.error('Resident session not found.');
+      return;
+    }
+
     const local = (contactLocal || '').trim();
     if (!/^09\d{9}$/.test(local)) {
       setContactError('Enter 11 digits starting with 09');
-      toast.error('Contact number must be 11 digits and start with 09');
-      setShowSaveConfirm(false);
+      toast.error('Contact number must be exactly 11 digits and start with 09');
       return;
     }
 
-    const residentId = localStorage.getItem("residentId");
-    let token =
-      localStorage.getItem("token") ||
-      localStorage.getItem("authToken") ||
-      localStorage.getItem("jwt") ||
-      null;
-
-    if (token) {
-      token = token.replace(/^"|"$/g, '');
-    }
-
-    if (!residentId || !token || !residentDbSnapshot) {
-      toast.error('Session expired. Please log in again.');
-      return;
-    }
-
-    const updatedProfile = {
-      ...draftProfileData,
-      contactNumber: local,
-    };
+    setIsSaving(true);
 
     try {
-      setIsSaving(true);
+      const updatedProfile: ResidentProfileData = {
+        ...draftProfileData,
+        contactNumber: local,
+        emergencyContactAddress:
+          draftProfileData.emergencyContactAddress || residentDbSnapshot?.emergencyContactAddress || '',
+      };
 
-      const response = await fetch(`http://localhost:5001/residents/${encodeURIComponent(residentId)}`, {
-        method: "PUT",
+      const payload = {
+        firstName: updatedProfile.firstName.trim(),
+        middleName: updatedProfile.middleName.trim(),
+        lastName: updatedProfile.lastName.trim(),
+        age: updatedProfile.age.trim(),
+        birthday: updatedProfile.birthdate,
+        gender: updatedProfile.sex.trim(),
+        civilStatus: updatedProfile.civilStatus.trim(),
+        nationality: updatedProfile.nationality.trim(),
+        religion: updatedProfile.religion.trim(),
+        contactNumber: updatedProfile.contactNumber.trim(),
+        email: updatedProfile.email.trim(),
+        houseNo: updatedProfile.houseNo.trim(),
+        streetAddress: updatedProfile.street.trim(),
+        city: updatedProfile.city.trim(),
+        province: updatedProfile.province.trim(),
+        zipCode: updatedProfile.zipCode.trim(),
+        voterStatus: residentDbSnapshot?.voterStatus,
+        residentType: residentDbSnapshot?.residentType,
+        fatherName: residentDbSnapshot?.fatherName || '',
+        motherName: residentDbSnapshot?.motherName || '',
+        spouseName: residentDbSnapshot?.spouseName || '',
+        numberOfChildren: residentDbSnapshot?.numberOfChildren ?? 0,
+        emergencyContactName: updatedProfile.emergencyContactName.trim(),
+        emergencyContactNumber: updatedProfile.emergencyContactNumber.trim(),
+        emergencyContactAddress: updatedProfile.emergencyContactAddress.trim(),
+      };
+
+      const res = await fetch(`http://localhost:5001/residents/${encodeURIComponent(residentId)}`, {
+        method: 'PUT',
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
         },
-        body: JSON.stringify({
-          firstName: updatedProfile.firstName.trim(),
-          middleName: updatedProfile.middleName.trim(),
-          lastName: updatedProfile.lastName.trim(),
-          age: updatedProfile.age,
-          birthday: updatedProfile.birthdate,
-          gender: updatedProfile.sex,
-          civilStatus: updatedProfile.civilStatus,
-          religion: updatedProfile.religion.trim(),
-          nationality: updatedProfile.nationality.trim(),
-          residentType: residentDbSnapshot.residentType,
-          voterStatus: residentDbSnapshot.voterStatus,
-          houseNo: updatedProfile.houseNo.trim(),
-          streetAddress: updatedProfile.street.trim(),
-          city: updatedProfile.city.trim(),
-          province: updatedProfile.province.trim(),
-          zipCode: updatedProfile.zipCode.trim(),
-          contactNumber: updatedProfile.contactNumber,
-          email: updatedProfile.email.trim(),
-          fatherName: residentDbSnapshot.fatherName,
-          motherName: residentDbSnapshot.motherName,
-          spouseName: residentDbSnapshot.spouseName,
-          numberOfChildren: residentDbSnapshot.numberOfChildren,
-          emergencyContactName: updatedProfile.emergencyContactName.trim(),
-          emergencyContactNumber: updatedProfile.emergencyContactNumber.trim(),
-          emergencyContactAddress: residentDbSnapshot.emergencyContactAddress,
-          profileImage: residentDbSnapshot.profileImagePath,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const data = await response.json().catch(() => null);
+      const responseText = await res.text();
+      let responseData: any = null;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch {
+        responseData = null;
+      }
 
-      if (!response.ok) {
-        throw new Error(data?.error || 'Failed to save profile changes.');
+      if (!res.ok) {
+        throw new Error(responseData?.error || `Failed to update profile (HTTP ${res.status})`);
       }
 
       setProfileData(updatedProfile);
-      setResidentDbSnapshot((prev) =>
-        prev
-          ? {
-            ...prev,
-            profileImagePath: data?.ProfileImage ?? prev.profileImagePath,
-          }
-          : prev
-      );
       setDraftProfileData(null);
       setShowSaveConfirm(false);
+      setShowCancelConfirm(false);
       setIsEditing(false);
       setContactError('');
       toast.success('Profile information updated successfully!');
     } catch (error: any) {
-      console.error('Resident profile save error:', error);
-      toast.error(error?.message || 'Failed to save profile changes.');
+      toast.error(error?.message || 'Failed to update profile.');
     } finally {
       setIsSaving(false);
     }
@@ -557,7 +555,7 @@ export function ResidentProfile() {
                     <div>
                       <div className="flex items-center">
                         <div className="flex items-center border-2 border-[#2957a1] rounded-lg overflow-hidden w-full">
-                          {/* <span className="inline-flex items-center px-3 py-2 text-sm">+63</span> */}
+                          <span className="inline-flex items-center px-3 py-2 text-sm">+63</span>
                           <input
                             type="text"
                             inputMode="numeric"
@@ -579,9 +577,8 @@ export function ResidentProfile() {
                           />
                         </div>
                       </div>
-                      <p className={`text-sm mt-1 ${contactError ? 'text-red-600' : 'text-gray-500'}`}>
-                        {contactError || 'Enter 11 digits (must start with 09).'}
-                      </p>
+                      {contactError && <p className="text-sm text-red-600 mt-1">{contactError}</p>}
+                      <p className="text-xs text-gray-500 mt-1">Enter 10 digits (must start with 9). Country code <strong>+63</strong> is applied automatically.</p>
                     </div>
                   ) : (
                     <div className="w-full bg-gray-50 border-2 border-gray-200 rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] text-gray-700">
@@ -657,16 +654,17 @@ export function ResidentProfile() {
                 Emergency Contact
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* FIXED: isEditing prop is now dynamic instead of false */}
                 <FormField
                   label="Contact Name"
                   value={visibleProfileData.emergencyContactName}
                   onChange={(value) => handleChange('emergencyContactName', value)}
-                  isEditing={false}
+                  isEditing={isEditing} 
                 />
                 <FormField
-                  label="Address"
-                  value={visibleProfileData.emergencyContactAddress}
-                  onChange={(value) => handleChange('emergencyContactAddress', value)}
+                  label="Relationship"
+                  value={profileData.emergencyContactRelation}
+                  onChange={(value) => handleChange('emergencyContactRelation', value)}
                   isEditing={false}
                 />
                 <FormField
@@ -674,7 +672,16 @@ export function ResidentProfile() {
                   type="tel"
                   value={visibleProfileData.emergencyContactNumber}
                   onChange={(value) => handleChange('emergencyContactNumber', value)}
-                  isEditing={false}
+                  isEditing={isEditing}
+                />
+              </div>
+              {/* Added the emergency address field so they can actually edit it */}
+              <div className="mt-6">
+                 <FormField
+                  label="Emergency Contact Address"
+                  value={profileData.emergencyContactAddress}
+                  onChange={(value) => handleChange('emergencyContactAddress', value)}
+                  isEditing={isEditing}
                 />
               </div>
             </div>

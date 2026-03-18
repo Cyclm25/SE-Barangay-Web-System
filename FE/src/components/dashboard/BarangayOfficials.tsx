@@ -30,7 +30,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
-import { User, Lock, Eye, EyeOff } from "lucide-react";
+import { User, Lock, Eye, EyeOff, Calendar } from "lucide-react";
 import { ProfileImageUpload } from "../ui/ProfileImageUpload";
 import { OfficialForgotPasswordPage } from "./OfficialForgotPasswordPage";
 import { toast } from "sonner";
@@ -857,26 +857,56 @@ export function BarangayOfficials() {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="termStart">Term Start</Label>
-                    <Input
-                      id="termStart"
-                      type="date"
-                      value={formData.termStart}
-                      onChange={(e) =>
-                        setFormData({ ...formData, termStart: e.target.value })
-                      }
-                    />
+                    <div className="relative">
+                      <Input
+                        id="termStart"
+                        type="date"
+                        className="pr-11 [&::-webkit-calendar-picker-indicator]:opacity-0"
+                        value={formData.termStart}
+                        onChange={(e) =>
+                          setFormData({ ...formData, termStart: e.target.value })
+                        }
+                      />
+                      <button
+                        type="button"
+                        aria-label="Open term start calendar"
+                        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-gray-600 hover:text-black"
+                        onClick={() => {
+                          const input = document.getElementById("termStart") as HTMLInputElement | null;
+                          input?.showPicker?.();
+                          input?.focus();
+                        }}
+                      >
+                        <Calendar className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="termEnd">Term End</Label>
-                    <Input
-                      id="termEnd"
-                      type="date"
-                      value={formData.termEnd}
-                      onChange={(e) =>
-                        setFormData({ ...formData, termEnd: e.target.value })
-                      }
-                    />
+                    <div className="relative">
+                      <Input
+                        id="termEnd"
+                        type="date"
+                        className="pr-11 [&::-webkit-calendar-picker-indicator]:opacity-0"
+                        value={formData.termEnd}
+                        onChange={(e) =>
+                          setFormData({ ...formData, termEnd: e.target.value })
+                        }
+                      />
+                      <button
+                        type="button"
+                        aria-label="Open term end calendar"
+                        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-gray-600 hover:text-black"
+                        onClick={() => {
+                          const input = document.getElementById("termEnd") as HTMLInputElement | null;
+                          input?.showPicker?.();
+                          input?.focus();
+                        }}
+                      >
+                        <Calendar className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -1060,7 +1090,7 @@ export function BarangayOfficials() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#2957a1]"
+                  className="absolute inset-y-0 right-3 flex items-center justify-center text-gray-400 hover:text-[#2957a1]"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>

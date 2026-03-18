@@ -31,22 +31,6 @@ interface Official {
   image: string | null;
 }
 
-// Mock data as a safe fallback if the server is offline
-const mockOfficials: Official[] = [
-  {
-    id: 'mock1',
-    name: 'Roberto Martinez',
-    position: 'Barangay Captain',
-    image: 'https://images.unsplash.com/photo-1717985498747-f081679d2c33?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBmaWxpcGluYSUyMG1hbiUyMHBvcnRyYWl0fGVufDF8fHx8MTc2OTc0NTg0OHww&ixlib=rb-4.1.0&q=80&w=1080'
-  },
-  {
-    id: 'mock2',
-    name: 'Maria Santos',
-    position: 'Barangay Kagawad',
-    image: 'https://images.unsplash.com/photo-1718006915613-bcb972cabdb1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBmaWxpcGluYSUyMHdvbWFuJTIwcG9ydHJhaXR8ZW58MXx8fHwxNzY5NzQ1ODQ4fDA&ixlib=rb-4.1.0&q=80&w=1080'
-  }
-];
-
 export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -69,7 +53,7 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
 
           // Filter for active officials only and map backend keys to frontend keys
           const activeOfficials = data
-            .filter((item: any) => item.status === true)
+            .filter((item: any) => item.status === true || item.status === "true")
             .map((item: any) => ({
               id: item.barangayadminid,
               name: item.adminname,
@@ -77,14 +61,13 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
               image: item.profileimage || null
             }));
 
-          // If the database has active officials, use them. Otherwise, show fallback.
-          setOfficials(activeOfficials.length > 0 ? activeOfficials : mockOfficials);
+          setOfficials(activeOfficials);
         } else {
-          setOfficials(mockOfficials);
+          setOfficials([]);
         }
       } catch (error) {
         console.error("Error connecting to backend for officials:", error);
-        setOfficials(mockOfficials);
+        setOfficials([]);
       } finally {
         setIsLoadingOfficials(false);
       }
@@ -174,6 +157,10 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
       {isLoadingOfficials ? (
         <div className="flex justify-center py-8">
           <p className="text-white/80 animate-pulse">Loading officials data...</p>
+        </div>
+      ) : officials.length === 0 ? (
+        <div className="rounded-xl border border-white/20 bg-white/10 px-5 py-6 text-center text-white/80">
+          No active barangay officials available.
         </div>
       ) : (
         <div className="space-y-4">
