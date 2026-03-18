@@ -122,7 +122,7 @@ export function ResidentProfile() {
           birthdate: data.Birthday || '',
           age: data.Age != null ? String(data.Age) : '',
           sex: data.Gender || '',
-          civilStatus: data.CivilStatus || '',
+          civilStatus: data.CivilStatus ?? data.civilStatus ?? data.civilstatus ?? '',
           nationality: 'Filipino',
           religion: data.Religion || data.religion || 'Roman Catholic',
           contactNumber: data.ContactNumber || '',
@@ -135,7 +135,8 @@ export function ResidentProfile() {
           zipCode: data.ZipCode || data.zipcode || '',
           emergencyContactName: data.ContactPerson || '',
           emergencyContactRelation: '',
-          emergencyContactNumber: data.ContactPersonNo || ''
+          emergencyContactNumber: data.ContactPersonNo || '',
+          emergencyContactAddress: data.ContactPersonAddress || ''
         });
         setResidentDbSnapshot({
           residentType: data.ResidentType || 'Resident',
