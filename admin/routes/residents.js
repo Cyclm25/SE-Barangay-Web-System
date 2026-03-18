@@ -19,6 +19,26 @@ async function hasResidentReligionColumn(client) {
   return result.rows.length > 0;
 }
 
+async function generateNextResidentId(client) {
+  const result = await client.query(
+    `
+    SELECT "ResidentID"
+    FROM resident
+    WHERE "ResidentID" ~ '^RS[0-9]{8}$'
+    ORDER BY CAST(RIGHT("ResidentID", 4) AS INTEGER) DESC
+    LIMIT 1
+    `
+  );
+
+  const currentYear = new Date().getFullYear();
+  const lastId = result.rows[0]?.ResidentID;
+  const nextNumber = lastId
+    ? (parseInt(String(lastId).slice(-4), 10) || 0) + 1
+    : 1;
+
+  return `RS${currentYear}${String(nextNumber).padStart(4, "0")}`;
+}
+
 /* =========================
    GET ALL RESIDENTS
 ========================= */
@@ -176,8 +196,8 @@ router.post("/register", verifyToken, async (req, res) => {
     if (v === true || v === false) return v;
     if (typeof v === "string") {
       const s = v.trim().toLowerCase();
-      if (s === "true" || s === "yes" || s === "1") return true;
-      if (s === "false" || s === "no" || s === "0") return false;
+      if (s === "true" || s === "yes" || s === "1" || s === "voter" || s === "registered") return true;
+      if (s === "false" || s === "no" || s === "0" || s === "non-voter" || s === "non voter" || s === "not registered") return false;
     }
     if (typeof v === "number") return v === 1;
     return false;
@@ -276,7 +296,10 @@ if (!isAdminActor || !actorId) {
     const profileImage = req.body.profileImage || null;
     const residentReligion = req.body.religion || null;
     const includeReligion = await hasResidentReligionColumn(client);
+    const newResidentId = await generateNextResidentId(client);
+
     const residentColumns = [
+      `"ResidentID"`,
       `"FirstName"`,
       `"MiddleName"`,
       `"LastName"`,
@@ -302,6 +325,7 @@ if (!isAdminActor || !actorId) {
       `"status"`,
     ];
     const residentValues = [
+      newResidentId,
       firstName,
       middleName,
       lastName,
@@ -366,9 +390,10 @@ if (!isAdminActor || !actorId) {
 ]
     
     */
-    const newResidentId = residentInsert.rows[0]?.ResidentID || residentInsert.rows[0]?.residentid;
+    const insertedResidentId =
+      residentInsert.rows[0]?.ResidentID || residentInsert.rows[0]?.residentid;
 
-    if (!newResidentId) {
+    if (!insertedResidentId) {
       throw new Error("Failed to get newly generated ResidentID.");
     }
 
@@ -379,7 +404,7 @@ if (!isAdminActor || !actorId) {
     await client.query(
       `INSERT INTO residentaccount ("ResidentID", "Password", "Role")
        VALUES ($1, $2, $3)`,
-      [newResidentId, passwordHash, "Resident"]
+      [insertedResidentId, passwordHash, "Resident"]
     );
 
     // 3) Log transaction BEFORE COMMIT (same DB transaction)
@@ -396,7 +421,7 @@ if (!isAdminActor || !actorId) {
         "Created Resident Account",
         "Success",
         "Resident Records",
-        `Created resident: ${newResidentId}`,
+        `Created resident: ${insertedResidentId}`,
       ]
     );
 
@@ -408,6 +433,178 @@ if (!isAdminActor || !actorId) {
     } catch { }
     console.error("REGISTER ERROR:", err);
     return res.status(500).json({ error: err.message || "Database failed to save record." });
+  } finally {
+    client.release();
+  }
+});
+
+router.put("/:id", verifyToken, async (req, res) => {
+  const client = await pool.connect();
+
+  const toBool = (v) => {
+    if (v === true || v === false) return v;
+    if (typeof v === "string") {
+      const s = v.trim().toLowerCase();
+      if (s === "true" || s === "yes" || s === "1" || s === "voter" || s === "registered") return true;
+      if (s === "false" || s === "no" || s === "0" || s === "non-voter" || s === "non voter" || s === "not registered") return false;
+    }
+    if (typeof v === "number") return v === 1;
+    return false;
+  };
+
+  try {
+    const { id } = req.params;
+    const {
+      firstName,
+      middleName,
+      lastName,
+      age,
+      birthday,
+      gender,
+      civilStatus,
+      religion,
+      residentType,
+      voterStatus,
+      houseNo,
+      streetAddress,
+      contactNumber,
+      email,
+      fatherName,
+      motherName,
+      spouseName,
+      numberOfChildren,
+      emergencyContactName,
+      emergencyContactNumber,
+      emergencyContactAddress,
+      profileImage,
+    } = req.body;
+
+    if (!firstName || !lastName || !age || !birthday || !gender || !civilStatus || !residentType || !contactNumber || !email) {
+      return res.status(400).json({ error: "Missing required resident fields." });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedContactNumber = String(contactNumber).trim();
+
+    if (!/^[^\s@]+@gmail\.com$/i.test(normalizedEmail)) {
+      return res.status(400).json({ error: "Only valid Gmail addresses are allowed." });
+    }
+
+    if (!/^\d{11}$/.test(normalizedContactNumber)) {
+      return res.status(400).json({ error: "Contact number must be exactly 11 digits." });
+    }
+
+    await client.query("BEGIN");
+
+    const existingEmail = await client.query(
+      `
+      SELECT 1
+      FROM resident
+      WHERE LOWER("Email") = $1
+        AND TRIM("ResidentID") <> TRIM($2)
+      LIMIT 1
+      `,
+      [normalizedEmail, id]
+    );
+
+    if (existingEmail.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Email already exists." });
+    }
+
+    const existingContactNumber = await client.query(
+      `
+      SELECT 1
+      FROM resident
+      WHERE "ContactNumber" = $1
+        AND TRIM("ResidentID") <> TRIM($2)
+      LIMIT 1
+      `,
+      [normalizedContactNumber, id]
+    );
+
+    if (existingContactNumber.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Contact number already exists." });
+    }
+
+    const includeReligion = await hasResidentReligionColumn(client);
+    const updateFields = [
+      `"FirstName" = $1`,
+      `"MiddleName" = $2`,
+      `"LastName" = $3`,
+      `"Age" = $4`,
+      `"Birthday" = $5`,
+      `"Gender" = $6`,
+      `"CivilStatus" = $7`,
+      `"ResidentType" = $8`,
+      `"VoterStatus" = $9`,
+      `"HouseNumber" = $10`,
+      `"StreetAddress" = $11`,
+      `"ContactNumber" = $12`,
+      `"Email" = $13`,
+      `"FatherName" = $14`,
+      `"MotherName" = $15`,
+      `"SpouseName" = $16`,
+      `"NoOfChildren" = $17`,
+      `"ContactPerson" = $18`,
+      `"ContactPersonNo" = $19`,
+      `"ContactPersonAddress" = $20`,
+      `"ProfileImage" = $21`,
+    ];
+
+    const updateValues = [
+      firstName,
+      middleName || null,
+      lastName,
+      parseInt(age, 10),
+      birthday,
+      gender,
+      civilStatus,
+      residentType,
+      toBool(voterStatus),
+      houseNo || null,
+      streetAddress || null,
+      normalizedContactNumber,
+      normalizedEmail,
+      fatherName || null,
+      motherName || null,
+      spouseName || null,
+      parseInt(numberOfChildren, 10) || 0,
+      emergencyContactName || null,
+      emergencyContactNumber || null,
+      emergencyContactAddress || null,
+      profileImage || null,
+    ];
+
+    if (includeReligion) {
+      updateFields.push(`religion = $${updateValues.length + 1}`);
+      updateValues.push(religion || null);
+    }
+
+    updateValues.push(id);
+
+    const updateResult = await client.query(
+      `
+      UPDATE resident
+      SET ${updateFields.join(", ")}
+      WHERE TRIM("ResidentID") = TRIM($${updateValues.length})
+      RETURNING *
+      `,
+      updateValues
+    );
+
+    await client.query("COMMIT");
+
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({ error: "Resident not found." });
+    }
+
+    return res.json(updateResult.rows[0]);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("PUT /residents/:id Error:", err.message);
+    return res.status(500).json({ error: err.message });
   } finally {
     client.release();
   }

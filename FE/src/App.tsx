@@ -64,9 +64,19 @@ type ResetState = {
 };
 
 export default function App() {
+  const storedAdminTab =
+    typeof window !== 'undefined' ? localStorage.getItem('admin_active_tab') : null;
   const [authView, setAuthView] = useState<AuthView>('login');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<ActiveTab>(
+    storedAdminTab === 'residents' ||
+      storedAdminTab === 'officials' ||
+      storedAdminTab === 'requests' ||
+      storedAdminTab === 'announcements' ||
+      storedAdminTab === 'transactions'
+      ? storedAdminTab
+      : 'dashboard'
+  );
   const [user, setUser] = useState<User | null>(null);
   const [resetState, setResetState] = useState<ResetState | null>(null);
 
@@ -80,6 +90,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('registrationCutoffDate', registrationCutoffDate);
   }, [registrationCutoffDate]);
+
+  useEffect(() => {
+    localStorage.setItem('admin_active_tab', activeTab);
+  }, [activeTab]);
 
   // Persistence logic to keep user logged in on refresh
   useEffect(() => {
@@ -125,6 +139,7 @@ export default function App() {
     setActiveTab('dashboard');
     setUser(null);
     localStorage.removeItem('app_user');
+    localStorage.removeItem('admin_active_tab');
     toast.success('Logged out successfully.');
   };
 

@@ -1,41 +1,51 @@
 const router = require("express").Router();
 const pool = require("../db");
 
+async function generateNextAnnouncementId(db = pool) {
+  const result = await db.query(
+    `
+    SELECT "AnnouncementID"
+    FROM announcement
+    ORDER BY "AnnouncementID" DESC
+    LIMIT 1
+    `
+  );
+
+  const lastId = Number(result.rows[0]?.AnnouncementID);
+  return Number.isFinite(lastId) ? lastId + 1 : 1;
+}
+
 async function publishScheduledAnnouncements() {
-  const now = new Date().toISOString();
   const result = await pool.query(
     `
     UPDATE announcement
     SET "Status" = 'Active',
         "IsScheduled" = false,
-        "PublishedDate" = NOW(),
+        "PublishedDate" = TIMEZONE('Asia/Manila', NOW()),
         "IsPublished" = true
     WHERE "IsScheduled" = true
       AND "Status" = 'Drafts'
       AND "ScheduledPublishDate" IS NOT NULL
-      AND "ScheduledPublishDate" <= $1
+      AND "ScheduledPublishDate" <= TIMEZONE('Asia/Manila', NOW())
     RETURNING *
-    `,
-    [now]
+    `
   );
   return result;
 }
 
 async function archiveExpiredAnnouncements() {
-  const now = new Date().toISOString();
   const result = await pool.query(
     `
     UPDATE announcement
     SET "Status" = 'Archived'
     WHERE "ExpirationDate" IS NOT NULL
-      AND "ExpirationDate" <= $1
+      AND "ExpirationDate" <= TIMEZONE('Asia/Manila', NOW())
       AND "Status" = 'Active'
       AND "IsPublished" = true
       AND "PublishedDate" IS NOT NULL
-      AND "PublishedDate" <= NOW() - INTERVAL '5 minutes'
+      AND "PublishedDate" <= TIMEZONE('Asia/Manila', NOW()) - INTERVAL '5 minutes'
     RETURNING "AnnouncementID", "Title", "ExpirationDate"
-    `,
-    [now]
+    `
   );
   return result;
 }
@@ -173,25 +183,36 @@ router.post("/", async (req, res) => {
       categories = ["All"];
     }
 
+    const nextAnnouncementId = await generateNextAnnouncementId(pool);
+
     const queryText = `
       INSERT INTO announcement (
-        "Title", "Body", "PostedByRole", "PostedByID", "Category",
+        "AnnouncementID", "Title", "Body", "PostedByRole", "PostedByID", "Category",
         "Status", "CreatedAt", "IsScheduled", "ScheduledPublishDate",
         "PublishedDate", "ExpirationDate", "Images", "IsPublished"
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6,
-        NOW(), $7, $8,
-        CASE WHEN $9 = true THEN NOW() ELSE NULL END,
-        $10, $11, $9
+        $1, $2, $3, $4, $5, $6, $7,
+        NOW(), $8, $9,
+        CASE WHEN $10 = true THEN NOW() ELSE NULL END,
+        $11, $12, $10
       )
       RETURNING *
     `;
 
     const values = [
-      title, body, postedByRole || "Admin", postedById || "SYSTEM", categories,
-      dbStatus, finalIsScheduled, scheduledPublishDate || null, finalIsPublished,
-      expirationDate || null, images || [],
+      nextAnnouncementId,
+      title,
+      body,
+      postedByRole || "Admin",
+      postedById || "SYSTEM",
+      categories,
+      dbStatus,
+      finalIsScheduled,
+      scheduledPublishDate || null,
+      finalIsPublished,
+      expirationDate || null,
+      images || [],
     ];
 
     const result = await pool.query(queryText, values);

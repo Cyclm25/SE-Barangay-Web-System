@@ -122,7 +122,6 @@ export function OfficialForgotPasswordPage({
                 <h1 className="text-[22px] font-bold text-[#2957a1] md:text-[24px]">
                   Forgot Password
                 </h1>
-                <p className="text-xs text-gray-500">UI-only admin reset page</p>
               </div>
             </div>
 
@@ -132,7 +131,7 @@ export function OfficialForgotPasswordPage({
               <br />
               Username: <span className="font-bold">{official.barangayadminid}</span>
               <br />
-              Gmail: <span className="font-bold">{official.email}</span>
+              Gmail Address: <span className="font-bold">{official.email}</span>
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-5 md:space-y-6">

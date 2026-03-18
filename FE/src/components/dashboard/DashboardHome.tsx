@@ -375,8 +375,8 @@ export function DashboardHome({
             : Number(data?.voters?.not_registered ?? data?.voters?.notRegistered ?? 0);
 
         setVoterData([
-          { name: 'Registered', value: registered, fill: '#2dadfc' },
-          { name: 'Not Registered', value: notRegistered, fill: '#ffa62e' },
+          { name: 'VOTER', value: registered, fill: '#2dadfc' },
+          { name: 'NON-VOTER', value: notRegistered, fill: '#ffa62e' },
         ]);
 
         setResidentData(residentChartData);
@@ -519,7 +519,7 @@ export function DashboardHome({
         )}
 
         {/* Total Pending Requests */}
-        <Card className="border-[#ea4d48] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+        <Card className="border-[#f4b400] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
           <CardContent className="p-4">
             <p className="text-xs text-gray-700 mb-2">Total Pending Requests</p>
 
@@ -530,7 +530,7 @@ export function DashboardHome({
             <button
               type="button"
               onClick={() => onNavigate?.('requests', 'pending')}
-              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#ef4444] px-3 py-1.5 text-[13px] font-semibold text-[#ef4444] transition-all duration-200 hover:bg-[#ef4444] hover:text-white hover:shadow-sm sm:w-auto"
+              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#f4b400] px-3 py-1.5 text-[13px] font-semibold text-[#f4b400] transition-all duration-200 hover:bg-[#f4b400] hover:text-white hover:shadow-sm sm:w-auto"
             >
               View pending
             </button>

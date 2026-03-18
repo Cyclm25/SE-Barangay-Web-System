@@ -8,6 +8,7 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { FileText, Clock, CheckCircle, XCircle, Eye, Search, AlertCircle, Mail } from 'lucide-react';
 import { toast } from 'sonner';
@@ -27,6 +28,9 @@ interface Request {
   contactNumber: string;      // from resident table (JOIN)
   email?: string;             // from resident table (JOIN)
   rejectionReason?: string;   // UI only
+  appointmentDate?: string | null;
+  appointmentTime?: string | null;
+  appointmentSetByAdmin?: string | null;
 }
 
 interface InboxRow {
@@ -43,7 +47,35 @@ interface InboxRow {
   ContactNumber?: string;
   Email?: string;
   RejectionReason?: string;
+  AppointmentDate?: string | null;
+  AppointmentTime?: string | null;
+  AppointmentSetByAdmin?: string | null;
 }
+
+const formatAppointmentTime = (value?: string | null) => {
+  if (!value) return '';
+
+  const [hourText, minuteText] = value.split(':');
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (Number.isNaN(hour) || Number.isNaN(minute)) {
+    return value;
+  }
+
+  return new Date(2000, 0, 1, hour, minute).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
+const formatWordDate = (value?: string | null) => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+};
 
 interface OnlineRequestsProps {
   initialFilter?: string;
@@ -83,6 +115,12 @@ export function OnlineRequests({
     requirements: '',
     additionalNotes: ''
   });
+  const [appointmentAttempted, setAppointmentAttempted] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<null | {
+    request: Request;
+    kind: 'process' | 'ready' | 'complete';
+    isOtherDocuments: boolean;
+  }>(null);
 
   const API_BASE = "http://localhost:5001";
 
@@ -122,6 +160,9 @@ export function OnlineRequests({
       contactNumber: row.ContactNumber || 'N/A',
       email: row.Email || 'N/A',
       rejectionReason: (row as any).RejectionReason || (row as any).rejectionReason || undefined,
+      appointmentDate: row.AppointmentDate ?? null,
+      appointmentTime: row.AppointmentTime ?? null,
+      appointmentSetByAdmin: row.AppointmentSetByAdmin ?? null,
     };
   };
 
@@ -305,22 +346,58 @@ export function OnlineRequests({
     }
   };
 
-  const handleSendAppointment = () => {
+  const handleSendAppointment = async () => {
     if (!appointmentRequest) return;
+    setAppointmentAttempted(true);
 
     if (!appointmentDetails.date || !appointmentDetails.time || !appointmentDetails.requirements.trim()) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    setRequests(prev =>
-      prev.map(req => (req.id === appointmentRequest.id ? { ...req, status: 'Processing' } : req))
-    );
+    try {
+      const rawUser = localStorage.getItem("app_user");
+      const currentUser = rawUser ? JSON.parse(rawUser) : null;
+      const setByAdmin = String(currentUser?.name || currentUser?.id || "Barangay Admin").trim();
 
-    toast.success(`Appointment scheduled! (UI only)`, { duration: 4000 });
+      setRequests(prev =>
+        prev.map(req => (req.id === appointmentRequest.id ? { ...req, status: 'Processing' } : req))
+      );
 
-    setAppointmentRequest(null);
-    setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' });
+      const res = await fetch(`${API_BASE}/requests/${appointmentRequest.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "Processing",
+          appointmentDate: appointmentDetails.date,
+          appointmentTime: appointmentDetails.time,
+          requirements: appointmentDetails.requirements.trim(),
+          additionalNotes: appointmentDetails.additionalNotes.trim(),
+          setByAdmin,
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || "Failed to send appointment");
+        await loadInbox(false);
+        return;
+      }
+
+      await loadInbox(false);
+      setActiveTab(certificateDocTypes.includes(appointmentRequest.documentType) ? 'certificates' : 'other');
+      setStatusFilter('Processing');
+      onFilterChange?.('processing');
+
+      toast.success("Appointment sent successfully.", { duration: 4000 });
+      setAppointmentRequest(null);
+      setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' });
+      setAppointmentAttempted(false);
+    } catch {
+      toast.error("Server error while sending appointment.");
+      await loadInbox(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -445,7 +522,7 @@ export function OnlineRequests({
                       <Button
                         size="sm"
                         className="bg-blue-600 hover:bg-blue-700 text-white"
-                        onClick={() => setAppointmentRequest(request)}
+                        onClick={() => setConfirmAction({ request, kind: 'process', isOtherDocuments: true })}
                       >
                         Process
                       </Button>
@@ -453,7 +530,7 @@ export function OnlineRequests({
                       <Button
                         size="sm"
                         className="bg-blue-600 hover:bg-blue-700 text-white"
-                        onClick={() => handleStatusChange(request.id, 'Processing')}
+                        onClick={() => setConfirmAction({ request, kind: 'process', isOtherDocuments: false })}
                       >
                         Process
                       </Button>
@@ -468,7 +545,7 @@ export function OnlineRequests({
                   <Button
                     size="sm"
                     className="bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => handleStatusChange(request.id, 'Ready for Pickup')}
+                    onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}
                   >
                     Ready
                   </Button>
@@ -478,7 +555,7 @@ export function OnlineRequests({
                   <Button
                     size="sm"
                     className="bg-gray-600 hover:bg-gray-700 text-white"
-                    onClick={() => handleStatusChange(request.id, 'Completed')}
+                    onClick={() => setConfirmAction({ request, kind: 'complete', isOtherDocuments })}
                   >
                     Complete
                   </Button>
@@ -501,6 +578,62 @@ export function OnlineRequests({
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-full">
+      <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <AlertDialogContent className="max-w-[420px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmAction?.kind === 'process'
+                ? 'Process this request?'
+                : confirmAction?.kind === 'ready'
+                  ? 'Mark as Ready for Pickup?'
+                  : 'Mark as Completed?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction?.kind === 'process' ? (
+                confirmAction?.isOtherDocuments ? (
+                  <>This will open the appointment scheduler. Sending the appointment will move the request to Processing.</>
+                ) : (
+                  <>This will move the request from Pending to Processing.</>
+                )
+              ) : confirmAction?.kind === 'ready' ? (
+                <>This will move the request from Processing to Ready for Pickup.</>
+              ) : (
+                <>This will mark the request as Completed. Use this only when the resident has picked up the document.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+              onClick={() => {
+                const action = confirmAction;
+                setConfirmAction(null);
+                if (!action) return;
+
+                if (action.kind === 'process') {
+                  if (action.isOtherDocuments) {
+                    setAppointmentRequest(action.request);
+                    return;
+                  }
+                  handleStatusChange(action.request.id, 'Processing');
+                  return;
+                }
+
+                if (action.kind === 'ready') {
+                  handleStatusChange(action.request.id, 'Ready for Pickup');
+                  return;
+                }
+
+                handleStatusChange(action.request.id, 'Completed');
+              }}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -695,49 +828,109 @@ export function OnlineRequests({
 
       {/* View Request Dialog */}
       <Dialog open={!!viewingRequest} onOpenChange={(open) => !open && setViewingRequest(null)}>
-        <DialogContent>
+        <DialogContent className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto">
           {viewingRequest && (
             <>
               <DialogHeader>
                 <DialogTitle>Request Details</DialogTitle>
                 <DialogDescription>View the details of the request</DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-xs text-gray-500">Request Number</Label>
-                  <p className="font-semibold">{viewingRequest.requestNo}</p>
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Request Number</Label>
+                    <p className="text-lg font-semibold text-gray-900">{viewingRequest.requestNo}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</Label>
+                    <div className="mt-1">
+                      <Badge className={getStatusColor(viewingRequest.status)}>{viewingRequest.status}</Badge>
+                    </div>
+                  </div>
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Document Type</Label>
+                    <p className="text-base font-semibold text-gray-900">{viewingRequest.documentType}</p>
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Resident</Label>
-                  <p className="font-semibold">{viewingRequest.residentName}</p>
-                  <p className="text-xs text-gray-500">{viewingRequest.residentId}</p>
-                </div>
+
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Resident</Label>
+                    <p className="mt-1 text-base font-semibold text-gray-900 break-words">{viewingRequest.residentName}</p>
+                    <p className="text-sm text-gray-500">{viewingRequest.residentId}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+                    <div>
+                      <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contact Number</Label>
+                      <p className="mt-1 font-semibold text-gray-900">{viewingRequest.contactNumber}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Email</Label>
+                      <p className="mt-1 font-semibold text-gray-900 break-all">{viewingRequest.email}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
                   <div>
-                    <Label className="text-xs text-gray-500">Contact Number</Label>
-                    <p className="font-semibold">{viewingRequest.contactNumber}</p>
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Purpose</Label>
+                    <p className="mt-1 text-gray-900">{viewingRequest.purpose}</p>
                   </div>
                   <div>
-                    <Label className="text-xs text-gray-500">Email</Label>
-                    <p className="font-semibold">{viewingRequest.email}</p>
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Date Requested</Label>
+                    <p className="mt-1 font-semibold text-gray-900">{formatWordDate(viewingRequest.dateRequested)}</p>
                   </div>
+                  {activeTab === 'other' && viewingRequest.status === 'Processing' && (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Appointment Date</Label>
+                        <p className="mt-1 font-semibold text-gray-900">
+                          {viewingRequest.appointmentDate ? formatWordDate(viewingRequest.appointmentDate) : 'Not set'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Appointment Time</Label>
+                        <p className="mt-1 font-semibold text-gray-900">
+                          {viewingRequest.appointmentTime ? formatAppointmentTime(viewingRequest.appointmentTime) : 'Not set'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Document Type</Label>
-                  <p className="font-semibold">{viewingRequest.documentType}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Purpose</Label>
-                  <p>{viewingRequest.purpose}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Date Requested</Label>
-                  <p>{new Date(viewingRequest.dateRequested).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Status</Label>
-                  <Badge className={getStatusColor(viewingRequest.status)}>{viewingRequest.status}</Badge>
-                </div>
+
+                {activeTab === 'other' && viewingRequest.status === 'Processing' && (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-blue-700" />
+                      <p className="text-sm font-semibold text-blue-900">Appointment Details</p>
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      <div>
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Date</Label>
+                        <p className="mt-1 font-semibold text-gray-900">
+                          {viewingRequest.appointmentDate ? formatWordDate(viewingRequest.appointmentDate) : 'Not set'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Time</Label>
+                        <p className="mt-1 font-semibold text-gray-900">
+                          {viewingRequest.appointmentTime ? formatAppointmentTime(viewingRequest.appointmentTime) : 'Not set'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Set By</Label>
+                        <p className="mt-1 font-semibold text-gray-900">
+                          {viewingRequest.appointmentSetByAdmin || 'Barangay Admin'}
+                        </p>
+                      </div>
+                    </div>
+                    {!viewingRequest.appointmentDate && !viewingRequest.appointmentTime && (
+                      <p className="mt-3 text-sm text-blue-900/80">
+                        No appointment date/time has been recorded for this request yet.
+                      </p>
+                    )}
+                  </div>
+                )}
                 {viewingRequest.rejectionReason && (
                   <div>
                     <Label className="text-xs text-gray-500">Rejection Reason</Label>
@@ -822,6 +1015,7 @@ export function OnlineRequests({
           if (!open) {
             setAppointmentRequest(null);
             setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' });
+            setAppointmentAttempted(false);
           }
         }}
       >
@@ -834,63 +1028,65 @@ export function OnlineRequests({
                   Schedule Appointment
                 </DialogTitle>
                 <DialogDescription>
-                  Set appointment details for the resident (UI only).
+                  Set the appointment details for this request and move it to processing.
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 p-4 bg-gray-50 rounded-lg sm:grid-cols-2">
-                  <div>
-                    <Label className="text-xs text-gray-500">Request Number</Label>
-                    <p className="font-semibold">{appointmentRequest.requestNo}</p>
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
+                  <div className="space-y-1 text-left">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Request Number</Label>
+                    <p className="text-lg font-semibold text-gray-900">{appointmentRequest.requestNo}</p>
                   </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Document Type</Label>
-                    <p className="font-semibold">{appointmentRequest.documentType}</p>
+                  <div className="space-y-1 text-left">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Document Type</Label>
+                    <p className="text-lg font-semibold text-gray-900">{appointmentRequest.documentType}</p>
                   </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Resident</Label>
-                    <p className="font-semibold">{appointmentRequest.residentName}</p>
-                    <p className="text-xs text-gray-500">{appointmentRequest.residentId}</p>
+                  <div className="space-y-1 text-left sm:col-span-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Resident</Label>
+                    <p className="text-lg font-semibold leading-snug text-gray-900 break-words">{appointmentRequest.residentName}</p>
+                    <p className="text-sm text-gray-500">{appointmentRequest.residentId}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <Label htmlFor="appointmentDate">Appointment Date *</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="appointmentDate" className="font-semibold">Appointment Date *</Label>
                     <Input
                       id="appointmentDate"
                       type="date"
                       value={appointmentDetails.date}
                       onChange={(e) => setAppointmentDetails({ ...appointmentDetails, date: e.target.value })}
                       min={new Date().toISOString().split('T')[0]}
+                      className={appointmentAttempted && !appointmentDetails.date ? 'border-red-500 text-left focus-visible:ring-red-500' : 'text-left'}
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="appointmentTime">Appointment Time *</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="appointmentTime" className="font-semibold">Appointment Time *</Label>
                     <Input
                       id="appointmentTime"
                       type="time"
                       value={appointmentDetails.time}
                       onChange={(e) => setAppointmentDetails({ ...appointmentDetails, time: e.target.value })}
+                      className={appointmentAttempted && !appointmentDetails.time ? 'border-red-500 text-left focus-visible:ring-red-500' : 'text-left'}
                     />
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="requirements">Required Documents to Bring *</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="requirements" className="font-semibold">Required Documents to Bring *</Label>
                   <Textarea
                     id="requirements"
                     value={appointmentDetails.requirements}
                     onChange={(e) => setAppointmentDetails({ ...appointmentDetails, requirements: e.target.value })}
                     placeholder="e.g., Valid ID, Proof of Residency, etc."
                     rows={4}
-                    className="resize-none"
+                    className={`resize-none ${appointmentAttempted && !appointmentDetails.requirements.trim() ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="additionalNotes">Additional Notes (Optional)</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="additionalNotes" className="font-semibold">Additional Notes (Optional)</Label>
                   <Textarea
                     id="additionalNotes"
                     value={appointmentDetails.additionalNotes}
@@ -902,14 +1098,26 @@ export function OnlineRequests({
                 </div>
               </div>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => { setAppointmentRequest(null); setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' }); }}>
-                  Cancel
-                </Button>
-                <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleSendAppointment}>
-                  <Mail className="w-4 h-4 mr-2" />
-                  Send Appointment
-                </Button>
+              <DialogFooter className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-gray-500">
+                  Sending the appointment will move this request to the Processing tab.
+                </p>
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setAppointmentRequest(null);
+                      setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' });
+                      setAppointmentAttempted(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleSendAppointment}>
+                    <Mail className="w-4 h-4 mr-2" />
+                    Send Appointment
+                  </Button>
+                </div>
               </DialogFooter>
             </>
           )}

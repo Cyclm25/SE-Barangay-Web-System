@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -56,7 +56,7 @@ interface Announcement {
   title: string;
   content: string;
   images: string[];
-  targetAudience: string;
+  targetAudience: string[];
   dateCreated: string;
   datePosted?: string;
   scheduledPublishDate?: string;
@@ -66,6 +66,83 @@ interface Announcement {
   postedByName?: string;
   status: "draft" | "posted" | "archived";
   tags: string[];
+}
+
+function formatAnnouncementDate(dateValue?: string | null) {
+  if (!dateValue) return "";
+  const parsedDate = new Date(dateValue);
+  if (Number.isNaN(parsedDate.getTime())) return "";
+
+  return parsedDate.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatAnnouncementTime(dateValue?: string | null) {
+  if (!dateValue) return "";
+  const parsedDate = new Date(dateValue);
+  if (Number.isNaN(parsedDate.getTime())) return "";
+
+  return parsedDate.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function normalizeTargetAudienceValue(value: unknown): string {
+  const cleaned = String(value ?? "")
+    .replace(/[\{\}\[\]\\"]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  switch (cleaned) {
+    case "":
+    case "all":
+      return "all";
+    case "students":
+    case "student":
+      return "students";
+    case "senior-citizens":
+    case "senior citizen":
+    case "seniorcitizen":
+    case "senior":
+      return "senior-citizens";
+    case "health":
+      return "health";
+    case "events":
+    case "event":
+      return "events";
+    default:
+      return cleaned || "all";
+  }
+}
+
+function parseTargetAudienceValues(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeTargetAudienceValue(item))
+      .filter(Boolean);
+  }
+
+  const raw = String(value ?? "").trim();
+  if (!raw) return ["all"];
+
+  const cleaned = raw.replace(/^\{+|\}+$/g, "");
+  const parts = cleaned
+    .split(",")
+    .map((item) => normalizeTargetAudienceValue(item))
+    .filter(Boolean);
+
+  return parts.length ? Array.from(new Set(parts)) : ["all"];
+}
+
+function normalizeTargetAudienceArray(value: unknown): string[] {
+  const normalized = parseTargetAudienceValues(value);
+  if (normalized.includes("all")) return ["all"];
+  return Array.from(new Set(normalized)).slice(0, 3);
 }
 
 function mapApiAnnouncementToUI(a: any): Announcement {
@@ -114,10 +191,11 @@ function mapApiAnnouncementToUI(a: any): Announcement {
     title: a.Title ?? a.title ?? "",
     content: a.Body ?? a.body ?? a.Content ?? a.content ?? "",
     images: fixedImages, 
-    targetAudience:
+    targetAudience: normalizeTargetAudienceArray(
       Array.isArray(a.Category)
-        ? (a.Category[0] ?? "all")
-        : a.TargetAudience ?? a.targetAudience ?? a.Category ?? "all",
+        ? a.Category
+        : a.TargetAudience ?? a.targetAudience ?? a.Category ?? "all"
+    ),
     dateCreated: a.CreatedAt ?? a.createdat ?? new Date().toISOString(),
     datePosted:
       a.PostedAt ?? a.PublishedDate ?? a.CreatedAt ?? undefined,
@@ -141,12 +219,18 @@ export function AnnouncementManagement() {
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [viewingAnnouncement, setViewingAnnouncement] = useState<Announcement | null>(null);
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const [imageUploadSizes, setImageUploadSizes] = useState<Record<number, number>>({});
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  const [publishTarget, setPublishTarget] = useState<Announcement | null>(null);
+  const [isScheduleConfirmOpen, setIsScheduleConfirmOpen] = useState(false);
+  const [activeAnnouncementTab, setActiveAnnouncementTab] = useState("posted");
+  const previousDraftIdsRef = useRef<string[]>([]);
 
   const [formData, setFormData] = useState({
     title: "",
     content: "",
     images: [] as string[],
-    targetAudience: "all",
+    targetAudience: ["all"] as string[],
     tags: [] as string[],
     isScheduled: false,
     scheduledDate: "",
@@ -163,7 +247,7 @@ export function AnnouncementManagement() {
       title: "",
       content: "",
       images: [],
-      targetAudience: "all",
+      targetAudience: ["all"],
       tags: [],
       isScheduled: false,
       scheduledDate: "",
@@ -174,6 +258,21 @@ export function AnnouncementManagement() {
     });
     setEditingAnnouncement(null);
     setNewCustomAudience("");
+    setImageUploadSizes({});
+  };
+
+  const closeAnnouncementDialog = () => {
+    setIsDialogOpen(false);
+    resetForm();
+  };
+
+  const requestAnnouncementDialogClose = () => {
+    if (editingAnnouncement) {
+      setIsCancelConfirmOpen(true);
+      return;
+    }
+
+    closeAnnouncementDialog();
   };
 
   const fetchAnnouncements = async () => {
@@ -192,33 +291,35 @@ export function AnnouncementManagement() {
 
   useEffect(() => {
     fetchAnnouncements();
+    const interval = setInterval(fetchAnnouncements, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleImageFileUpload = async (file: File, index: number) => {
     if (!file) return;
     try {
-      setUploadingIndex(index);
-      const fd = new FormData();
-      fd.append("image", file);
-
-      // FIX: Securely get token
-      const token = localStorage.getItem("token") || "";
-
-      const res = await fetch(
-        "http://localhost:5001/api/upload/announcement-image",
-        {
-          method: "POST",
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: fd,
-        }
-      );
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || err.message || "Upload failed");
+      const allowedImageTypes = ["image/jpeg", "image/png", "image/webp"];
+      if (!allowedImageTypes.includes(file.type)) {
+        throw new Error("Only JPG, PNG, and WebP images are allowed.");
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error("Image must be 5MB or smaller.");
       }
 
-      const data = await res.json();
+      setUploadingIndex(index);
+      setImageUploadSizes((prev) => ({ ...prev, [index]: file.size }));
+      const fd = new FormData();
+      fd.append("image", file);
+      const token = localStorage.getItem("token") || "";
+
+      const res = await api.post("/api/upload/announcement-image", fd, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      const data = res.data;
       const imageUrl = `http://localhost:5001${data.imageUrl}`;
 
       setFormData((prev) => {
@@ -246,9 +347,39 @@ export function AnnouncementManagement() {
       return;
     }
     setCustomTargetAudiences([...customTargetAudiences, newCustomAudience.trim()]);
-    setFormData({ ...formData, targetAudience: newCustomAudience.trim() });
     toast.success(`Added "${newCustomAudience.trim()}" to target audiences`);
     setNewCustomAudience("");
+  };
+
+  const toggleTargetAudience = (value: string) => {
+    const normalizedValue = normalizeTargetAudienceValue(value);
+
+    setFormData((prev) => {
+      const current = normalizeTargetAudienceArray(prev.targetAudience);
+
+      if (normalizedValue === "all") {
+        return { ...prev, targetAudience: ["all"] };
+      }
+
+      const withoutAll = current.filter((item) => item !== "all");
+      if (withoutAll.includes(normalizedValue)) {
+        const next = withoutAll.filter((item) => item !== normalizedValue);
+        return {
+          ...prev,
+          targetAudience: next.length > 0 ? next : ["all"],
+        };
+      }
+
+      if (withoutAll.length >= 3) {
+        toast.error("You can select up to 3 target audiences only.");
+        return prev;
+      }
+
+      return {
+        ...prev,
+        targetAudience: [...withoutAll, normalizedValue],
+      };
+    });
   };
 
   // FIX: Handles UPDATE via PUT route and logs Transactions
@@ -273,7 +404,7 @@ export function AnnouncementManagement() {
         title: formData.title.trim(),
         body: formData.content.trim(),
         images: formData.images.filter(Boolean),
-        targetAudience: formData.targetAudience,
+        targetAudience: normalizeTargetAudienceArray(formData.targetAudience),
         tags: formData.tags,
         status: saveAsDraft ? "draft" : "posted",
         postedByRole,
@@ -321,8 +452,7 @@ export function AnnouncementManagement() {
             ? "Announcement updated successfully"
             : "Announcement posted successfully"
         );
-        setIsDialogOpen(false);
-        resetForm();
+        closeAnnouncementDialog();
         await fetchAnnouncements();
       } finally {
         setIsSaving(false);
@@ -416,20 +546,51 @@ export function AnnouncementManagement() {
     }
   };
 
+  const handlePrimaryAnnouncementAction = () => {
+    if (formData.isScheduled && !editingAnnouncement) {
+      setIsScheduleConfirmOpen(true);
+      return;
+    }
+
+    void handleCreateOrUpdate(false);
+  };
+
   const postedAnnouncements = announcements.filter((a) => a.status === "posted");
   const draftAnnouncements = announcements.filter((a) => a.status === "draft");
   const archivedAnnouncements = announcements.filter((a) => a.status === "archived");
 
-  const getTargetAudienceBadge = (t: string) => {
-    switch (t) {
+  useEffect(() => {
+    const previousDraftIds = previousDraftIdsRef.current;
+    const currentDraftIds = draftAnnouncements.map((announcement) => announcement.id);
+    const currentPostedIds = new Set(
+      postedAnnouncements.map((announcement) => announcement.id)
+    );
+
+    const movedFromDraftToPosted = previousDraftIds.some(
+      (id) => !currentDraftIds.includes(id) && currentPostedIds.has(id)
+    );
+
+    if (activeAnnouncementTab === "drafts" && movedFromDraftToPosted) {
+      setActiveAnnouncementTab("posted");
+    }
+
+    previousDraftIdsRef.current = currentDraftIds;
+  }, [activeAnnouncementTab, draftAnnouncements, postedAnnouncements]);
+
+  const getTargetAudienceBadge = (t: string | string[]) => {
+    const value = Array.isArray(t) ? t[0] ?? "all" : t;
+    switch (value) {
       case "all": return "All";
       case "students": return "Students";
       case "senior-citizens": return "Senior Citizen";
       case "health": return "Health";
       case "events": return "Events";
-      default: return t;
+      default: return value;
     }
   };
+
+  const getTargetAudienceBadges = (targets: string[]) =>
+    normalizeTargetAudienceArray(targets).map(getTargetAudienceBadge);
 
   const AnnouncementCard = ({ announcement }: { announcement: Announcement }) => (
     <Card className="overflow-hidden hover:shadow-md transition-shadow">
@@ -461,7 +622,7 @@ export function AnnouncementManagement() {
               <h3 className="font-semibold text-gray-900 line-clamp-1">
                 {announcement.title}
               </h3>
-              <div className="flex items-center gap-1 flex-shrink-0">
+              <div className="hidden">
                 {announcement.expirationDate &&
                   new Date(announcement.expirationDate) < new Date() && (
                     <Badge className="bg-red-100 text-red-800 border-0 text-xs">
@@ -483,54 +644,54 @@ export function AnnouncementManagement() {
               {announcement.content}
             </p>
 
-            <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
-              <div className="flex items-center gap-1">
+            <div className="mb-3 flex flex-wrap items-center gap-4 text-sm text-gray-600">
+              <div className="flex items-center gap-1 font-semibold">
                 <User className="w-3 h-3" />
                 <span>
                   Posted by: {announcement.postedByName || announcement.postedBy}
                 </span>
               </div>
               {announcement.expirationDate && (
-                <div className="flex items-center gap-1 font-semibold text-red-600">
+                <div className="flex items-center gap-1 text-base font-bold text-red-600">
                   <Calendar className="w-3 h-3" />
                   <span>
                     Expires:{" "}
-                    {new Date(announcement.expirationDate).toLocaleDateString()}
+                    {formatAnnouncementDate(announcement.expirationDate)}
                   </span>
                 </div>
               )}
               {announcement.isScheduled && announcement.scheduledPublishDate ? (
-                <div className="flex items-center gap-1 font-semibold text-blue-600">
+                <div className="flex items-center gap-1 text-base font-bold text-blue-600">
                   <Clock className="w-3 h-3" />
                   <span>
                     Scheduled:{" "}
-                    {new Date(announcement.scheduledPublishDate).toLocaleDateString()}{" "}
+                    {formatAnnouncementDate(announcement.scheduledPublishDate)}{" "}
                     at{" "}
-                    {new Date(announcement.scheduledPublishDate).toLocaleTimeString(
-                      "en-US",
-                      { hour: "2-digit", minute: "2-digit" }
-                    )}
+                    {formatAnnouncementTime(announcement.scheduledPublishDate)}
                   </span>
                 </div>
               ) : announcement.datePosted ? (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 text-base font-bold text-gray-700">
                   <Calendar className="w-3 h-3" />
                   <span>
-                    {new Date(announcement.datePosted).toLocaleDateString()}
+                    Posted: {formatAnnouncementDate(announcement.datePosted)} at{" "}
+                    {formatAnnouncementTime(announcement.datePosted)}
                   </span>
                 </div>
-              ) : (
-                <div className="flex items-center gap-1">
+              ) : null}
+              {announcement.dateCreated && (
+                <div className="flex items-center gap-1 text-base font-bold text-gray-700">
                   <Clock className="w-3 h-3" />
                   <span>
                     Created:{" "}
-                    {new Date(announcement.dateCreated).toLocaleDateString()}
+                    {formatAnnouncementDate(announcement.dateCreated)} at{" "}
+                    {formatAnnouncementTime(announcement.dateCreated)}
                   </span>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -587,6 +748,321 @@ export function AnnouncementManagement() {
                 </AlertDialog>
               )}
             </div>
+
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {announcement.expirationDate &&
+                new Date(announcement.expirationDate) < new Date() && (
+                  <Badge className="border-0 bg-red-100 text-xs font-medium text-red-700">
+                    Expired
+                  </Badge>
+                )}
+              {announcement.isScheduled && (
+                <Badge className="border-0 bg-blue-100 text-xs font-medium text-blue-700">
+                  Scheduled {formatAnnouncementTime(announcement.scheduledPublishDate)}
+                </Badge>
+              )}
+              <Badge
+                variant="outline"
+                className="border-gray-200 bg-gray-50 text-xs font-medium text-gray-700"
+              >
+                {getTargetAudienceBadge(announcement.targetAudience)}
+              </Badge>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const visibleImageSlotCount = Math.min(
+    Math.max(formData.images.filter(Boolean).length + 1, 1),
+    5
+  );
+
+  const AnnouncementTableRow = ({
+    announcement,
+  }: {
+    announcement: Announcement;
+  }) => (
+    <Card className="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
+      <CardContent className="p-0">
+        <div className="hidden grid-cols-[1.5fr_2fr_1.2fr_1.2fr_0.9fr_1.1fr] gap-4 bg-[#2957a1] px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-white lg:grid">
+          <div>Announcement Title</div>
+          <div>Description</div>
+          <div>Start Date</div>
+          <div>End Date</div>
+          <div>Attachment</div>
+          <div>Action</div>
+        </div>
+
+        <div className="border-t border-gray-100 px-4 py-4 lg:px-6">
+          <div className="space-y-4 lg:hidden">
+            <div className="flex gap-4">
+              <div className="flex-shrink-0">
+                {announcement.images && announcement.images.length > 0 ? (
+                  <div
+                    className="relative cursor-pointer hover:opacity-90"
+                    onClick={() => setFullScreenImage(announcement.images[0])}
+                  >
+                    <img
+                      src={announcement.images[0]}
+                      alt={announcement.title}
+                      className="h-24 w-24 rounded-xl object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-24 w-24 items-center justify-center rounded-xl bg-gray-100">
+                    <ImageIcon className="h-6 w-6 text-gray-400" />
+                  </div>
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <h3 className="mb-2 line-clamp-2 text-lg font-semibold text-gray-900">
+                  {announcement.title}
+                </h3>
+                <p className="mb-3 line-clamp-3 text-sm leading-6 text-gray-600">
+                  {announcement.content}
+                </p>
+                <div className="space-y-1 text-sm text-gray-600">
+                  <div className="font-medium">
+                    Start:{" "}
+                    {announcement.datePosted
+                      ? `${formatAnnouncementDate(announcement.datePosted)} at ${formatAnnouncementTime(announcement.datePosted)}`
+                      : `${formatAnnouncementDate(announcement.dateCreated)} at ${formatAnnouncementTime(announcement.dateCreated)}`}
+                  </div>
+                  <div className="font-medium">
+                    End:{" "}
+                    {announcement.expirationDate
+                      ? `${formatAnnouncementDate(announcement.expirationDate)} at ${formatAnnouncementTime(announcement.expirationDate)}`
+                      : "No end date"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {getTargetAudienceBadges(announcement.targetAudience).map((badge) => (
+                <Badge
+                  key={badge}
+                  variant="outline"
+                  className="border-gray-200 bg-gray-50 text-xs font-medium text-gray-700"
+                >
+                  {badge}
+                </Badge>
+              ))}
+              {announcement.expirationDate &&
+                new Date(announcement.expirationDate) < new Date() && (
+                  <Badge className="border-0 bg-red-100 text-xs font-medium text-red-700">
+                    Expired
+                  </Badge>
+                )}
+              {announcement.isScheduled && (
+                <Badge className="border-0 bg-blue-100 text-xs font-medium text-blue-700">
+                  Scheduled
+                </Badge>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setViewingAnnouncement(announcement)}
+                className="gap-1"
+              >
+                <Eye className="h-3 w-3" />
+                View
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleEdit(announcement)}
+                className="gap-1"
+              >
+                <Edit className="h-3 w-3" />
+                Edit
+              </Button>
+              {announcement.status === "draft" && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setPublishTarget(announcement)}
+                  className="gap-1"
+                >
+                  <Send className="h-3 w-3" />
+                  Publish
+                </Button>
+              )}
+              {announcement.status === "posted" && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1">
+                      <Archive className="h-3 w-3" />
+                      Archive
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Archive Announcement?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Residents will no longer see this announcement.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => void handleArchive(announcement.id)}
+                      >
+                        Yes, archive it
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
+          </div>
+
+          <div className="hidden items-center gap-4 lg:grid lg:grid-cols-[1.5fr_2fr_1.2fr_1.2fr_0.9fr_1.1fr]">
+            <div className="min-w-0">
+              <p className="truncate text-base font-semibold text-gray-900">
+                {announcement.title}
+              </p>
+              <p className="mt-2 text-sm text-gray-500">
+                Posted by {announcement.postedByName || announcement.postedBy}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {getTargetAudienceBadges(announcement.targetAudience).map((badge) => (
+                  <Badge
+                    key={badge}
+                    variant="outline"
+                    className="border-gray-200 bg-gray-50 text-xs font-medium text-gray-700"
+                  >
+                    {badge}
+                  </Badge>
+                ))}
+                {announcement.expirationDate &&
+                  new Date(announcement.expirationDate) < new Date() && (
+                    <Badge className="border-0 bg-red-100 text-xs font-medium text-red-700">
+                      Expired
+                    </Badge>
+                  )}
+                {announcement.isScheduled && (
+                  <Badge className="border-0 bg-blue-100 text-xs font-medium text-blue-700">
+                    Scheduled - {formatAnnouncementTime(announcement.scheduledPublishDate)}
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <p className="line-clamp-3 text-sm leading-6 text-gray-600">
+                {announcement.content}
+              </p>
+            </div>
+
+            <div className="text-sm font-semibold text-gray-800">
+              {announcement.isScheduled && announcement.scheduledPublishDate
+                ? formatAnnouncementDate(announcement.scheduledPublishDate)
+                : announcement.datePosted
+                ? formatAnnouncementDate(announcement.datePosted)
+                : formatAnnouncementDate(announcement.dateCreated)}
+              <div className="mt-1 text-xs font-medium text-gray-500">
+                {announcement.isScheduled && announcement.scheduledPublishDate
+                  ? formatAnnouncementTime(announcement.scheduledPublishDate)
+                  : announcement.datePosted
+                  ? formatAnnouncementTime(announcement.datePosted)
+                  : formatAnnouncementTime(announcement.dateCreated)}
+              </div>
+            </div>
+
+            <div className="text-sm font-semibold text-gray-800">
+              {announcement.expirationDate
+                ? formatAnnouncementDate(announcement.expirationDate)
+                : "No end date"}
+              {announcement.expirationDate && (
+                <div className="mt-1 text-xs font-medium text-gray-500">
+                  {formatAnnouncementTime(announcement.expirationDate)}
+                </div>
+              )}
+            </div>
+
+            <div>
+              {announcement.images && announcement.images.length > 0 ? (
+                <div
+                  className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-gray-200 bg-white p-2 hover:bg-gray-50"
+                  onClick={() => setFullScreenImage(announcement.images[0])}
+                >
+                  <img
+                    src={announcement.images[0]}
+                    alt={announcement.title}
+                    className="h-16 w-16 rounded-lg object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="inline-flex h-20 w-20 items-center justify-center rounded-xl border border-gray-200 bg-gray-50">
+                  <ImageIcon className="h-6 w-6 text-gray-400" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setViewingAnnouncement(announcement)}
+                className="gap-2"
+              >
+                <Eye className="h-4 w-4" />
+                View
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleEdit(announcement)}
+                className="gap-2"
+              >
+                <Edit className="h-4 w-4" />
+                Edit
+              </Button>
+              {announcement.status === "draft" && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setPublishTarget(announcement)}
+                  className="gap-2"
+                >
+                  <Send className="h-4 w-4" />
+                  Publish
+                </Button>
+              )}
+              {announcement.status === "posted" && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Archive className="h-4 w-4" />
+                      Archive
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Archive Announcement?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Residents will no longer see this announcement.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => void handleArchive(announcement.id)}
+                      >
+                        Yes, archive it
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
           </div>
         </div>
       </CardContent>
@@ -611,8 +1087,12 @@ export function AnnouncementManagement() {
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
-              setIsDialogOpen(open);
-              if (!open) resetForm();
+              if (open) {
+                setIsDialogOpen(true);
+                return;
+              }
+
+              requestAnnouncementDialogClose();
             }}
           >
             <DialogTrigger asChild>
@@ -622,7 +1102,27 @@ export function AnnouncementManagement() {
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent
+              className="max-w-2xl max-h-[90vh] overflow-y-auto"
+              onInteractOutside={(event) => {
+                if (editingAnnouncement) {
+                  event.preventDefault();
+                  setIsCancelConfirmOpen(true);
+                }
+              }}
+              onEscapeKeyDown={(event) => {
+                if (editingAnnouncement) {
+                  event.preventDefault();
+                  setIsCancelConfirmOpen(true);
+                }
+              }}
+              onPointerDownOutside={(event) => {
+                if (editingAnnouncement) {
+                  event.preventDefault();
+                  setIsCancelConfirmOpen(true);
+                }
+              }}
+            >
               <DialogHeader>
                 <DialogTitle>
                   {editingAnnouncement
@@ -668,7 +1168,10 @@ export function AnnouncementManagement() {
                 <div className="space-y-2">
                   <Label>Images (Optional, Max 5)</Label>
                   <div className="space-y-3">
-                    {[0, 1, 2, 3, 4].map((index) => (
+                    {Array.from(
+                      { length: visibleImageSlotCount },
+                      (_, index) => index
+                    ).map((index) => (
                       <div key={index} className="space-y-1">
                         <div className="flex gap-2 items-center">
                           {/* URL input */}
@@ -683,6 +1186,11 @@ export function AnnouncementManagement() {
                                   ...prev,
                                   images: imgs.filter(Boolean),
                                 };
+                              });
+                              setImageUploadSizes((prev) => {
+                                const next = { ...prev };
+                                delete next[index];
+                                return next;
                               });
                             }}
                             placeholder={`Image ${index + 1} URL (paste link)`}
@@ -733,6 +1241,11 @@ export function AnnouncementManagement() {
                                     images: imgs.filter(Boolean),
                                   };
                                 });
+                                setImageUploadSizes((prev) => {
+                                  const next = { ...prev };
+                                  delete next[index];
+                                  return next;
+                                });
                               }}
                               className="text-red-400 hover:text-red-600 p-1"
                             >
@@ -740,6 +1253,13 @@ export function AnnouncementManagement() {
                             </button>
                           )}
                         </div>
+
+                        {typeof imageUploadSizes[index] === "number" && (
+                          <p className="text-xs text-gray-500">
+                            {uploadingIndex === index ? "Uploading: " : "File size: "}
+                            {(imageUploadSizes[index] / (1024 * 1024)).toFixed(2)} MB / 5.00 MB
+                          </p>
+                        )}
 
                         {/* Preview */}
                         {formData.images[index] && (
@@ -758,38 +1278,67 @@ export function AnnouncementManagement() {
                     ))}
                   </div>
                   <p className="text-xs text-gray-400">
-                    Upload from your computer (JPEG, PNG, WebP, max 5MB each) or
-                    paste an image URL.
+                    Upload from your computer or paste an image URL. Only JPG,
+                    PNG, or WebP files are allowed, with a maximum of 5MB per
+                    image.
                   </p>
                 </div>
 
                 {/* Target Audience */}
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Label htmlFor="targetAudience">Target Audience</Label>
-                  <Select
-                    value={formData.targetAudience}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, targetAudience: value })
-                    }
-                  >
-                    <SelectTrigger id="targetAudience">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="students">Students</SelectItem>
-                      <SelectItem value="senior-citizens">
-                        Senior Citizen
-                      </SelectItem>
-                      <SelectItem value="health">Health</SelectItem>
-                      <SelectItem value="events">Events</SelectItem>
-                      {customTargetAudiences.map((audience) => (
-                        <SelectItem key={audience} value={audience}>
-                          {audience}
-                        </SelectItem>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {getTargetAudienceBadges(formData.targetAudience).map((badge) => (
+                        <Badge
+                          key={badge}
+                          className="border-0 bg-[#2957a1] text-white"
+                        >
+                          {badge}
+                        </Badge>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {[
+                        { value: "all", label: "All" },
+                        { value: "students", label: "Students" },
+                        { value: "senior-citizens", label: "Senior Citizen" },
+                        { value: "health", label: "Health" },
+                        { value: "events", label: "Events" },
+                        ...customTargetAudiences.map((audience) => ({
+                          value: audience,
+                          label: audience,
+                        })),
+                      ].map((option) => {
+                        const isSelected = normalizeTargetAudienceArray(
+                          formData.targetAudience
+                        ).includes(normalizeTargetAudienceValue(option.value));
+
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => toggleTargetAudience(option.value)}
+                            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
+                              isSelected
+                                ? "border-[#2957a1] bg-blue-50 text-[#2957a1]"
+                                : "border-gray-200 bg-white text-gray-700 hover:border-[#2957a1]/40"
+                            }`}
+                          >
+                            <span>{option.label}</span>
+                            <span className="text-xs font-semibold">
+                              {isSelected ? "Selected" : "Select"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="mt-3 text-xs text-gray-500">
+                      Choose up to 3 target audiences. Selecting All will override the other choices.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Scheduled Publishing */}
@@ -866,7 +1415,7 @@ export function AnnouncementManagement() {
                               month: "long",
                               day: "numeric",
                             }) +
-                            ` at ${formData.scheduledTime || "00:00"}`
+                            ` at ${new Date(`2000-01-01T${formData.scheduledTime || "00:00"}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
                           : "the selected date"}
                       </p>
                     </div>
@@ -947,7 +1496,7 @@ export function AnnouncementManagement() {
                               month: "long",
                               day: "numeric",
                             }) +
-                            ` at ${formData.expirationTime || "23:59"}`
+                            ` at ${new Date(`2000-01-01T${formData.expirationTime || "23:59"}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
                           : "the selected date"}
                       </p>
                     </div>
@@ -958,7 +1507,7 @@ export function AnnouncementManagement() {
               <DialogFooter className="gap-2">
                 <Button
                   variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
+                  onClick={requestAnnouncementDialogClose}
                   disabled={isSaving}
                 >
                   Cancel
@@ -971,20 +1520,115 @@ export function AnnouncementManagement() {
                   {isSaving ? "Saving..." : "Save as Draft"}
                 </Button>
                 <Button
-                  onClick={() => handleCreateOrUpdate(false)}
+                  onClick={handlePrimaryAnnouncementAction}
                   disabled={isSaving}
                 >
                   {isSaving
                     ? "Processing..."
                     : formData.isScheduled
-                    ? "Schedule Announcement"
+                    ? editingAnnouncement
+                      ? "Save Edit"
+                      : "Schedule Announcement"
                     : editingAnnouncement
-                    ? "Update & Publish"
+                    ? "Save Edit"
                     : "Post Announcement"}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          <AlertDialog
+            open={isCancelConfirmOpen}
+            onOpenChange={setIsCancelConfirmOpen}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Cancel announcement editing?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to cancel editing this announcement? Any unsaved changes will be lost.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Keep Editing</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    setIsCancelConfirmOpen(false);
+                    closeAnnouncementDialog();
+                  }}
+                >
+                  Yes, discard changes
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog
+            open={!!publishTarget}
+            onOpenChange={(open) => {
+              if (!open) {
+                setPublishTarget(null);
+              }
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Publish Announcement?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to publish
+                  {publishTarget ? ` "${publishTarget.title}"` : " this announcement"}?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    if (publishTarget) {
+                      void handlePublish(publishTarget.id);
+                    }
+                    setPublishTarget(null);
+                  }}
+                >
+                  Yes, publish it
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog
+            open={isScheduleConfirmOpen}
+            onOpenChange={setIsScheduleConfirmOpen}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Schedule Announcement?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to schedule this announcement for{" "}
+                  {formData.scheduledDate
+                    ? `${new Date(`${formData.scheduledDate}T00:00:00`).toLocaleDateString("en-US", {
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      })} at ${new Date(`2000-01-01T${formData.scheduledTime || "00:00"}`).toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}`
+                    : "the selected date and time"}
+                  ?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    setIsScheduleConfirmOpen(false);
+                    void handleCreateOrUpdate(false);
+                  }}
+                >
+                  Yes, schedule it
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         {/* Stats */}
@@ -1037,7 +1681,11 @@ export function AnnouncementManagement() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="posted" className="space-y-4">
+        <Tabs
+          value={activeAnnouncementTab}
+          onValueChange={setActiveAnnouncementTab}
+          className="space-y-4"
+        >
           <TabsList className="grid w-full max-w-md grid-cols-3">
             <TabsTrigger value="posted">Posted</TabsTrigger>
             <TabsTrigger value="drafts">Drafts</TabsTrigger>
@@ -1054,7 +1702,7 @@ export function AnnouncementManagement() {
               </Card>
             ) : (
               postedAnnouncements.map((a) => (
-                <AnnouncementCard key={a.id} announcement={a} />
+                <AnnouncementTableRow key={a.id} announcement={a} />
               ))
             )}
           </TabsContent>
@@ -1069,7 +1717,7 @@ export function AnnouncementManagement() {
               </Card>
             ) : (
               draftAnnouncements.map((a) => (
-                <AnnouncementCard key={a.id} announcement={a} />
+                <AnnouncementTableRow key={a.id} announcement={a} />
               ))
             )}
           </TabsContent>
@@ -1084,7 +1732,7 @@ export function AnnouncementManagement() {
               </Card>
             ) : (
               archivedAnnouncements.map((a) => (
-                <AnnouncementCard key={a.id} announcement={a} />
+                <AnnouncementTableRow key={a.id} announcement={a} />
               ))
             )}
           </TabsContent>
@@ -1163,9 +1811,9 @@ export function AnnouncementManagement() {
                       <Megaphone className="w-4 h-4" />
                       <span className="font-medium">Target Audience:</span>
                       <span>
-                        {getTargetAudienceBadge(
+                        {getTargetAudienceBadges(
                           viewingAnnouncement.targetAudience
-                        )}
+                        ).join(", ")}
                       </span>
                     </div>
                   </div>

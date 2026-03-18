@@ -13,7 +13,11 @@ interface AnnouncementDetailProps {
  */
 function normalizeCategoryLabel(raw: string): string {
   if (!raw) return "Announcement";
-  const c = raw.toLowerCase().trim().replace(/[{}]/g, "");
+  const c = raw
+    .toLowerCase()
+    .replace(/[\{\}\[\]\\"]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!c || c === "all") return "Announcement";
   if (c === "students" || c === "student") return "Students";
   if (c === "senior-citizens" || c === "senior citizen" || c === "senior")
@@ -76,9 +80,17 @@ export function AnnouncementDetail({
   const body = source.Body || source.body || source.content || a.content || "No content available.";
   
   const rawCategory = source.Category || source.category || source.targetAudience || a.targetAudience;
-  const categories = Array.isArray(rawCategory) 
-    ? rawCategory 
-    : (rawCategory && rawCategory !== "all" ? [rawCategory] : []);
+  const categories = Array.isArray(rawCategory)
+    ? rawCategory
+    : rawCategory && rawCategory !== "all"
+    ? String(rawCategory)
+        .replace(/^\{+|\}+$/g, "")
+        .split(",")
+        .map((value) =>
+          value.replace(/[\{\}\[\]\\"]/g, " ").replace(/\s+/g, " ").trim()
+        )
+        .filter(Boolean)
+    : [];
 
   const rawImages = source.Images || source.images || a.images;
   let parsedImages: string[] = [];

@@ -30,6 +30,15 @@ function normalizeDateValue(value) {
     return `${year}-${month}-${day}`;
 }
 
+function buildNextPrefixedId(lastId, prefix) {
+    const currentYear = new Date().getFullYear();
+    const nextNumber = lastId
+        ? (parseInt(String(lastId).slice(-4), 10) || 0) + 1
+        : 1;
+
+    return `${prefix}${currentYear}${String(nextNumber).padStart(4, "0")}`;
+}
+
 // GET all officials
 router.get("/", async (req, res) => {
     try {
@@ -92,16 +101,12 @@ router.post("/", async (req, res) => {
         const last = await client.query(`
       SELECT "BarangayAdminID"
       FROM barangayadmin
-      ORDER BY "DateCreated" DESC
+      WHERE "BarangayAdminID" ~ '^AD[0-9]{8}$'
+      ORDER BY CAST(RIGHT("BarangayAdminID", 4) AS INTEGER) DESC
       LIMIT 1
     `);
 
-        let newId = "AD20260001";
-        if (last.rows.length > 0) {
-            const lastId = last.rows[0].BarangayAdminID;
-            const num = parseInt(String(lastId).slice(-4), 10) + 1;
-            newId = "AD2026" + String(num).padStart(4, "0");
-        }
+        const newId = buildNextPrefixedId(last.rows[0]?.BarangayAdminID, "AD");
 
         const adminResult = await client.query(
             `

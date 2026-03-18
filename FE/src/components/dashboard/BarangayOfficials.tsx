@@ -174,6 +174,11 @@ function toUppercaseInput(value: string) {
 }
 
 export function BarangayOfficials() {
+  const dataPrivacyHighlights = [
+    "The information you provide is accurate and complete.",
+    "You consent to the collection and processing of your data for legitimate barangay operations.",
+    "You understand your rights to access, correct, or request deletion of your personal data, subject to applicable regulations.",
+  ];
   const initialFormData = {
     profileImage: "",
     name: "",
@@ -201,6 +206,7 @@ export function BarangayOfficials() {
 
   // STEP 2 + STEP 3 dialog states
   const [showDataPrivacyDialog, setShowDataPrivacyDialog] = useState(false);
+  const [officialPrivacyAccepted, setOfficialPrivacyAccepted] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
 
   // password fields
@@ -227,6 +233,7 @@ export function BarangayOfficials() {
 
     setShowDataPrivacyDialog(false);
     setShowPasswordDialog(false);
+    setOfficialPrivacyAccepted(false);
     setPassword("");
     setConfirmPassword("");
     setShowPassword(false);
@@ -353,11 +360,16 @@ export function BarangayOfficials() {
 
   const handleCancelDataPrivacy = () => {
     setShowDataPrivacyDialog(false);
+    setOfficialPrivacyAccepted(false);
     setShowDiscardOfficialDialog(false);
     setIsDialogOpen(true);
   };
 
   const handleConfirmPrivacy = () => {
+    if (!officialPrivacyAccepted) {
+      toast.error("Please confirm the data privacy agreement before continuing.");
+      return;
+    }
     setShowDataPrivacyDialog(false);
     setShowPasswordDialog(true);
   };
@@ -424,10 +436,6 @@ export function BarangayOfficials() {
       const created = (res.data?.official || res.data) as Official;
       console.log("Created official:", created);
 
-      if (!created || !created.barangayadminid) {
-        throw new Error("Invalid response from server");
-      }
-
       // Normalize keys (backend may return PascalCase or lowercase)
       const normalized = normalizeOfficialRecord(created, {
         barangayadminid: "",
@@ -440,6 +448,11 @@ export function BarangayOfficials() {
         termend: normalizeDateInputValue(formData.termEnd) || undefined,
         profileimage: formData.profileImage || undefined,
       });
+
+      if (!normalized.barangayadminid) {
+        throw new Error("Invalid response from server");
+      }
+
       setOfficials((prev) => [normalized, ...prev]);
 
       setShowPasswordDialog(false);
@@ -449,7 +462,7 @@ export function BarangayOfficials() {
       resetForm();
 
       toast.success("Barangay official successfully added!", {
-        description: `${created.adminname} has been registered as ${created.position ?? "Official"
+        description: `${normalized.adminname} has been registered as ${normalized.position ?? "Official"
           }.`,
       });
     } catch (err: any) {
@@ -645,11 +658,11 @@ export function BarangayOfficials() {
               </Button>
             </DialogTrigger>
 
-            <DialogContent
-              className="w-[95vw] max-w-2xl"
-              onInteractOutside={(event) => {
-                event.preventDefault();
-                handleOfficialDialogOpenChange(false);
+        <DialogContent
+          className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(event) => {
+            event.preventDefault();
+            handleOfficialDialogOpenChange(false);
               }}
               onEscapeKeyDown={(event) => {
                 event.preventDefault();
@@ -660,7 +673,7 @@ export function BarangayOfficials() {
                 <DialogTitle>Add New Official</DialogTitle>
               </DialogHeader>
               <DialogDescription className="px-0 pt-2">
-                Add a new barangay official to the system.
+                Provide the official's details to register their account and maintain their records in the barangay system.
               </DialogDescription>
 
               <div className="space-y-4 py-4">
@@ -884,9 +897,14 @@ export function BarangayOfficials() {
       {/* STEP 2: DATA PRIVACY DIALOG */}
       <AlertDialog
         open={showDataPrivacyDialog}
-        onOpenChange={setShowDataPrivacyDialog}
+        onOpenChange={(open) => {
+          setShowDataPrivacyDialog(open);
+          if (!open) {
+            setOfficialPrivacyAccepted(false);
+          }
+        }}
       >
-        <AlertDialogContent className="max-w-[400px]">
+        <AlertDialogContent className="max-w-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Data Privacy Agreement</AlertDialogTitle>
             <AlertDialogDescription>
@@ -894,6 +912,48 @@ export function BarangayOfficials() {
               management and record-keeping purposes?
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-2 text-sm leading-7 text-gray-700">
+            <p>
+              By accessing and using the Tondocs Barangay Management Web Application, you agree to the
+              collection, use, and processing of your personal information in accordance with applicable
+              data privacy laws and regulations.
+            </p>
+            <p>
+              The system collects personal data such as your name, address, contact information, and
+              other relevant details solely for the purpose of processing barangay service requests,
+              maintaining resident records, and improving service delivery.
+            </p>
+            <p>
+              All personal information provided will be treated with strict confidentiality and will only
+              be accessed by authorized barangay personnel. The system implements appropriate security
+              measures to protect your data from unauthorized access, disclosure, alteration, or destruction.
+            </p>
+            <p>
+              Your information will not be shared with third parties without your consent, unless
+              required by law or necessary for official government functions.
+            </p>
+            <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="font-semibold text-[#2957a1]">By continuing to use this system, you confirm that:</p>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-gray-700">
+                {dataPrivacyHighlights.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            <p>If you do not agree with this policy, please discontinue use of the system.</p>
+            <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <input
+                type="checkbox"
+                checked={officialPrivacyAccepted}
+                onChange={(event) => setOfficialPrivacyAccepted(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-300"
+              />
+              <span className="text-sm font-medium text-gray-800">
+                I have read and understood the Data Privacy Agreement, and I consent to the collection
+                and processing of this official’s information for legitimate barangay operations.
+              </span>
+            </label>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel
               onClick={handleCancelDataPrivacy}
@@ -904,7 +964,7 @@ export function BarangayOfficials() {
             <AlertDialogAction
               onClick={handleConfirmPrivacy}
               className="bg-[#2957a1]"
-              disabled={loading}
+              disabled={loading || !officialPrivacyAccepted}
             >
               Agree and Continue
             </AlertDialogAction>
@@ -1012,7 +1072,7 @@ export function BarangayOfficials() {
         }}
       >
         <DialogContent
-          className="w-[95vw] max-w-[1100px] max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden"
+          className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto overflow-x-hidden"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
           }}

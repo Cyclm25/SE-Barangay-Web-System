@@ -78,7 +78,7 @@ interface Resident {
   gender: "Male" | "Female";
   civilStatus: string;
   residentType: string;
-  voterStatus: "Yes" | "No";
+  voterStatus: "Voter" | "Non-Voter";
   houseNo: string;
   streetAddress: string;
   city: string;
@@ -125,6 +125,7 @@ type ResidentRow = {
   status: ResidentStatus | null;
   dateRegistered?: string | null;
   Religion?: string | null;
+  religion?: string | null;
 };
 
 type SortMenuValue =
@@ -156,7 +157,7 @@ function mapRowToResident(r: ResidentRow): Resident {
     gender: (r.Gender as any) ?? "Male",
     civilStatus: r.CivilStatus ?? "",
     residentType: r.ResidentType ?? "",
-    voterStatus: r.VoterStatus === true ? "Yes" : "No",
+    voterStatus: r.VoterStatus === true ? "Voter" : "Non-Voter",
     houseNo: r.HouseNumber ?? "",
     streetAddress: r.StreetAddress ?? "",
     city: "Manila City",
@@ -173,7 +174,7 @@ function mapRowToResident(r: ResidentRow): Resident {
     emergencyContactAddress: r.ContactPersonAddress ?? "",
     status: (r.status ?? "Active") as ResidentStatus,
     dateRegistered: r.dateRegistered ?? new Date().toISOString().split("T")[0],
-    religion: (r as any).Religion ?? null,
+    religion: (r as any).Religion ?? (r as any).religion ?? null,
   };
 }
 
@@ -519,6 +520,11 @@ export function ResidentRecords({
   registrationCutoffDate = getDefaultCutoffDate(),
   onUpdateCutoffDate,
 }: ResidentRecordsProps) {
+  const dataPrivacyHighlights = [
+    "The information you provide is accurate and complete.",
+    "You consent to the collection and processing of your data for legitimate barangay operations.",
+    "You understand your rights to access, correct, or request deletion of your personal data, subject to applicable regulations.",
+  ];
   const birthdayInputRef = useRef<HTMLInputElement | null>(null);
   const initialFormData = {
     profileImage: "",
@@ -531,7 +537,7 @@ export function ResidentRecords({
     civilStatus: "Single",
     religion: "",
     residentType: "",
-    voterStatus: "No" as "Yes" | "No",
+    voterStatus: "Non-Voter" as "Voter" | "Non-Voter",
     houseNo: "",
     streetAddress: "",
     city: "MANILA CITY",
@@ -553,7 +559,9 @@ export function ResidentRecords({
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [viewingResident, setViewingResident] = useState<Resident | null>(null);
   const [isResidentDetailsOpen, setIsResidentDetailsOpen] = useState(false);
+  const [editingResident, setEditingResident] = useState<Resident | null>(null);
   const [showDataPrivacyDialog, setShowDataPrivacyDialog] = useState(false);
+  const [residentPrivacyAccepted, setResidentPrivacyAccepted] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -748,7 +756,9 @@ export function ResidentRecords({
 
     let cancelled = false;
     const localDuplicate = residents.some(
-      (resident) => resident.email?.trim().toLowerCase() === trimmedEmail
+      (resident) =>
+        resident.email?.trim().toLowerCase() === trimmedEmail &&
+        resident.residentNo !== editingResident?.residentNo
     );
 
     if (localDuplicate) {
@@ -784,7 +794,7 @@ export function ResidentRecords({
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [formData.email, residents]);
+  }, [editingResident?.residentNo, formData.email, residents]);
 
   useEffect(() => {
     const trimmedContactNumber = formData.contactNumber.trim();
@@ -797,7 +807,9 @@ export function ResidentRecords({
 
     let cancelled = false;
     const localDuplicate = residents.some(
-      (resident) => resident.contactNumber?.trim() === trimmedContactNumber
+      (resident) =>
+        resident.contactNumber?.trim() === trimmedContactNumber &&
+        resident.residentNo !== editingResident?.residentNo
     );
 
     if (localDuplicate) {
@@ -833,7 +845,7 @@ export function ResidentRecords({
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [formData.contactNumber, residents]);
+  }, [editingResident?.residentNo, formData.contactNumber, residents]);
 
   // Sync activeFilter with initialFilter prop changes
   useEffect(() => {
@@ -845,6 +857,8 @@ export function ResidentRecords({
     setProfileImagePreview("");
     setPassword("");
     setConfirmPassword("");
+    setEditingResident(null);
+    setResidentPrivacyAccepted(false);
     setSaveAttempted(false);
     setIsCheckingContactNumber(false);
     setContactNumberAlreadyExists(false);
@@ -921,7 +935,47 @@ export function ResidentRecords({
     setShowDataPrivacyDialog(true);
   };
 
+  const openResidentEdit = (resident: Resident) => {
+    setEditingResident(resident);
+    setFormData({
+      profileImage: resident.profileImage || "",
+      firstName: resident.firstName || "",
+      middleName: resident.middleName || "",
+      lastName: resident.lastName || "",
+      age: String(resident.age || ""),
+      birthday: resident.birthday || "",
+      gender: resident.gender || "Male",
+      civilStatus: resident.civilStatus || "Single",
+      religion: resident.religion || "",
+      residentType: resident.residentType || "",
+      voterStatus: resident.voterStatus || "Non-Voter",
+      houseNo: resident.houseNo || "",
+      streetAddress: resident.streetAddress || "",
+      city: resident.city || "MANILA CITY",
+      postalCode: resident.postalCode || "1013",
+      country: resident.country || "PHILIPPINES",
+      contactNumber: resident.contactNumber || "",
+      email: resident.email || "",
+      fatherName: resident.fatherName || "",
+      motherName: resident.motherName || "",
+      spouseName: resident.spouseName || "",
+      numberOfChildren: resident.numberOfChildren ? String(resident.numberOfChildren) : "",
+      emergencyContactName: resident.emergencyContactName || "",
+      emergencyContactNumber: resident.emergencyContactNumber || "",
+      emergencyContactAddress: resident.emergencyContactAddress || "",
+    });
+    setProfileImagePreview(resident.profileImage || "");
+    setSaveAttempted(false);
+    setEmailAlreadyExists(false);
+    setContactNumberAlreadyExists(false);
+    setIsAddDialogOpen(true);
+  };
+
   const handleConfirmPrivacy = () => {
+    if (!residentPrivacyAccepted) {
+      toast.error("Please confirm the data privacy agreement before continuing.");
+      return;
+    }
     setShowDataPrivacyDialog(false);
     setShowPasswordDialog(true);
   };
@@ -1017,8 +1071,100 @@ export function ResidentRecords({
     }
   };
 
+  const handleUpdateResident = async () => {
+    if (!editingResident) return;
+
+    setSaveAttempted(true);
+
+    if (
+      isBlank(formData.firstName) ||
+      isBlank(formData.lastName) ||
+      isBlank(formData.birthday) ||
+      invalidContact(formData.contactNumber) ||
+      contactNumberAlreadyExists ||
+      invalidEmail(formData.email) ||
+      emailAlreadyExists
+    ) {
+      toast.error("Please fill in all required fields correctly.");
+      return;
+    }
+
+    try {
+      let token =
+        localStorage.getItem("token") ||
+        localStorage.getItem("authToken") ||
+        localStorage.getItem("jwt") ||
+        null;
+
+      if (token) {
+        token = token.replace(/^"|"$/g, "");
+      }
+
+      if (!token) {
+        toast.error("Missing login token. Please log in again.");
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/residents/${editingResident.residentNo}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          profileImage: formData.profileImage,
+          firstName: formData.firstName,
+          middleName: formData.middleName,
+          lastName: formData.lastName,
+          age: formData.age,
+          birthday: formData.birthday,
+          gender: formData.gender,
+          civilStatus: formData.civilStatus,
+          religion: formData.religion,
+          residentType: formData.residentType || "Resident",
+          voterStatus: formData.voterStatus,
+          houseNo: formData.houseNo,
+          streetAddress: formData.streetAddress,
+          contactNumber: formData.contactNumber,
+          email: formData.email,
+          fatherName: formData.fatherName,
+          motherName: formData.motherName,
+          spouseName: formData.spouseName,
+          numberOfChildren: formData.numberOfChildren,
+          emergencyContactName: formData.emergencyContactName,
+          emergencyContactNumber: formData.emergencyContactNumber,
+          emergencyContactAddress: formData.emergencyContactAddress,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          const message = String(data?.error || "").toLowerCase();
+          if (message.includes("email")) setEmailAlreadyExists(true);
+          if (message.includes("contact")) setContactNumberAlreadyExists(true);
+        }
+        toast.error(data?.error || "Failed to update resident.");
+        return;
+      }
+
+      toast.success("Resident information updated successfully.");
+      setIsAddDialogOpen(false);
+      setIsResidentDetailsOpen(false);
+      setViewingResident(null);
+      setEditingResident(null);
+      resetForm();
+      await loadResidents();
+    } catch (err) {
+      toast.error("Could not reach backend server.");
+      console.error(err);
+    }
+  };
+
   const handleCancelDataPrivacy = () => {
     setShowDataPrivacyDialog(false);
+    setResidentPrivacyAccepted(false);
     setShowDiscardResidentDialog(false);
     setIsAddDialogOpen(true);
   };
@@ -1262,7 +1408,7 @@ export function ResidentRecords({
             </DialogTrigger>
 
             <DialogContent
-              className="w-[95vw] max-w-6xl max-h-[90vh] overflow-y-auto"
+              className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto"
               onInteractOutside={(event) => {
                 event.preventDefault();
                 handleAddDialogOpenChange(false);
@@ -1273,10 +1419,13 @@ export function ResidentRecords({
               }}
             >
               <DialogHeader className="-mx-6 -mt-6 border-b bg-gray-50 px-6 py-4 rounded-t-[inherit]">
-                <DialogTitle className="text-xl">Add New Resident</DialogTitle>
+                <DialogTitle className="text-xl">
+                  {editingResident ? "Edit Resident Information" : "Add New Resident"}
+                </DialogTitle>
                 <DialogDescription>
-                  Fill in the resident's information to register them in the
-                  system.
+                  {editingResident
+                    ? "Update the resident's information and save the changes to the system."
+                    : "Fill in the resident's information to register them in the system."}
                 </DialogDescription>
               </DialogHeader>
 
@@ -1544,8 +1693,8 @@ export function ResidentRecords({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="uppercase">
-                          <SelectItem value="Yes" className="uppercase">VOTER</SelectItem>
-                          <SelectItem value="No" className="uppercase">NON-VOTER</SelectItem>
+                          <SelectItem value="Voter" className="uppercase">VOTER</SelectItem>
+                          <SelectItem value="Non-Voter" className="uppercase">NON-VOTER</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1864,15 +2013,30 @@ export function ResidentRecords({
               </div>
 
               <DialogFooter className="-mx-6 -mb-6 mt-6 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
-                <Button variant="outline" onClick={() => handleAddDialogOpenChange(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setEditingResident(null);
+                    handleAddDialogOpenChange(false);
+                  }}
+                >
                   Cancel
                 </Button>
-                <Button
-                  onClick={handleSaveResident}
-                  className="bg-[#2957a1] hover:bg-[#1e3f7a]"
-                >
-                  Save Resident
-                </Button>
+                {editingResident ? (
+                  <Button
+                    onClick={handleUpdateResident}
+                    className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+                  >
+                    Save Edit
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleSaveResident}
+                    className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+                  >
+                    Save Resident
+                  </Button>
+                )}
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -1969,13 +2133,13 @@ export function ResidentRecords({
                   <TableCell className="text-xs py-3">
                     {resident.lastName}
                   </TableCell>
-                  <TableCell className="text-xs py-3">
+                  <TableCell className="text-xs py-3 uppercase">
                     {resident.residentType}
                   </TableCell>
-                  <TableCell className="text-xs py-3">
+                  <TableCell className="text-xs py-3 uppercase">
                     {resident.gender}
                   </TableCell>
-                  <TableCell className="text-xs py-3">
+                  <TableCell className="text-xs py-3 uppercase">
                     {resident.voterStatus}
                   </TableCell>
                   <TableCell className="text-xs py-3">
@@ -2003,7 +2167,6 @@ export function ResidentRecords({
                         <Eye className="w-6 h-6" />
                         <span>View Info</span>
                       </Button>
-
                       {resident.status === "Active" ? (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -2089,15 +2252,62 @@ export function ResidentRecords({
       {/* STEP 2: DATA PRIVACY DIALOG */}
       <AlertDialog
         open={showDataPrivacyDialog}
-        onOpenChange={setShowDataPrivacyDialog}
+        onOpenChange={(open) => {
+          setShowDataPrivacyDialog(open);
+          if (!open) {
+            setResidentPrivacyAccepted(false);
+          }
+        }}
       >
-        <AlertDialogContent className="max-w-[400px]">
+        <AlertDialogContent className="max-w-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Data Privacy Agreement</AlertDialogTitle>
             <AlertDialogDescription>
-              Agree to process information for management purposes?
+              Please review and confirm the data privacy terms before creating this resident account.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-2 text-sm leading-7 text-gray-700">
+            <p>
+              By accessing and using the Tondocs Barangay Management Web Application, you agree to the
+              collection, use, and processing of your personal information in accordance with applicable
+              data privacy laws and regulations.
+            </p>
+            <p>
+              The system collects personal data such as your name, address, contact information, and
+              other relevant details solely for the purpose of processing barangay service requests,
+              maintaining resident records, and improving service delivery.
+            </p>
+            <p>
+              All personal information provided will be treated with strict confidentiality and will only
+              be accessed by authorized barangay personnel. The system implements appropriate security
+              measures to protect your data from unauthorized access, disclosure, alteration, or destruction.
+            </p>
+            <p>
+              Your information will not be shared with third parties without your consent, unless
+              required by law or necessary for official government functions.
+            </p>
+            <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="font-semibold text-[#2957a1]">By continuing to use this system, you confirm that:</p>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-gray-700">
+                {dataPrivacyHighlights.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            <p>If you do not agree with this policy, please discontinue use of the system.</p>
+            <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <input
+                type="checkbox"
+                checked={residentPrivacyAccepted}
+                onChange={(event) => setResidentPrivacyAccepted(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-300"
+              />
+              <span className="text-sm font-medium text-gray-800">
+                I have read and understood the Data Privacy Agreement, and I consent to the collection
+                and processing of this resident’s information for legitimate barangay operations.
+              </span>
+            </label>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={handleCancelDataPrivacy}>
               Cancel
@@ -2105,6 +2315,7 @@ export function ResidentRecords({
             <AlertDialogAction
               onClick={handleConfirmPrivacy}
               className="bg-[#2957a1]"
+              disabled={!residentPrivacyAccepted}
             >
               Agree and Continue
             </AlertDialogAction>
@@ -2267,13 +2478,13 @@ export function ResidentRecords({
 
                       {viewingResident.residentType && (
                         <span className="text-xs px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold">
-                          Type: {viewingResident.residentType}
+                          Type: {String(viewingResident.residentType).toUpperCase()}
                         </span>
                       )}
 
                       {typeof viewingResident.voterStatus !== "undefined" && (
                         <span className="text-xs px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-100 font-semibold">
-                          Voter: {viewingResident.voterStatus ? "Registered" : "Not Registered"}
+                          Voter: {String(viewingResident.voterStatus).toUpperCase()}
                         </span>
                       )}
 
@@ -2471,13 +2682,13 @@ export function ResidentRecords({
 
                     {viewingResident.residentType && (
                       <span className="text-xs px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold">
-                        Type: {viewingResident.residentType}
+                        Type: {String(viewingResident.residentType).toUpperCase()}
                       </span>
                     )}
 
                     {typeof viewingResident.voterStatus !== "undefined" && (
                       <span className="text-xs px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-100 font-semibold">
-                        Voter: {viewingResident.voterStatus ? "Registered" : "Not Registered"}
+                        Voter: {String(viewingResident.voterStatus).toUpperCase()}
                       </span>
                     )}
 

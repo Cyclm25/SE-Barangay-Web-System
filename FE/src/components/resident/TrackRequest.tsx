@@ -12,6 +12,11 @@ type DBRequest = {
   RequestStatus: string;    // Pending / Processing / Ready for Pickup / Pickup / Completed / Denied
   RequestPurpose: string;
   Remarks?: string | null;  // optional if you add it later in DB
+  AppointmentDate?: string | null;
+  AppointmentTime?: string | null;
+  AppointmentRequirements?: string | null;
+  AppointmentNotes?: string | null;
+  AppointmentSetByAdmin?: string | null;
 };
 
 function formatRequestId(id: number) {
@@ -20,6 +25,24 @@ function formatRequestId(id: number) {
 
 function normalizeStatus(s: string) {
   return (s || "").trim().toLowerCase();
+}
+
+function formatAppointmentTime(value?: string | null) {
+  if (!value) return "";
+
+  const [hourText, minuteText] = value.split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (Number.isNaN(hour) || Number.isNaN(minute)) {
+    return value;
+  }
+
+  return new Date(2000, 0, 1, hour, minute).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
 function getStatusUI(statusRaw: string) {
@@ -141,6 +164,8 @@ export function TrackRequest() {
             (normalizedStatus === "pickup" ||
               normalizedStatus === "picked up" ||
               normalizedStatus === "completed");
+          const showAppointmentDetails =
+            !!request.AppointmentDate || !!request.AppointmentTime || !!request.AppointmentSetByAdmin;
 
           return (
             <div
@@ -248,6 +273,32 @@ export function TrackRequest() {
                     </div>
                   )}
 
+                  {showAppointmentDetails && (
+                    <div className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 bg-[#eef4ff] rounded-lg border border-[#c7d8ff]">
+                      <Clock className="w-4 h-4 md:w-5 md:h-5 text-[#2957a1] flex-shrink-0" />
+                      <div>
+                        <p className="text-[11px] md:text-[12px] text-[#2957a1] font-semibold">
+                          Appointment Set by Admin
+                        </p>
+                        <p className="text-[13px] md:text-[14px] text-gray-900">
+                          {request.AppointmentDate
+                            ? new Date(request.AppointmentDate).toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })
+                            : "Date to be announced"}
+                          {request.AppointmentTime ? ` at ${formatAppointmentTime(request.AppointmentTime)}` : ""}
+                        </p>
+                        {request.AppointmentSetByAdmin && (
+                          <p className="text-[11px] text-gray-500">
+                            Set by {request.AppointmentSetByAdmin}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 bg-gray-50 rounded-lg">
                     <svg
                       className="w-4 h-4 md:w-5 md:h-5 text-[#2957a1] flex-shrink-0"
@@ -280,6 +331,27 @@ export function TrackRequest() {
                         <p className="text-[13px] md:text-[14px] text-gray-700 leading-relaxed">
                           {request.RequestPurpose}
                         </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {request.AppointmentRequirements && (
+                  <div className="mt-4 p-3 md:p-4 bg-indigo-50 border-l-4 border-indigo-500 rounded-lg">
+                    <div className="flex items-start gap-2 md:gap-3">
+                      <Clock className="w-4 h-4 md:w-5 md:h-5 text-indigo-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-[12px] md:text-[13px] font-bold text-indigo-700 mb-1">
+                          Required Documents to Bring:
+                        </p>
+                        <p className="text-[13px] md:text-[14px] text-gray-700 leading-relaxed">
+                          {request.AppointmentRequirements}
+                        </p>
+                        {request.AppointmentNotes && (
+                          <p className="mt-2 text-[12px] md:text-[13px] text-gray-600">
+                            Note from admin: {request.AppointmentNotes}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

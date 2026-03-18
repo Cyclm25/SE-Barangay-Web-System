@@ -124,25 +124,38 @@ router.post(
    Accepts field name: "image"
    Max: 5MB, JPEG/PNG/WebP only
 ========================= */
-router.post(
-  "/announcement-image",
-  verifyToken,
-  uploadAnnouncement.single("image"),
-  (req, res) => {
+router.post("/announcement-image", (req, res) => {
+  uploadAnnouncement.single("image")(req, res, (err) => {
     try {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ error: "Image must be 5MB or smaller." });
+        }
+        return res.status(400).json({ error: err.message });
+      }
+
+      if (err) {
+        return res.status(400).json({
+          error: err.message || "Only JPG, PNG, and WebP images are allowed.",
+        });
+      }
+
       if (!req.file) {
         return res.status(400).json({ error: "No image file provided." });
       }
+
       const imageUrl = `/uploads/announcements/${req.file.filename}`;
       return res.status(200).json({ imageUrl });
-    } catch (err) {
-      console.error("ANNOUNCEMENT UPLOAD ERROR:", err.message);
+    } catch (uploadErr) {
+      console.error("ANNOUNCEMENT UPLOAD ERROR:", uploadErr.message);
       if (req.file) {
-        try { fs.unlinkSync(path.join(announcementUploadDir, req.file.filename)); } catch {}
+        try {
+          fs.unlinkSync(path.join(announcementUploadDir, req.file.filename));
+        } catch {}
       }
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: uploadErr.message });
     }
-  }
-);
+  });
+});
 
 module.exports = router;

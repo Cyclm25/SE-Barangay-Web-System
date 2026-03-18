@@ -18,6 +18,38 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+function buildAppointmentNotificationMessage({
+  date,
+  time,
+  requirements,
+  additionalNotes,
+  setByAdmin,
+}) {
+  return JSON.stringify({
+    type: "appointment",
+    date: date || "",
+    time: time || "",
+    requirements: requirements || "",
+    additionalNotes: additionalNotes || "",
+    setByAdmin: setByAdmin || "Barangay Admin",
+  });
+}
+
+function parseAppointmentNotificationMessage(rawMessage) {
+  if (!rawMessage) return null;
+
+  try {
+    const parsed = JSON.parse(rawMessage);
+    if (parsed && typeof parsed === "object" && parsed.type === "appointment") {
+      return parsed;
+    }
+  } catch (_) {
+    return null;
+  }
+
+  return null;
+}
+
 /* ==============================
    CREATE REQUEST (Resident)
 ============================== */
@@ -118,7 +150,15 @@ router.patch("/:id/status", async (req, res) => {
 
   try {
     const { id } = req.params;
-    const { status, reason } = req.body; // ✅ include reason
+    const {
+      status,
+      reason,
+      appointmentDate,
+      appointmentTime,
+      requirements,
+      additionalNotes,
+      setByAdmin,
+    } = req.body;
 
     const allowed = ["Pending", "Processing", "Ready for Pickup", "Completed", "Rejected"];
     if (!allowed.includes(status)) {
@@ -132,7 +172,7 @@ router.patch("/:id/status", async (req, res) => {
     await client.query("BEGIN");
 
     const current = await client.query(
-      `SELECT "RequestStatus" FROM request WHERE "RequestID" = $1`,
+      `SELECT "RequestStatus", "ResidentID" FROM request WHERE "RequestID" = $1`,
       [id]
     );
     if (current.rowCount === 0) {
@@ -141,6 +181,7 @@ router.patch("/:id/status", async (req, res) => {
     }
 
     const prevStatus = current.rows[0].RequestStatus;
+    const residentId = current.rows[0].ResidentID;
 
     let updateQuery = `UPDATE request SET "RequestStatus" = $1`;
     const params = [status];
@@ -166,6 +207,23 @@ router.patch("/:id/status", async (req, res) => {
     params.push(id);
 
     const update = await client.query(updateQuery, params);
+
+    if (status === "Processing" && appointmentDate && appointmentTime) {
+      const appointmentMessage = buildAppointmentNotificationMessage({
+        date: appointmentDate,
+        time: appointmentTime,
+        requirements,
+        additionalNotes,
+        setByAdmin,
+      });
+
+      await client.query(
+        `INSERT INTO notification
+          ("RequestID","RecipientRole","RecipientID","NotificationType","NotificationDate","Message")
+         VALUES ($1,'Resident',$2,'Appointment',NOW(),$3)`,
+        [id, residentId, appointmentMessage]
+      );
+    }
 
     await client.query("COMMIT");
 
@@ -196,6 +254,7 @@ router.get("/admin/all", async (req, res) => {
         req."RequestPurpose",
         req."ResidentID",
         req."RejectionReason",
+        latest_appt."Message" AS "AppointmentMessage",
         r."FirstName",
         r."MiddleName",
         r."LastName",
@@ -203,11 +262,33 @@ router.get("/admin/all", async (req, res) => {
         r."Email"
       FROM request req
       JOIN resident r ON req."ResidentID" = r."ResidentID"
+      LEFT JOIN LATERAL (
+        SELECT n."Message"
+        FROM notification n
+        WHERE n."RequestID" = req."RequestID"
+          AND n."RecipientRole" = 'Resident'
+          AND n."NotificationType" = 'Appointment'
+        ORDER BY n."NotificationDate" DESC
+        LIMIT 1
+      ) latest_appt ON TRUE
       ORDER BY req."RequestDate" DESC
       `
     );
 
-    res.json(result.rows);
+    res.json(
+      result.rows.map((row) => {
+        const appointmentDetails = parseAppointmentNotificationMessage(row.AppointmentMessage);
+
+        return {
+          ...row,
+          AppointmentDate: appointmentDetails?.date || null,
+          AppointmentTime: appointmentDetails?.time || null,
+          AppointmentRequirements: appointmentDetails?.requirements || null,
+          AppointmentNotes: appointmentDetails?.additionalNotes || null,
+          AppointmentSetByAdmin: appointmentDetails?.setByAdmin || null,
+        };
+      })
+    );
   } catch (err) {
     console.error("Admin Requests Error:", err);
     res.status(500).json({ error: err.message });
@@ -222,10 +303,28 @@ router.get("/resident/:residentId", async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT "RequestID","ResidentID","RequestDate","PickupDate","CompletionDate","RequestType","RequestStatus","RequestPurpose"
-      FROM request
-      WHERE "ResidentID" = $1
-      ORDER BY "RequestDate" DESC, "RequestID" DESC
+      SELECT
+        req."RequestID",
+        req."ResidentID",
+        req."RequestDate",
+        req."PickupDate",
+        req."CompletionDate",
+        req."RequestType",
+        req."RequestStatus",
+        req."RequestPurpose",
+        latest_appt."Message" AS "AppointmentMessage"
+      FROM request req
+      LEFT JOIN LATERAL (
+        SELECT n."Message"
+        FROM notification n
+        WHERE n."RequestID" = req."RequestID"
+          AND n."RecipientRole" = 'Resident'
+          AND n."NotificationType" = 'Appointment'
+        ORDER BY n."NotificationDate" DESC
+        LIMIT 1
+      ) latest_appt ON TRUE
+      WHERE req."ResidentID" = $1
+      ORDER BY req."RequestDate" DESC, req."RequestID" DESC
       `,
       [residentId]
     );
