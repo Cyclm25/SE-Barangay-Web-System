@@ -343,29 +343,6 @@ if (!isAdminActor || !actorId) {
       residentValues
     );
 
-    /*
-  `
-  INSERT INTO resident (
-    "FirstName", "MiddleName", "LastName", "Age", "Birthday",
-    "Gender", "CivilStatus", "ResidentType", "VoterStatus", "HouseNumber",
-    "StreetAddress", "ContactNumber", "Email", "FatherName", "MotherName",
-    "SpouseName", "NoOfChildren", "ContactPerson", "ContactPersonNo",
-    "ContactPersonAddress", "BarangayCard", "ProfileImage", "status", "Religion"
-  )
-  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'Active',$23)
-  RETURNING *
-  `,
-[
-  firstName, middleName, lastName, parseInt(age, 10), birthday,
-  gender, civilStatus, residentType, toBool(voterStatus), houseNo || null,
-  streetAddress || null, normalizedContactNumber, normalizedEmail, fatherName || null,
-  motherName || null, spouseName || null, parseInt(numberOfChildren, 10) || 0,
-  emergencyContactName || null, emergencyContactNumber || null,
-  emergencyContactAddress || null, "N/A", profileImage,  // ← added
-  residentReligion,
-]
-    
-    */
     const newResidentId = residentInsert.rows[0]?.ResidentID || residentInsert.rows[0]?.residentid;
 
     if (!newResidentId) {
@@ -442,6 +419,86 @@ router.patch("/:id/status", async (req, res) => {
     return res.json({ message: "Status updated", updated: result.rows[0] });
   } catch (err) {
     console.error("PATCH /residents/:id/status error:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+
+/* =========================
+   UPDATE RESIDENT PROFILE
+   PUT /residents/:id
+   Only allows fields the resident can self-edit.
+   Admin can also call this to update any resident.
+========================= */
+router.put("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      civilStatus,
+      contactNumber,
+      email,
+      contactPerson,
+      contactPersonNo,
+      contactPersonAddress,
+    } = req.body;
+
+    // Validate email format if provided
+    if (email && !/^[^\s@]+@gmail\.com$/i.test(email.trim())) {
+      return res.status(400).json({ error: "Only Gmail addresses are allowed." });
+    }
+
+    // Check email uniqueness (exclude current resident)
+    if (email) {
+      const emailCheck = await pool.query(
+        `
+        SELECT 1
+        FROM resident
+        WHERE LOWER("Email") = LOWER($1)
+          AND "ResidentID"::text != $2::text
+        UNION
+        SELECT 1
+        FROM barangayadmin
+        WHERE LOWER("Email") = LOWER($1)
+        LIMIT 1
+        `,
+        [email.trim(), id]
+      );
+      if (emailCheck.rows.length > 0) {
+        return res.status(409).json({ error: "Email is already in use by another account." });
+      }
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE resident
+      SET
+        "CivilStatus"          = COALESCE($1, "CivilStatus"),
+        "ContactNumber"        = COALESCE($2, "ContactNumber"),
+        "Email"                = COALESCE($3, "Email"),
+        "ContactPerson"        = COALESCE($4, "ContactPerson"),
+        "ContactPersonNo"      = COALESCE($5, "ContactPersonNo"),
+        "ContactPersonAddress" = COALESCE($6, "ContactPersonAddress")
+      WHERE "ResidentID" = $7
+      RETURNING *
+      `,
+      [
+        civilStatus        || null,
+        contactNumber      || null,
+        email              ? email.trim().toLowerCase() : null,
+        contactPerson      || null,
+        contactPersonNo    || null,
+        contactPersonAddress || null,
+        id,
+      ]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Resident not found." });
+    }
+
+    return res.json({ message: "Profile updated successfully.", resident: result.rows[0] });
+  } catch (err) {
+    console.error("PUT /residents/:id Error:", err.message);
     return res.status(500).json({ error: err.message });
   }
 });
