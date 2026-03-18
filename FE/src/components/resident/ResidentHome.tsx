@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { api } from "../../utils/api";
 
-interface Announcement {
+export interface Announcement {
   id: string;
   title: string;
   tags: string[];
@@ -19,55 +19,71 @@ interface ResidentHomeProps {
   onAnnouncementClick: (announcement: Announcement) => void;
 }
 
-/**
- * DB row shape (based on your backend SELECT * FROM announcement)
- */
 type DBAnnouncement = {
   AnnouncementID?: number | string;
   Title?: string;
   Body?: string;
-  Category?: string; // "students" | "senior-citizens" | "events" | "All" | etc.
+  Category?: string[] | string;
   CreatedAt?: string;
+  PublishedDate?: string | null;
   PostedByRole?: string;
   PostedByID?: string | number;
-  Images?: string[]; // if you have this column; otherwise undefined
-  images?: string[]; // fallback if backend returns lowercase
+  Images?: string[];
+  Status?: string;
+  IsScheduled?: boolean;
+  IsPublished?: boolean;
+  ExpirationDate?: string | null;
 };
 
 const PLACEHOLDER_IMAGE =
   "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1200&q=80";
 
+const POLL_INTERVAL_MS = 60 * 1000;
+
 /**
- * Normalize DB Category -> UI Tags (must match your filter buttons)
+ * Normalize a single category value -> filter button label.
+ * Handles all casings and formats the admin form may send.
+ *
+ * Admin dropdown values:  "all" | "students" | "senior-citizens" | "health" | "events"
+ * Filter button labels:   "Students" | "Senior Citizen" | "Health" | "Events"
  */
-function categoryToTags(categoryRaw: string | null | undefined): string[] {
-  const c = (categoryRaw || "").toLowerCase().trim();
-
-  // Your admin UI uses values:
-  // all, students, senior-citizens, pwd, events, health
-  if (!c || c === "all") return [];
-
-  if (c === "students" || c === "student") return ["Student"];
-  if (c === "senior-citizens" || c === "senior citizen" || c === "senior") return ["Senior Citizen"];
-  if (c === "events" || c === "event") return ["Events"];
-
-  // If you stored custom audiences (e.g. "Primary 4A"), treat as a tag
-  // so it still appears and can be filtered later if you add buttons.
-  return [categoryRaw as string];
+function normalizeCategory(raw: string): string {
+  const c = raw.toLowerCase().trim();
+  if (!c || c === "all") return "";
+  if (c === "students" || c === "student") return "Students";
+  if (
+    c === "senior-citizens" ||
+    c === "senior citizen" ||
+    c === "seniorcitizen" ||
+    c === "senior"
+  )
+    return "Senior Citizen";
+  if (c === "events" || c === "event") return "Events";
+  if (c === "health") return "Health";
+  if (c === "pwd") return "PWD";
+  return raw.trim();
 }
 
 /**
- * Map DB row -> Resident UI Announcement
+ * Category can come back as TEXT[] array OR a plain string depending
+ * on how old/new the row is. Handle both safely.
  */
+function categoryArrayToTags(
+  category: string[] | string | null | undefined
+): string[] {
+  if (!category) return [];
+  const arr = Array.isArray(category) ? category : [String(category)];
+  return arr.map(normalizeCategory).filter((t) => t.length > 0);
+}
+
 function mapDbToResident(a: DBAnnouncement): Announcement {
   const id = String(a.AnnouncementID ?? "");
-
   const title = a.Title ?? "";
   const details = a.Body ?? "";
+  const tags = categoryArrayToTags(a.Category);
 
-  const tags = categoryToTags(a.Category);
-
-  const created = a.CreatedAt ? new Date(a.CreatedAt) : new Date();
+  const dateSource = a.PublishedDate ?? a.CreatedAt;
+  const created = dateSource ? new Date(dateSource) : new Date();
   const date = created.toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
@@ -76,24 +92,20 @@ function mapDbToResident(a: DBAnnouncement): Announcement {
 
   const postedByRole = a.PostedByRole ?? "Admin";
   const postedById = a.PostedByID ?? "";
-  const postedBy = postedById ? `${postedByRole} (${postedById})` : postedByRole;
+  const postedBy = postedById
+    ? `${postedByRole} (${postedById})`
+    : postedByRole;
 
-  const imgs = Array.isArray(a.Images)
-    ? a.Images
-    : Array.isArray(a.images)
-    ? a.images
-    : [];
-
+  const imgs = Array.isArray(a.Images) ? a.Images : [];
   const image = imgs.length > 0 ? imgs[0] : PLACEHOLDER_IMAGE;
 
-  // description is the short preview shown on the card
   const description =
     details.length > 120 ? `${details.slice(0, 120).trim()}…` : details;
 
   return {
     id,
     title,
-    tags: tags.length ? tags : ["Announcement"], // show something even if Category=All
+    tags: tags.length ? tags : ["Announcement"],
     image,
     images: imgs.length ? imgs : undefined,
     description,
@@ -108,26 +120,30 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
   const [items, setItems] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Filter buttons (matches your original UI)
-  const tags = ["Student", "Senior Citizen","Health", "Events"];
+  // These must exactly match the output of normalizeCategory()
+  const tags = ["Students", "Senior Citizen", "Health", "Events"];
+
+  const fetchResidentAnnouncements = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get("/api/announcements/resident");
+      const rows = Array.isArray(res.data)
+        ? (res.data as DBAnnouncement[])
+        : [];
+      setItems(rows.map(mapDbToResident));
+    } catch (err) {
+      console.error("Failed to load resident announcements:", err);
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchResidentAnnouncements = async () => {
-      try {
-        setLoading(true);
-        const res = await api.get("/api/announcements/resident");
-        const rows = Array.isArray(res.data) ? (res.data as DBAnnouncement[]) : [];
-        setItems(rows.map(mapDbToResident));
-      } catch (err) {
-        console.error("Failed to load resident announcements:", err);
-        setItems([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchResidentAnnouncements();
-  }, []);
+    const interval = setInterval(fetchResidentAnnouncements, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [fetchResidentAnnouncements]);
 
   const filteredAnnouncements = useMemo(() => {
     if (!selectedTag) return items;
@@ -137,7 +153,7 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
   return (
     <div className="pt-[73px] md:pt-[93px] min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
       <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-6 md:py-10">
-        {/* Header Section */}
+        {/* Header */}
         <div className="mb-6 md:mb-8">
           <h1 className="text-[24px] md:text-[32px] font-bold text-[#2957a1] mb-2">
             Announcements
@@ -147,7 +163,7 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
           </p>
         </div>
 
-        {/* Filter Section */}
+        {/* Filter Buttons */}
         <div className="mb-6 md:mb-8 flex flex-wrap items-center gap-2 md:gap-3 bg-white p-3 md:p-4 rounded-lg shadow-sm">
           <span className="text-[13px] md:text-[14px] font-semibold text-[#2957a1] w-full md:w-auto mb-1 md:mb-0">
             FILTER BY:
@@ -179,15 +195,17 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
           ))}
         </div>
 
-        {/* Loading State */}
-        {loading && (
+        {/* Loading */}
+        {loading && items.length === 0 && (
           <div className="text-center py-14 bg-white rounded-xl shadow-sm">
-            <p className="text-gray-500 text-lg font-medium">Loading announcements…</p>
+            <p className="text-gray-500 text-lg font-medium">
+              Loading announcements…
+            </p>
           </div>
         )}
 
-        {/* Announcements Grid */}
-        {!loading && (
+        {/* Grid */}
+        {(!loading || items.length > 0) && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {filteredAnnouncements.map((announcement) => (
               <div
@@ -195,14 +213,12 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
                 onClick={() => onAnnouncementClick(announcement)}
                 className="cursor-pointer group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden transform hover:-translate-y-1"
               >
-                {/* Image */}
                 <div className="relative bg-gray-200 overflow-hidden h-[180px] md:h-[220px]">
                   <ImageWithFallback
                     src={announcement.image}
                     alt={announcement.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
-                  {/* Date Badge */}
                   <div className="absolute top-2 md:top-3 right-2 md:right-3 bg-white/95 backdrop-blur-sm px-2 md:px-3 py-1 rounded-full shadow-md">
                     <p className="text-[10px] md:text-[11px] font-bold text-[#2957a1]">
                       {announcement.date}
@@ -210,13 +226,11 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
                   </div>
                 </div>
 
-                {/* Content */}
                 <div className="p-4 md:p-5">
                   <h3 className="text-[18px] md:text-[20px] text-[#2957a1] font-bold mb-2 md:mb-3 line-clamp-2 group-hover:text-[#1e4380] transition-colors">
                     {announcement.title}
                   </h3>
 
-                  {/* Tags */}
                   <div className="flex flex-wrap gap-2 mb-2 md:mb-3">
                     {announcement.tags.map((tag, index) => (
                       <span
@@ -228,12 +242,10 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
                     ))}
                   </div>
 
-                  {/* Description Preview */}
                   <p className="text-gray-600 text-[12px] md:text-[13px] line-clamp-2 leading-relaxed">
                     {announcement.description}
                   </p>
 
-                  {/* Read More */}
                   <div className="mt-4 flex items-center text-[#2957a1] text-[12px] font-semibold group-hover:gap-2 transition-all">
                     <span>Read more</span>
                     <svg
@@ -274,8 +286,12 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
                 />
               </svg>
             </div>
-            <p className="text-gray-500 text-lg font-medium">No announcements found</p>
-            <p className="text-gray-400 text-sm mt-1">Try selecting a different filter</p>
+            <p className="text-gray-500 text-lg font-medium">
+              No announcements found
+            </p>
+            <p className="text-gray-400 text-sm mt-1">
+              Try selecting a different filter
+            </p>
           </div>
         )}
       </div>
@@ -283,4 +299,4 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
   );
 }
 
-export type { Announcement };
+export type { Announcement as ResidentAnnouncement };

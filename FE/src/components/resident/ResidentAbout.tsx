@@ -1,6 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import imgBarangayLogo from "../../assets/barangaylogo.png";
+
+// Interface for dynamic official data
+interface Official {
+  id: string;
+  name: string;
+  position: string;
+  image: string | null;
+}
 
 const images = [
   'https://images.unsplash.com/photo-1758599668299-beebedfabf7b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb21tdW5pdHklMjB2b2x1bnRlZXJzJTIwY2xlYW5pbmd8ZW58MXx8fHwxNzY5MzMyNzk3fDA&ixlib=rb-4.1.0&q=80&w=1080',
@@ -8,41 +16,63 @@ const images = [
   'https://images.unsplash.com/photo-1666887360726-f55472d96c34?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoZWFsdGglMjBjaGVja3VwJTIwbWVkaWNhbHxlbnwxfHx8fDE3NjkzMzI3Mzh8MA&ixlib=rb-4.1.0&q=80&w=1080'
 ];
 
-const officials = [
+// Renamed to mockOfficials to act as a safe fallback if the server is offline
+const mockOfficials: Official[] = [
   { 
+    id: 'mock1',
     name: 'Roberto Martinez', 
     position: 'Barangay Captain',
-    image: 'https://images.unsplash.com/photo-1717985498747-f081679d2c33?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBmaWxpcGluYSUyMG1hbiUyMHBvcnRyYWl0fGVufDF8fHx8MTc2OTc0NTg0OHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
+    image: 'https://images.unsplash.com/photo-1717985498747-f081679d2c33?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBmaWxpcGluYSUyMG1hbiUyMHBvcnRyYWl0fGVufDF8fHx8MTc2OTc0NTg0OHww&ixlib=rb-4.1.0&q=80&w=1080'
   },
   { 
+    id: 'mock2',
     name: 'Maria Santos', 
     position: 'Barangay Kagawad',
-    image: 'https://images.unsplash.com/photo-1718006915613-bcb972cabdb1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBmaWxpcGluYSUyMHdvbWFuJTIwcG9ydHJhaXR8ZW58MXx8fHwxNzY5NzQ1ODQ4fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  },
-  { 
-    name: 'Juan Dela Cruz', 
-    position: 'Barangay Kagawad',
-    image: 'https://images.unsplash.com/photo-1738566061505-556830f8b8f5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxidXNpbmVzcyUyMG1hbiUyMHBvcnRyYWl0JTIwYXNpYW58ZW58MXx8fHwxNzY5NzQ1ODQ5fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  },
-  { 
-    name: 'Ana Reyes', 
-    position: 'Barangay Secretary',
-    image: 'https://images.unsplash.com/photo-1581065178026-390bc4e78dad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjB3b21hbiUyMHBvcnRyYWl0JTIwYXNpYW58ZW58MXx8fHwxNzY5NjgyMTk0fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  },
-  { 
-    name: 'Pedro Garcia', 
-    position: 'Barangay Treasurer',
-    image: 'https://images.unsplash.com/photo-1532272278764-53cd1fe53f72?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx5b3VuZyUyMHByb2Zlc3Npb25hbCUyMG1hbiUyMHBvcnRyYWl0fGVufDF8fHx8MTc2OTc0NTg0OXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
-  },
-  { 
-    name: 'Linda Ramos', 
-    position: 'SK Chairperson',
-    image: 'https://images.unsplash.com/photo-1758600587839-56ba05596c69?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx5b3VuZyUyMHByb2Zlc3Npb25hbCUyMHdvbWFuJTIwcG9ydHJhaXQlMjBhc2lhbnxlbnwxfHx8fDE3Njk3NDU4NDl8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
+    image: 'https://images.unsplash.com/photo-1718006915613-bcb972cabdb1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBmaWxpcGluYSUyMHdvbWFuJTIwcG9ydHJhaXR8ZW58MXx8fHwxNzY5NzQ1ODQ4fDA&ixlib=rb-4.1.0&q=80&w=1080'
   }
 ];
 
 export function ResidentAbout() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // State for dynamic officials data
+  const [officials, setOfficials] = useState<Official[]>([]);
+  const [isLoadingOfficials, setIsLoadingOfficials] = useState(true);
+
+  // Fetch officials data on component mount
+  useEffect(() => {
+    const fetchOfficials = async () => {
+      try {
+        const response = await fetch("http://localhost:5001/api/officials");
+
+        if (response.ok) {
+          const data = await response.json();
+
+          // Filter active officials and map DB keys to frontend keys
+          const activeOfficials = data
+            .filter((item: any) => item.status === true)
+            .map((item: any) => ({
+              id: item.barangayadminid,
+              name: item.adminname,
+              position: item.position || 'Barangay Official',
+              image: item.profileimage || null
+            }));
+
+          // Use active officials if they exist, otherwise fallback to mock data
+          setOfficials(activeOfficials.length > 0 ? activeOfficials : mockOfficials);
+        } else {
+          setOfficials(mockOfficials);
+        }
+      } catch (error) {
+        console.error("Error fetching officials data:", error);
+        setOfficials(mockOfficials);
+      } finally {
+        setIsLoadingOfficials(false);
+      }
+    };
+
+    fetchOfficials();
+  }, []);
 
   return (
     <div className="pt-[73px] md:pt-[93px] min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
@@ -65,6 +95,7 @@ export function ResidentAbout() {
 
         {/* Main Content Grid */}
         <div className="space-y-6 md:space-y-8">
+          
           {/* Introduction */}
           <div className="bg-white rounded-xl md:rounded-2xl shadow-lg p-5 md:p-8">
             <h2 className="text-[20px] md:text-[24px] font-bold text-[#2957a1] mb-3 md:mb-4">Our Barangay</h2>
@@ -224,21 +255,32 @@ export function ResidentAbout() {
           {/* Barangay Officials */}
           <div className="bg-white rounded-xl md:rounded-2xl shadow-lg p-5 md:p-8">
             <h2 className="text-[20px] md:text-[24px] font-bold text-[#2957a1] mb-4 md:mb-6">Barangay Officials</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {officials.map((official, index) => (
-                <div key={index} className="flex items-center gap-4">
-                  <img 
-                    src={official.image} 
-                    alt={`${official.name} - ${official.position}`}
-                    className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-full shadow-md"
-                  />
-                  <div>
-                    <p className="font-bold text-gray-900">{official.name}</p>
-                    <p className="text-gray-600 text-[14px]">{official.position}</p>
+            
+            {isLoadingOfficials ? (
+              <div className="flex justify-center py-8">
+                <p className="text-gray-500 animate-pulse font-medium">Loading officials data...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {officials.map((official) => (
+                  <div key={official.id} className="flex items-center gap-4">
+                    <img 
+                      src={
+                        official.image || 
+                        `https://ui-avatars.com/api/?name=${encodeURIComponent(official.name)}&background=2957a1&color=fff`
+                      } 
+                      alt={`${official.name} - ${official.position}`}
+                      className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-full shadow-md bg-white border border-gray-100"
+                    />
+                    <div>
+                      <p className="font-bold text-gray-900">{official.name}</p>
+                      <p className="text-gray-600 text-[14px]">{official.position}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
+            
           </div>
         </div>
       </div>
