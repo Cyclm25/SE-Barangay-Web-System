@@ -3,33 +3,63 @@ import { Camera, Edit2, CreditCard } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { toast } from 'sonner';
 import { ViewBarangayID } from './ViewBarangayID';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/alert-dialog';
+
+const createDefaultProfileData = () => ({
+  firstName: 'First Name',
+  middleName: 'Middle Name',
+  lastName: 'Last Name',
+  suffix: '',
+  birthdate: '1990-01-01',
+  age: '34',
+  sex: 'Sex',
+  civilStatus: 'Single',
+  nationality: 'Filipino',
+  religion: 'Roman Catholic',
+  contactNumber: '09123456789',
+  email: 'example@email.com',
+  houseNo: '15',
+  street: 'Yuseco Street',
+  barangay: 'Barangay 160',
+  city: 'Manila',
+  province: 'Metro Manila',
+  zipCode: '1013',
+  emergencyContactName: 'Contact Name',
+  emergencyContactAddress: '15 Yuseco Street',
+  emergencyContactNumber: '09123456789'
+});
+
+type ResidentProfileData = ReturnType<typeof createDefaultProfileData>;
+
+type ResidentDbSnapshot = {
+  residentType: string;
+  voterStatus: boolean | string;
+  fatherName: string;
+  motherName: string;
+  spouseName: string;
+  numberOfChildren: number;
+  emergencyContactAddress: string;
+  profileImagePath: string | null;
+};
 
 export function ResidentProfile() {
   const [isEditing, setIsEditing] = useState(false);
   const [showBarangayID, setShowBarangayID] = useState(false);
-  const [profileData, setProfileData] = useState({
-    firstName: 'First Name',
-    middleName: 'Middle Name',
-    lastName: 'Last Name',
-    suffix: '',
-    birthdate: '1990-01-01',
-    age: '34',
-    sex: 'Sex',
-    civilStatus: 'Single',
-    nationality: 'Filipino',
-    religion: 'Roman Catholic',
-    contactNumber: '09123456789',
-    email: 'example@email.com',
-    houseNo: '15',
-    street: 'Yuseco Street',
-    barangay: 'Barangay 160',
-    city: 'Manila',
-    province: 'Metro Manila',
-    zipCode: '1013',
-    emergencyContactName: 'Contact Name',
-    emergencyContactRelation: 'Mother',
-    emergencyContactNumber: '09123456789'
-  });
+  const [profileData, setProfileData] = useState<ResidentProfileData>(createDefaultProfileData);
+  const [draftProfileData, setDraftProfileData] = useState<ResidentProfileData | null>(null);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [residentDbSnapshot, setResidentDbSnapshot] = useState<ResidentDbSnapshot | null>(null);
 
   useEffect(() => {
     const userType = localStorage.getItem("userType");
@@ -77,7 +107,7 @@ export function ResidentProfile() {
 
         // Load profile image from backend
         if (data.ProfileImage) {
-          const imgUrl = data.ProfileImage.startsWith('data:') 
+          const imgUrl = data.ProfileImage.startsWith('data:')
             ? data.ProfileImage  // base64
             : `http://localhost:5001${data.ProfileImage}`;  // file path
           setProfileImage(imgUrl);
@@ -93,18 +123,28 @@ export function ResidentProfile() {
           sex: data.Gender || '',
           civilStatus: data.CivilStatus || '',
           nationality: 'Filipino',
-          religion: 'Roman Catholic',
+          religion: data.Religion || data.religion || 'Roman Catholic',
           contactNumber: data.ContactNumber || '',
           email: data.Email || '',
           houseNo: data.HouseNumber || '',
           street: data.StreetAddress || '',
           barangay: 'Barangay 160',
-          city: 'Manila',
-          province: 'Metro Manila',
-          zipCode: '',
+          city: data.City || data.city || 'Manila',
+          province: data.Province || data.province || 'Metro Manila',
+          zipCode: data.ZipCode || data.zipcode || '',
           emergencyContactName: data.ContactPerson || '',
-          emergencyContactRelation: '',
+          emergencyContactAddress: data.ContactPersonAddress || '',
           emergencyContactNumber: data.ContactPersonNo || ''
+        });
+        setResidentDbSnapshot({
+          residentType: data.ResidentType || 'Resident',
+          voterStatus: data.VoterStatus ?? false,
+          fatherName: data.FatherName || '',
+          motherName: data.MotherName || '',
+          spouseName: data.SpouseName || '',
+          numberOfChildren: Number(data.NoOfChildren ?? 0),
+          emergencyContactAddress: data.ContactPersonAddress || '',
+          profileImagePath: data.ProfileImage || null,
         });
       } catch (err) {
         console.error("❌ Fetch failed:", err);
@@ -113,22 +153,32 @@ export function ResidentProfile() {
     })();
   }, []);
 
-  // derive local contact part (10 digits) from stored profileData.contactNumber
+  // keep the contact number in local PH mobile format: 09XXXXXXXXX
   useEffect(() => {
-    const num = profileData.contactNumber || '';
-    let local = '';
-    if (num.startsWith('+63')) local = num.slice(3);
-    else if (num.startsWith('63')) local = num.slice(2);
-    else if (num.startsWith('0')) local = num.slice(1);
-    else local = num;
-    // keep digits only
-    local = (local.match(/\d+/g) || []).join('').slice(0, 10);
-    setContactLocal(local);
-  }, [profileData.contactNumber]);
+    const sourceNumber = isEditing
+      ? draftProfileData?.contactNumber || profileData.contactNumber || ''
+      : profileData.contactNumber || '';
+    const digitsOnly = (sourceNumber.match(/\d+/g) || []).join('');
+
+    let normalized = digitsOnly;
+    if (digitsOnly.startsWith('63') && digitsOnly.length >= 12) {
+      normalized = `0${digitsOnly.slice(2)}`;
+    } else if (digitsOnly.startsWith('9') && digitsOnly.length === 10) {
+      normalized = `0${digitsOnly}`;
+    }
+
+    setContactLocal(normalized.slice(0, 11));
+  }, [profileData.contactNumber, draftProfileData?.contactNumber, isEditing]);
 
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [contactLocal, setContactLocal] = useState('');
   const [contactError, setContactError] = useState('');
+  const voterStatusText =
+    residentDbSnapshot?.voterStatus === true ||
+    String(residentDbSnapshot?.voterStatus ?? '').trim().toLowerCase() === 'true' ||
+    String(residentDbSnapshot?.voterStatus ?? '').trim() === '1'
+      ? 'VOTER'
+      : 'NON-VOTER';
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -177,27 +227,144 @@ export function ResidentProfile() {
     }
   };
 
-  const handleChange = (field: string, value: string) => {
-    setProfileData(prev => ({ ...prev, [field]: value }));
+  const handleEditStart = () => {
+    setDraftProfileData({ ...profileData });
+    setContactError('');
+    setIsEditing(true);
   };
 
-  const handleSave = () => {
-    // Validate contact local part: must be 10 digits and start with '9'
-    const local = (contactLocal || '').trim();
+  const handleChange = (field: keyof ResidentProfileData, value: string) => {
+    if (!isEditing) return;
+    setDraftProfileData(prev => ({ ...(prev ?? profileData), [field]: value }));
+  };
+
+  const handleCancel = () => {
     if (isEditing) {
-      if (!/^9\d{9}$/.test(local)) {
-        setContactError('Enter 10 digits starting with 9');
-        toast.error('Contact number must be 10 digits and start with 9');
-        return;
-      }
-      // update stored contactNumber to include +63 prefix
-      setProfileData(prev => ({ ...prev, contactNumber: `+63${local}` }));
+      setShowCancelConfirm(true);
+      return;
+    }
+    setDraftProfileData(null);
+    setContactError('');
+    setIsEditing(false);
+  };
+
+  const handleConfirmCancel = () => {
+    setDraftProfileData(null);
+    setContactError('');
+    setShowCancelConfirm(false);
+    setIsEditing(false);
+  };
+
+  const handleSaveClick = () => {
+    if (!isEditing) return;
+    setShowSaveConfirm(true);
+  };
+
+  const handleConfirmSave = async () => {
+    if (!draftProfileData) {
+      setShowSaveConfirm(false);
+      setIsEditing(false);
+      return;
     }
 
-    setIsEditing(false);
-    setContactError('');
-    toast.success('Profile information updated successfully!');
+    // Validate contact number: must be 11 digits and start with 09
+    const local = (contactLocal || '').trim();
+    if (!/^09\d{9}$/.test(local)) {
+      setContactError('Enter 11 digits starting with 09');
+      toast.error('Contact number must be 11 digits and start with 09');
+      setShowSaveConfirm(false);
+      return;
+    }
+
+    const residentId = localStorage.getItem("residentId");
+    let token =
+      localStorage.getItem("token") ||
+      localStorage.getItem("authToken") ||
+      localStorage.getItem("jwt") ||
+      null;
+
+    if (token) {
+      token = token.replace(/^"|"$/g, '');
+    }
+
+    if (!residentId || !token || !residentDbSnapshot) {
+      toast.error('Session expired. Please log in again.');
+      return;
+    }
+
+    const updatedProfile = {
+      ...draftProfileData,
+      contactNumber: local,
+    };
+
+    try {
+      setIsSaving(true);
+
+      const response = await fetch(`http://localhost:5001/residents/${encodeURIComponent(residentId)}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          firstName: updatedProfile.firstName.trim(),
+          middleName: updatedProfile.middleName.trim(),
+          lastName: updatedProfile.lastName.trim(),
+          age: updatedProfile.age,
+          birthday: updatedProfile.birthdate,
+          gender: updatedProfile.sex,
+          civilStatus: updatedProfile.civilStatus,
+          religion: updatedProfile.religion.trim(),
+          nationality: updatedProfile.nationality.trim(),
+          residentType: residentDbSnapshot.residentType,
+          voterStatus: residentDbSnapshot.voterStatus,
+          houseNo: updatedProfile.houseNo.trim(),
+          streetAddress: updatedProfile.street.trim(),
+          city: updatedProfile.city.trim(),
+          province: updatedProfile.province.trim(),
+          zipCode: updatedProfile.zipCode.trim(),
+          contactNumber: updatedProfile.contactNumber,
+          email: updatedProfile.email.trim(),
+          fatherName: residentDbSnapshot.fatherName,
+          motherName: residentDbSnapshot.motherName,
+          spouseName: residentDbSnapshot.spouseName,
+          numberOfChildren: residentDbSnapshot.numberOfChildren,
+          emergencyContactName: updatedProfile.emergencyContactName.trim(),
+          emergencyContactNumber: updatedProfile.emergencyContactNumber.trim(),
+          emergencyContactAddress: residentDbSnapshot.emergencyContactAddress,
+          profileImage: residentDbSnapshot.profileImagePath,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to save profile changes.');
+      }
+
+      setProfileData(updatedProfile);
+      setResidentDbSnapshot((prev) =>
+        prev
+          ? {
+            ...prev,
+            profileImagePath: data?.ProfileImage ?? prev.profileImagePath,
+          }
+          : prev
+      );
+      setDraftProfileData(null);
+      setShowSaveConfirm(false);
+      setIsEditing(false);
+      setContactError('');
+      toast.success('Profile information updated successfully!');
+    } catch (error: any) {
+      console.error('Resident profile save error:', error);
+      toast.error(error?.message || 'Failed to save profile changes.');
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  const visibleProfileData = isEditing && draftProfileData ? draftProfileData : profileData;
 
   return (
     <div className="pt-[73px] md:pt-[93px] min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
@@ -255,6 +422,7 @@ export function ResidentProfile() {
                     <p><strong>Age:</strong> {profileData.age}</p>
                     <p><strong>Sex:</strong> {profileData.sex}</p>
                     <p><strong>Civil Status:</strong> {profileData.civilStatus}</p>
+                    <p><strong>Voter:</strong> {voterStatusText}</p>
                   </div>
                   <p className="mt-2 text-[14px] opacity-80">
                     Resident ID: {localStorage.getItem("residentId") || "-"}
@@ -283,7 +451,7 @@ export function ResidentProfile() {
                 </h3>
                 {!isEditing ? (
                   <button
-                    onClick={() => setIsEditing(true)}
+                    onClick={handleEditStart}
                     className="flex items-center justify-center bg-[#2957a1] hover:bg-[#1e4380] text-white p-2 md:p-2.5 rounded-lg transition-colors shadow-md hover:shadow-lg"
                     title="Edit Profile"
                   >
@@ -292,13 +460,13 @@ export function ResidentProfile() {
                 ) : (
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setIsEditing(false)}
+                      onClick={handleCancel}
                       className="px-3 md:px-4 py-1.5 md:py-2 border-2 border-gray-300 text-gray-700 rounded-lg text-[12px] md:text-[13px] font-semibold hover:bg-gray-50 transition-colors"
                     >
                       Cancel
                     </button>
                     <button
-                      onClick={handleSave}
+                      onClick={handleSaveClick}
                       className="px-3 md:px-4 py-1.5 md:py-2 bg-[#5CE36C] hover:bg-[#4bc95b] text-white rounded-lg text-[12px] md:text-[13px] font-semibold transition-colors shadow-md"
                     >
                       Save
@@ -309,47 +477,47 @@ export function ResidentProfile() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <FormField
                   label="First Name"
-                  value={profileData.firstName}
+                  value={visibleProfileData.firstName}
                   onChange={(value) => handleChange('firstName', value)}
                   isEditing={false}
                 />
                 <FormField
                   label="Middle Name"
-                  value={profileData.middleName}
+                  value={visibleProfileData.middleName}
                   onChange={(value) => handleChange('middleName', value)}
                   isEditing={false}
                 />
                 <FormField
                   label="Last Name"
-                  value={profileData.lastName}
+                  value={visibleProfileData.lastName}
                   onChange={(value) => handleChange('lastName', value)}
                   isEditing={false}
                 />
-                <FormField
+                {/* <FormField
                   label="Suffix"
-                  value={profileData.suffix}
+                  value={visibleProfileData.suffix}
                   onChange={(value) => handleChange('suffix', value)}
                   isEditing={false}
                   placeholder="Jr., Sr., III"
-                />
+                /> ADD NALANG KAPAG NAKALAGAY NA SA DATABASE*/}
                 <FormField
                   label="Birthdate"
                   type="date"
-                  value={profileData.birthdate}
+                  value={visibleProfileData.birthdate}
                   onChange={(value) => handleChange('birthdate', value)}
                   isEditing={false}
                 />
                 <FormField
                   label="Age"
                   type="number"
-                  value={profileData.age}
+                  value={visibleProfileData.age}
                   onChange={(value) => handleChange('age', value)}
                   isEditing={false}
                 />
                 <FormField
                   label="Sex"
                   type="select"
-                  value={profileData.sex}
+                  value={visibleProfileData.sex}
                   onChange={(value) => handleChange('sex', value)}
                   isEditing={false}
                   options={['Male', 'Female']}
@@ -357,22 +525,22 @@ export function ResidentProfile() {
                 <FormField
                   label="Civil Status"
                   type="select"
-                  value={profileData.civilStatus}
+                  value={visibleProfileData.civilStatus}
                   onChange={(value) => handleChange('civilStatus', value)}
                   isEditing={isEditing}
                   options={['Single', 'Married', 'Widowed', 'Separated']}
                 />
-                <FormField
+                {/* <FormField
                   label="Nationality"
-                  value={profileData.nationality}
+                  value={visibleProfileData.nationality}
                   onChange={(value) => handleChange('nationality', value)}
-                  isEditing={false}
-                />
+                  isEditing={isEditing}
+                /> */}
                 <FormField
                   label="Religion"
-                  value={profileData.religion}
+                  value={visibleProfileData.religion}
                   onChange={(value) => handleChange('religion', value)}
-                  isEditing={false}
+                  isEditing={isEditing}
                 />
               </div>
             </div>
@@ -389,24 +557,31 @@ export function ResidentProfile() {
                     <div>
                       <div className="flex items-center">
                         <div className="flex items-center border-2 border-[#2957a1] rounded-lg overflow-hidden w-full">
-                          <span className="inline-flex items-center px-3 py-2 text-sm">+63</span>
+                          {/* <span className="inline-flex items-center px-3 py-2 text-sm">+63</span> */}
                           <input
                             type="text"
                             inputMode="numeric"
                             pattern="[0-9]*"
                             value={contactLocal}
                             onChange={(e) => {
-                              const cleaned = (e.target.value || '').replace(/\D/g, '').slice(0, 10);
+                              const cleaned = (e.target.value || '').replace(/\D/g, '').slice(0, 11);
                               setContactLocal(cleaned);
-                              if (/^9\d{9}$/.test(cleaned)) setContactError('');
+                              if (!cleaned) {
+                                setContactError('');
+                              } else if (/^09\d{9}$/.test(cleaned)) {
+                                setContactError('');
+                              } else {
+                                setContactError('Enter 11 digits starting with 09');
+                              }
                             }}
-                            placeholder="9123456789"
+                            placeholder="09123456789"
                             className="w-full px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] focus:outline-none"
                           />
                         </div>
                       </div>
-                      {contactError && <p className="text-sm text-red-600 mt-1">{contactError}</p>}
-                      <p className="text-xs text-gray-500 mt-1">Enter 10 digits (must start with 9). Country code <strong>+63</strong> is applied automatically.</p>
+                      <p className={`text-sm mt-1 ${contactError ? 'text-red-600' : 'text-gray-500'}`}>
+                        {contactError || 'Enter 11 digits (must start with 09).'}
+                      </p>
                     </div>
                   ) : (
                     <div className="w-full bg-gray-50 border-2 border-gray-200 rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] text-gray-700">
@@ -414,13 +589,20 @@ export function ResidentProfile() {
                     </div>
                   )}
                 </div>
-                <FormField
-                  label="Email Address"
-                  type="email"
-                  value={profileData.email}
-                  onChange={(value) => handleChange('email', value)}
-                  isEditing={isEditing}
-                />
+                <div>
+                  <FormField
+                    label="Email Address"
+                    type="email"
+                    value={visibleProfileData.email}
+                    onChange={(value) => handleChange('email', value)}
+                    isEditing={isEditing}
+                  />
+                  {isEditing && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Please use a valid Gmail address for your email information.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -432,37 +614,37 @@ export function ResidentProfile() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <FormField
                   label="House No."
-                  value={profileData.houseNo}
+                  value={visibleProfileData.houseNo}
                   onChange={(value) => handleChange('houseNo', value)}
-                  isEditing={false}
+                  isEditing={isEditing}
                 />
                 <FormField
                   label="Street"
-                  value={profileData.street}
+                  value={visibleProfileData.street}
                   onChange={(value) => handleChange('street', value)}
-                  isEditing={false}
+                  isEditing={isEditing}
                 />
                 <FormField
                   label="Barangay"
-                  value={profileData.barangay}
+                  value={visibleProfileData.barangay}
                   onChange={(value) => handleChange('barangay', value)}
                   isEditing={false}
                 />
                 <FormField
                   label="City"
-                  value={profileData.city}
+                  value={visibleProfileData.city}
                   onChange={(value) => handleChange('city', value)}
                   isEditing={false}
                 />
                 <FormField
                   label="Province"
-                  value={profileData.province}
+                  value={visibleProfileData.province}
                   onChange={(value) => handleChange('province', value)}
                   isEditing={false}
                 />
                 <FormField
                   label="Zip Code"
-                  value={profileData.zipCode}
+                  value={visibleProfileData.zipCode}
                   onChange={(value) => handleChange('zipCode', value)}
                   isEditing={false}
                 />
@@ -477,20 +659,20 @@ export function ResidentProfile() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <FormField
                   label="Contact Name"
-                  value={profileData.emergencyContactName}
+                  value={visibleProfileData.emergencyContactName}
                   onChange={(value) => handleChange('emergencyContactName', value)}
                   isEditing={false}
                 />
                 <FormField
-                  label="Relationship"
-                  value={profileData.emergencyContactRelation}
-                  onChange={(value) => handleChange('emergencyContactRelation', value)}
+                  label="Address"
+                  value={visibleProfileData.emergencyContactAddress}
+                  onChange={(value) => handleChange('emergencyContactAddress', value)}
                   isEditing={false}
                 />
                 <FormField
                   label="Contact Number"
                   type="tel"
-                  value={profileData.emergencyContactNumber}
+                  value={visibleProfileData.emergencyContactNumber}
                   onChange={(value) => handleChange('emergencyContactNumber', value)}
                   isEditing={false}
                 />
@@ -506,6 +688,40 @@ export function ResidentProfile() {
             profileData={profileData}
           />
         )}
+
+        <AlertDialog open={showSaveConfirm} onOpenChange={setShowSaveConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Save profile changes?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Your resident information will only be updated after you confirm this action.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmSave} disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Confirm Save'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Discard profile changes?</AlertDialogTitle>
+              <AlertDialogDescription>
+                If you continue, your unsaved resident information changes will be discarded.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep Editing</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmCancel}>
+                Discard Changes
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
@@ -523,6 +739,8 @@ interface FormFieldProps {
 }
 
 function FormField({ label, value, onChange, isEditing, type = 'text', placeholder, options, isEditable = false }: FormFieldProps) {
+  const shouldUppercase = type !== 'email';
+  const displayValue = value ? (shouldUppercase ? value.toUpperCase() : value) : '-';
   return (
     <div>
       <label className="block text-[12px] md:text-[13px] text-gray-700 font-semibold mb-2">
@@ -534,11 +752,11 @@ function FormField({ label, value, onChange, isEditing, type = 'text', placehold
           <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full border-2 border-[#2957a1] rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2957a1]/50 bg-white"
+            className="w-full border-2 border-[#2957a1] rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] uppercase focus:outline-none focus:ring-2 focus:ring-[#2957a1]/50 bg-white"
           >
             {/* <option value="">Select...</option> */}
             {options?.map((option) => (
-              <option key={option} value={option}>{option}</option>
+              <option key={option} value={option}>{option.toUpperCase()}</option>
             ))}
           </select>
         ) : (
@@ -547,12 +765,12 @@ function FormField({ label, value, onChange, isEditing, type = 'text', placehold
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className="w-full border-2 border-[#2957a1] rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2957a1]/50"
+            className={`w-full border-2 border-[#2957a1] rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2957a1]/50 ${shouldUppercase ? 'uppercase' : ''}`}
           />
         )
       ) : (
-        <div className="w-full bg-gray-50 border-2 border-gray-200 rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] text-gray-700">
-          {value || '-'}
+        <div className={`w-full bg-gray-50 border-2 border-gray-200 rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] text-gray-700 ${shouldUppercase ? 'uppercase' : ''}`}>
+          {displayValue}
         </div>
       )}
     </div>

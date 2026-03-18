@@ -139,6 +139,25 @@ type SortMenuValue =
 
 const API_BASE = "http://localhost:5001";
 
+const normalizeVoterStatus = (value: unknown): "Voter" | "Non-Voter" => {
+  if (value === true) return "Voter";
+  if (value === false || value == null) return "Non-Voter";
+  if (typeof value === "number") return value === 1 ? "Voter" : "Non-Voter";
+
+  const normalized = String(value).trim().toLowerCase();
+  if (
+    normalized === "true" ||
+    normalized === "1" ||
+    normalized === "yes" ||
+    normalized === "voter" ||
+    normalized === "registered"
+  ) {
+    return "Voter";
+  }
+
+  return "Non-Voter";
+};
+
 function mapRowToResident(r: ResidentRow): Resident {
   return {
     id: r.ResidentID,
@@ -157,11 +176,11 @@ function mapRowToResident(r: ResidentRow): Resident {
     gender: (r.Gender as any) ?? "Male",
     civilStatus: r.CivilStatus ?? "",
     residentType: r.ResidentType ?? "",
-    voterStatus: r.VoterStatus === true ? "Voter" : "Non-Voter",
+    voterStatus: normalizeVoterStatus(r.VoterStatus),
     houseNo: r.HouseNumber ?? "",
     streetAddress: r.StreetAddress ?? "",
-    city: "Manila City",
-    postalCode: "1013",
+    city: ((r as any).City ?? (r as any).city ?? "Manila City") as string,
+    postalCode: ((r as any).ZipCode ?? (r as any).zipcode ?? (r as any).PostalCode ?? "1013") as string,
     country: "Philippines",
     contactNumber: r.ContactNumber ?? "",
     email: r.Email ?? "",
@@ -1032,6 +1051,8 @@ export function ResidentRecords({
           voterStatus: pendingResident.voterStatus,
           houseNo: pendingResident.houseNo,
           streetAddress: pendingResident.streetAddress,
+          city: pendingResident.city,
+          zipCode: pendingResident.postalCode,
           contactNumber: pendingResident.contactNumber,
           email: pendingResident.email,
           fatherName: pendingResident.fatherName,
@@ -1125,6 +1146,8 @@ export function ResidentRecords({
           voterStatus: formData.voterStatus,
           houseNo: formData.houseNo,
           streetAddress: formData.streetAddress,
+          city: formData.city,
+          zipCode: formData.postalCode,
           contactNumber: formData.contactNumber,
           email: formData.email,
           fatherName: formData.fatherName,
@@ -2059,8 +2082,8 @@ export function ResidentRecords({
                   <SelectItem value="field:status">Status</SelectItem>
                   <SelectItem value="field:residentNo:asc">Resident No (Ascending)</SelectItem>
                   <SelectItem value="field:residentNo:desc">Resident No (Descending)</SelectItem>
-                  <SelectItem value="dir:asc">Alphabetical (A-Z)</SelectItem>
-                  <SelectItem value="dir:desc">Alphabetical (Z-A)</SelectItem>
+                  <SelectItem value="dir:asc">First Name (A-Z)</SelectItem>
+                  <SelectItem value="dir:desc">First Name (Z-A)</SelectItem>
                   <SelectItem value="field:lastName">Last Name</SelectItem>
                   <SelectItem value="field:residentType">Resident Type</SelectItem>
                 </SelectContent>
@@ -2115,135 +2138,146 @@ export function ResidentRecords({
             </TableHeader>
 
             <TableBody>
-              {filteredResidents.map((resident, index) => (
-                <TableRow
-                  key={resident.residentNo}
-                  className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
-                    }`}
-                >
-                  <TableCell className="font-medium text-xs py-3">
-                    {String(resident.residentNo).replace(/-/g, "")}
-                  </TableCell>
-                  <TableCell className="text-xs py-3">
-                    {resident.firstName}
-                  </TableCell>
-                  <TableCell className="text-xs py-3">
-                    {resident.middleName}
-                  </TableCell>
-                  <TableCell className="text-xs py-3">
-                    {resident.lastName}
-                  </TableCell>
-                  <TableCell className="text-xs py-3 uppercase">
-                    {resident.residentType}
-                  </TableCell>
-                  <TableCell className="text-xs py-3 uppercase">
-                    {resident.gender}
-                  </TableCell>
-                  <TableCell className="text-xs py-3 uppercase">
-                    {resident.voterStatus}
-                  </TableCell>
-                  <TableCell className="text-xs py-3">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${resident.status === "Active"
-                        ? "bg-green-100 text-green-700 border border-green-300"
-                        : "bg-red-100 text-red-700 border border-red-300"
-                        }`}
-                    >
-                      {resident.status}
-                    </span>
-                  </TableCell>
-
-                  <TableCell className="py-3">
-                    <div className="flex items-center gap-5">
-
-                      <Button
-                        size="sm"
-                        className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors"
-                        onClick={() => {
-                          setViewingResident(resident);
-                          setIsResidentDetailsOpen(true);
-                        }}
-                      >
-                        <Eye className="w-6 h-6" />
-                        <span>View Info</span>
-                      </Button>
-                      {resident.status === "Active" ? (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              size="sm"
-                              className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] h-7 px-2"
-                            >
-                              DEACTIVATE
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Deactivate this account?
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you certain you want to deactivate the account of{" "}
-                                <span className="font-semibold">
-                                  {resident.firstName} {resident.lastName}
-                                </span>
-                                ? This will set the account to inactive.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() =>
-                                  handleInactivate(resident.residentNo)
-                                }
-                                className="bg-orange-600"
-                              >
-                                Deactivate
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      ) : (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              size="sm"
-                              className="bg-green-500 hover:bg-green-600 text-white text-[10px] h-7 px-2"
-                            >
-                              REACTIVATE
-                            </Button>
-                          </AlertDialogTrigger>
-
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Reactivate Account?
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you certain you want to activate the account of{" "}
-                                <span className="font-semibold">
-                                  {resident.firstName} {resident.lastName}
-                                </span>
-                                ? This will set the account to active.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleReactivate(resident.residentNo)}
-                                className="bg-green-600"
-                              >
-                                Reactivate
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
+              {filteredResidents.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-14 text-center">
+                    <div className="text-sm font-semibold text-gray-700">
+                      {residents.length === 0
+                        ? "No resident records available."
+                        : "No matching resident records found."}
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                filteredResidents.map((resident, index) => (
+                  <TableRow
+                    key={resident.residentNo}
+                    className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
+                      }`}
+                  >
+                    <TableCell className="font-medium text-xs py-3">
+                      {String(resident.residentNo).replace(/-/g, "")}
+                    </TableCell>
+                    <TableCell className="text-xs py-3">
+                      {resident.firstName}
+                    </TableCell>
+                    <TableCell className="text-xs py-3">
+                      {resident.middleName}
+                    </TableCell>
+                    <TableCell className="text-xs py-3">
+                      {resident.lastName}
+                    </TableCell>
+                    <TableCell className="text-xs py-3 uppercase">
+                      {resident.residentType}
+                    </TableCell>
+                    <TableCell className="text-xs py-3 uppercase">
+                      {resident.gender}
+                    </TableCell>
+                    <TableCell className="text-xs py-3 uppercase">
+                      {resident.voterStatus}
+                    </TableCell>
+                    <TableCell className="text-xs py-3">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${resident.status === "Active"
+                          ? "bg-green-100 text-green-700 border border-green-300"
+                          : "bg-red-100 text-red-700 border border-red-300"
+                          }`}
+                      >
+                        {resident.status}
+                      </span>
+                    </TableCell>
+
+                    <TableCell className="py-3">
+                      <div className="flex items-center gap-5">
+                        <Button
+                          size="sm"
+                          className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors"
+                          onClick={() => {
+                            setViewingResident(resident);
+                            setIsResidentDetailsOpen(true);
+                          }}
+                        >
+                          <Eye className="w-6 h-6" />
+                          <span>View Info</span>
+                        </Button>
+                        {resident.status === "Active" ? (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] h-7 px-2"
+                              >
+                                DEACTIVATE
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Deactivate this account?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to deactivate the account of{" "}
+                                  <span className="font-semibold">
+                                    {resident.firstName} {resident.lastName}
+                                  </span>
+                                  ? This will set the account to inactive.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() =>
+                                    handleInactivate(resident.residentNo)
+                                  }
+                                  className="bg-orange-600"
+                                >
+                                  Deactivate
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        ) : (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                className="bg-green-500 hover:bg-green-600 text-white text-[10px] h-7 px-2"
+                              >
+                                REACTIVATE
+                              </Button>
+                            </AlertDialogTrigger>
+
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Reactivate Account?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to activate the account of{" "}
+                                  <span className="font-semibold">
+                                    {resident.firstName} {resident.lastName}
+                                  </span>
+                                  ? This will set the account to active.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleReactivate(resident.residentNo)}
+                                  className="bg-green-600"
+                                >
+                                  Reactivate
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -2357,7 +2391,7 @@ export function ResidentRecords({
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#2957a1]"
+                  className="absolute inset-y-0 right-0 flex h-full items-center justify-center px-3 text-gray-400 transition-colors hover:text-[#2957a1]"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -2377,6 +2411,13 @@ export function ResidentRecords({
                   placeholder="Confirm password"
                   className="h-10 pr-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1]"
                 />
+                {/* <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 flex h-full items-center justify-center px-3 text-gray-400 transition-colors hover:text-[#2957a1]"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button> */}
               </div>
             </div>
 
@@ -2758,21 +2799,21 @@ export function ResidentRecords({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Father</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
-                        {viewingResident.fatherName || "â€”"}
+                        {viewingResident.fatherName || "Not provided"}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Mother</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
-                        {viewingResident.motherName || "â€”"}
+                        {viewingResident.motherName || "Not provided"}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Spouse</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
-                        {viewingResident.spouseName || "â€”"}
+                        {viewingResident.spouseName || "Not provided"}
                       </p>
                     </div>
                   </div>
@@ -2789,31 +2830,31 @@ export function ResidentRecords({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Contact No.</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words">
-                        {viewingResident.contactNumber || "â€”"}
+                        {viewingResident.contactNumber || "Not provided"}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Email</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-all">
-                        {viewingResident.email || "â€”"}
+                        {viewingResident.email || "Not provided"}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-start">
                       <p className="text-xs font-semibold text-gray-500 uppercase mt-1">Address</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words leading-relaxed uppercase">
-                        {`${viewingResident.houseNo || ""} ${viewingResident.streetAddress || ""} ${viewingResident.city || ""}`.trim() ||
-                          "â€”"}
+                        {`${viewingResident.houseNo || ""} ${viewingResident.streetAddress || ""} ${viewingResident.city || ""} ${viewingResident.postalCode || ""}`.trim() ||
+                          "Not provided"}
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                    {/* <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Brgy Card</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words">
-                        {viewingResident.barangayCard || "â€”"}
+                        {viewingResident.barangayCard || ""}
                       </p>
-                    </div>
+                    </div> */}
                   </div>
                 </div>
               </div>

@@ -282,7 +282,7 @@ router.put("/:id", async (req, res) => {
       return res.status(404).json({ error: "Announcement not found in database" });
     }
     
-    console.log(`[Announcements] ✅ SUCCESS: Updated Announcement ID: ${id}`);
+    console.log(`[Announcements] SUCCESS: Updated Announcement ID: ${id}`);
     res.json(result.rows[0]);
   } catch (err) {
     console.error("[Announcements] ❌ Update Error:", err.message);

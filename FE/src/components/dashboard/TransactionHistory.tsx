@@ -362,7 +362,7 @@ export function TransactionHistory() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-sm py-6 text-gray-500">
+                    <TableCell colSpan={6} className="text-md py-6 text-gray-500">
                       Loading transactions…
                     </TableCell>
                   </TableRow>
@@ -377,18 +377,18 @@ export function TransactionHistory() {
                         className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
                           }`}
                       >
-                        <TableCell className="text-xs py-3 font-mono">
+                        <TableCell className="text-lg py-3 font-mono">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-3 h-3 text-gray-400" />
                             {formatTimestamp(transaction.timestamp)}
                           </div>
                         </TableCell>
 
-                        <TableCell className="text-xs py-3 font-medium">
+                        <TableCell className="text-md py-3 font-medium">
                           {transaction.account}
                         </TableCell>
 
-                        <TableCell className="text-xs py-3">
+                        <TableCell className="text-md py-3">
                           {isAdmin ? (
                             <span className="flex items-center gap-1 text-purple-700">
                               <Shield className="w-3 h-3" />
@@ -402,15 +402,15 @@ export function TransactionHistory() {
                           )}
                         </TableCell>
 
-                        <TableCell className="text-xs py-3 font-semibold text-[#2957a1]">
+                        <TableCell className="text-md py-3 font-semibold text-[#2957a1]">
                           {transaction.action}
                         </TableCell>
 
-                        <TableCell className="text-xs py-3 text-gray-700">
+                        <TableCell className="text-md py-3 text-gray-700">
                           {formatTransactionDetails(transaction.details, residentNames)}
                         </TableCell>
 
-                        <TableCell className="text-xs py-3">
+                        <TableCell className="text-md py-3">
                           <span
                             className={`px-2 py-1 rounded-full text-[10px] font-semibold ${isAdmin
                               ? "bg-blue-100 text-blue-700"

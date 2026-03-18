@@ -33,6 +33,7 @@ router.post("/login", async (req, res) => {
         ra."BarangayAdminID" AS "BarangayAdminID",
         ra."SuperAdminID" AS "SuperAdminID",
         r."status" AS "ResidentStatus",
+        ba."Status" AS "BarangayAdminStatus",
         COALESCE(r."FirstName", ba."AdminName", 'Super Admin') AS "DisplayName"
       FROM residentaccount ra
       LEFT JOIN resident r ON ra."ResidentID" = r."ResidentID"
@@ -61,18 +62,25 @@ router.post("/login", async (req, res) => {
     const SuperAdminID = row.SuperAdminID ?? row.superadminid ?? null;
 
     const ResidentStatus = row.ResidentStatus ?? row.residentstatus ?? null;
+    const BarangayAdminStatus =
+      row.BarangayAdminStatus ?? row.barangayadminstatus ?? null;
     const DisplayName = row.DisplayName ?? row.displayname ?? null;
 
     // Block only inactive residents
     if (ResidentID != null && ResidentStatus === "Inactive") {
-      return res.status(403).json({ error: "Account is deactivated." });
+      return res.status(403).json({ error: "Account is inactive." });
+    }
+
+    // Block inactive barangay admin accounts
+    if (BarangayAdminID != null && BarangayAdminStatus === false) {
+      return res.status(403).json({ error: "Account is inactive." });
     }
 
     if (!PasswordValue) {
       return res.status(401).json({ error: "Invalid ID or Password" });
     }
 
-    // ✅ Enforce bcrypt-only login (old plaintext passwords will NOT be accepted anymore)
+    // Enforce bcrypt-only login (old plaintext passwords will NOT be accepted anymore)
     if (typeof PasswordValue !== "string" || !PasswordValue.startsWith("$2")) {
       return res.status(403).json({
         error: "Password must be reset. Please use 'Forgot Password' to set a new one.",
@@ -206,7 +214,7 @@ router.post("/forgot-password", async (req, res) => {
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiry = new Date(Date.now() + 10 * 60 * 1000);
 
-    // ✅ Store OTP in THIS residentaccount row
+    //Store OTP in THIS residentaccount row
     await pool.query(
       `
       UPDATE residentaccount

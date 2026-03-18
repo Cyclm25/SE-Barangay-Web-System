@@ -38,7 +38,7 @@ async function checkAndApplyMigrations() {
     const missingColumns = Object.keys(requiredColumns).filter(col => !columns.includes(col));
 
     if (missingColumns.length === 0) {
-      console.log('✅ All required columns already exist!');
+      console.log('All required columns already exist!');
       return;
     }
 
@@ -52,7 +52,7 @@ async function checkAndApplyMigrations() {
           ALTER TABLE announcement
           ADD COLUMN IF NOT EXISTS "${column}" ${dataType};
         `);
-        console.log(`   ✅ Added ${column}`);
+        console.log(`   Added ${column}`);
       }
     }
 

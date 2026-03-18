@@ -167,26 +167,35 @@ export function AnnouncementDetail({
           <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div className="w-14 h-14 bg-[#2957a1] rounded-full flex items-center justify-center">
                     <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" />
                     </svg>
                   </div>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <h3 className="text-[18px] font-bold text-gray-900">Barangay 160</h3>
-                    <div className="flex items-center gap-2 text-[13px] text-gray-600">
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-gray-600">
+                      <div className="flex items-center gap-2 min-w-0">
                       <Calendar className="w-4 h-4" />
                       <span>{displayDate}</span>
                       <span className="text-gray-400">•</span>
-                      <span className={`${priority.color} text-white px-3 py-0.5 rounded-full text-[11px] font-semibold`}>
+                      </div>
+                      {/* <span className={`${priority.color} text-white px-3 py-0.5 rounded-full text-[11px] font-semibold`}>
                         {priority.text}
-                      </span>
+                      </span> */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {normalizedCategories.filter((cat) => cat !== "Announcement").map((cat, index) => (
+                          <span key={index} className="px-3 py-1 rounded-full bg-blue-50 border border-[#2957a1]/30 text-[11px] font-semibold text-[#2957a1]">
+                            {cat}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="hidden flex-wrap gap-2">
                   {normalizedCategories.filter((cat) => cat !== "Announcement").map((cat, index) => (
                     <span key={index} className="px-3 py-1 rounded-full bg-blue-50 border border-[#2957a1]/30 text-[11px] font-semibold text-[#2957a1]">
                       {cat}

@@ -71,7 +71,7 @@ export function LoginForm({ onLogin, error, isLoading }: LoginFormProps) {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  className="absolute inset-y-0 right-0 flex h-full items-center justify-center px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={isLoading}
                 >

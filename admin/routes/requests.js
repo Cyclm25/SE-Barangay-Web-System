@@ -187,7 +187,7 @@ router.patch("/:id/status", async (req, res) => {
     const params = [status];
     let idx = 2;
 
-    // ✅ persist rejection reason
+    // persist rejection reason
     if (status === "Rejected") {
       updateQuery += `, "RejectionReason" = $${idx}`;
       params.push(String(reason).trim());

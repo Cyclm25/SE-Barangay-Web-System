@@ -136,12 +136,12 @@ require('./cron/announcementScheduler');
 
 ### ✨ Features
 
-- ✅ Set exact date and time for publication
-- ✅ Automatic publishing based on system time
-- ✅ Visual indicators for scheduled announcements
-- ✅ Drafts hidden from residents until published
-- ✅ Works with all announcement features (images, target audience, etc.)
-- ✅ Time zone support (currently UTC, can be adjusted)
+- Set exact date and time for publication
+- Automatic publishing based on system time
+- Visual indicators for scheduled announcements
+- Drafts hidden from residents until published
+- Works with all announcement features (images, target audience, etc.)
+- Time zone support (currently UTC, can be adjusted)
 
 ### 🛠️ Troubleshooting
 

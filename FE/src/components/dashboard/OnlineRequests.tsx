@@ -1,5 +1,5 @@
 // OnlineRequests.tsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -10,24 +10,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { FileText, Clock, CheckCircle, XCircle, Eye, Search, AlertCircle, Mail } from 'lucide-react';
+import { FileText, Clock, CheckCircle, XCircle, Eye, Search, AlertCircle, Mail, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 
 type RequestStatus = 'Pending' | 'Processing' | 'Ready for Pickup' | 'Completed' | 'Rejected';
 
 interface Request {
-  id: string;                 // NotificationID
-  requestNo: string;          // RequestID formatted
-  residentName: string;       // now full name (from JOIN resident)
-  residentId: string;         // ResidentID
-  documentType: string;       // RequestType
-  purpose: string;            // RequestPurpose
-  dateRequested: string;      // RequestDate
-  dateCompleted?: string;     // not in DB yet
-  status: RequestStatus;      // RequestStatus
-  contactNumber: string;      // from resident table (JOIN)
-  email?: string;             // from resident table (JOIN)
-  rejectionReason?: string;   // UI only
+  id: string;                 
+  requestNo: string;         
+  residentName: string;       
+  residentId: string;         
+  documentType: string;       
+  purpose: string;           
+  dateRequested: string;      
+  dateCompleted?: string;     
+  status: RequestStatus;      
+  contactNumber: string;      
+  email?: string;             
+  rejectionReason?: string;  
   appointmentDate?: string | null;
   appointmentTime?: string | null;
   appointmentSetByAdmin?: string | null;
@@ -116,6 +116,8 @@ export function OnlineRequests({
     additionalNotes: ''
   });
   const [appointmentAttempted, setAppointmentAttempted] = useState(false);
+  const appointmentDateInputRef = useRef<HTMLInputElement | null>(null);
+  const appointmentTimeInputRef = useRef<HTMLInputElement | null>(null);
   const [confirmAction, setConfirmAction] = useState<null | {
     request: Request;
     kind: 'process' | 'ready' | 'complete';
@@ -167,7 +169,7 @@ export function OnlineRequests({
   };
 
   /**
-   * ✅ loadInbox(silent?)
+   * loadInbox(silent?)
    * - silent=false: shows toast errors
    * - silent=true: used by polling (prevents toast spam)
    */
@@ -411,6 +413,22 @@ export function OnlineRequests({
     }
   };
 
+  const getTabCountColor = () => {
+    switch (statusFilter) {
+      case 'Pending':
+        return 'bg-red-600 text-white';
+      case 'Processing':
+        return 'bg-blue-600 text-white';
+      case 'Ready for Pickup':
+        return 'bg-green-600 text-white';
+      case 'Completed':
+      case 'Rejected':
+        return 'bg-gray-500 text-white';
+      default:
+        return 'bg-red-600 text-white';
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'Pending': return <Clock className="w-4 h-4" />;
@@ -598,7 +616,7 @@ export function OnlineRequests({
               ) : confirmAction?.kind === 'ready' ? (
                 <>This will move the request from Processing to Ready for Pickup.</>
               ) : (
-                <>This will mark the request as Completed. Use this only when the resident has picked up the document.</>
+                <>This will mark the request as Completed.</>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -664,7 +682,7 @@ export function OnlineRequests({
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card
-          className={`border-yellow-400 transition-all ${statusFilter === 'Pending' ? 'ring-2 ring-yellow-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          className={`border-yellow-400 transition-all ${statusFilter === 'Pending' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => {
             if (statusFilter !== 'Pending') {
               setStatusFilter('Pending');
@@ -686,7 +704,7 @@ export function OnlineRequests({
         </Card>
 
         <Card
-          className={`border-blue-400 transition-all ${statusFilter === 'Processing' ? 'ring-2 ring-blue-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          className={`border-blue-400 transition-all ${statusFilter === 'Processing' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => {
             if (statusFilter !== 'Processing') {
               setStatusFilter('Processing');
@@ -708,7 +726,7 @@ export function OnlineRequests({
         </Card>
 
         <Card
-          className={`border-green-400 transition-all ${statusFilter === 'Ready for Pickup' ? 'ring-2 ring-green-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          className={`border-green-400 transition-all ${statusFilter === 'Ready for Pickup' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => {
             if (statusFilter !== 'Ready for Pickup') {
               setStatusFilter('Ready for Pickup');
@@ -730,7 +748,7 @@ export function OnlineRequests({
         </Card>
 
         <Card
-          className={`border-gray-400 transition-all ${statusFilter === 'Completed' ? 'ring-2 ring-gray-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          className={`border-gray-400 transition-all ${statusFilter === 'Completed' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => statusFilter !== 'Completed' && setStatusFilter('Completed')}
         >
           <CardContent className="p-4">
@@ -746,7 +764,7 @@ export function OnlineRequests({
           </CardContent>
         </Card>
         <Card
-          className={`border-2 border-red-500 transition-all ${statusFilter === 'Rejected' ? 'border-red-500 ring-2 ring-red-500 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          className={`border-2 border-red-500 transition-all ${statusFilter === 'Rejected' ? 'border-red-500 cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() =>
             statusFilter !== 'Rejected' && setStatusFilter('Rejected')
           }
@@ -776,7 +794,7 @@ export function OnlineRequests({
             <div className="flex items-center gap-2">
               <span>Certificates</span>
               {certificateCount > 0 && (
-                <span className="min-w-[26px] h-6 px-2 rounded-full bg-red-600 text-white text-sm font-semibold flex items-center justify-center">
+                <span className={`min-w-[26px] h-6 px-2 rounded-full text-sm font-semibold flex items-center justify-center ${getTabCountColor()}`}>
                   {certificateCount}
                 </span>
               )}
@@ -787,7 +805,7 @@ export function OnlineRequests({
             <div className="flex items-center gap-2">
               <span>Other Documents</span>
               {otherCount > 0 && (
-                <span className="min-w-[26px] h-6 px-2 rounded-full bg-red-600 text-white text-sm font-semibold flex items-center justify-center">
+                <span className={`min-w-[26px] h-6 px-2 rounded-full text-sm font-semibold flex items-center justify-center ${getTabCountColor()}`}>
                   {otherCount}
                 </span>
               )}
@@ -831,113 +849,151 @@ export function OnlineRequests({
         <DialogContent className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto">
           {viewingRequest && (
             <>
-              <DialogHeader>
-                <DialogTitle>Request Details</DialogTitle>
-                <DialogDescription>View the details of the request</DialogDescription>
+              <DialogHeader className="-mx-6 -mt-6 border-b px-6 py-5 text-left">
+                <DialogTitle className="text-[18px] font-bold text-gray-900">Request Details</DialogTitle>
+                <DialogDescription className="text-[14px] text-gray-500">
+                  Review the submitted request information and current processing status.
+                </DialogDescription>
               </DialogHeader>
-              <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Request Number</Label>
-                    <p className="text-lg font-semibold text-gray-900">{viewingRequest.requestNo}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</Label>
-                    <div className="mt-1">
-                      <Badge className={getStatusColor(viewingRequest.status)}>{viewingRequest.status}</Badge>
+              <div className="space-y-6 pt-2">
+                <div className="flex flex-col gap-5 rounded-[28px] border border-gray-200 bg-white px-6 py-6 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-center gap-5">
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-[#2957a1] bg-[#2957a1]/10 shadow-sm">
+                      <FileText className="h-10 w-10 text-[#2957a1]" />
                     </div>
-                  </div>
-                  <div className="space-y-1 sm:col-span-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Document Type</Label>
-                    <p className="text-base font-semibold text-gray-900">{viewingRequest.documentType}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="rounded-xl border border-gray-200 bg-white p-4">
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Resident</Label>
-                    <p className="mt-1 text-base font-semibold text-gray-900 break-words">{viewingRequest.residentName}</p>
-                    <p className="text-sm text-gray-500">{viewingRequest.residentId}</p>
-                  </div>
-                  <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-                    <div>
-                      <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contact Number</Label>
-                      <p className="mt-1 font-semibold text-gray-900">{viewingRequest.contactNumber}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Email</Label>
-                      <p className="mt-1 font-semibold text-gray-900 break-all">{viewingRequest.email}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-                  <div>
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Purpose</Label>
-                    <p className="mt-1 text-gray-900">{viewingRequest.purpose}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Date Requested</Label>
-                    <p className="mt-1 font-semibold text-gray-900">{formatWordDate(viewingRequest.dateRequested)}</p>
-                  </div>
-                  {activeTab === 'other' && viewingRequest.status === 'Processing' && (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div>
-                        <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Appointment Date</Label>
-                        <p className="mt-1 font-semibold text-gray-900">
-                          {viewingRequest.appointmentDate ? formatWordDate(viewingRequest.appointmentDate) : 'Not set'}
-                        </p>
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="inline-flex rounded-full bg-blue-50 px-4 py-1 text-sm font-semibold text-[#2957a1]">
+                          Request No: {viewingRequest.requestNo}
+                        </span>
+                        <Badge className={getStatusColor(viewingRequest.status)}>{viewingRequest.status}</Badge>
                       </div>
                       <div>
-                        <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Appointment Time</Label>
-                        <p className="mt-1 font-semibold text-gray-900">
-                          {viewingRequest.appointmentTime ? formatAppointmentTime(viewingRequest.appointmentTime) : 'Not set'}
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Document Type</p>
+                        <p className="mt-1 text-[30px] font-bold leading-tight text-gray-900 break-words">
+                          {viewingRequest.documentType}
                         </p>
                       </div>
                     </div>
-                  )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:min-w-[360px]">
+                    <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Date Requested</p>
+                      <p className="mt-1 text-base font-semibold text-gray-900">
+                        {formatWordDate(viewingRequest.dateRequested)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Resident ID</p>
+                      <p className="mt-1 text-base font-semibold text-gray-900">{viewingRequest.residentId}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.08fr_0.92fr]">
+                  <div className="rounded-[28px] border border-gray-200 bg-white p-6 shadow-sm">
+                    <h3 className="mb-4 text-[15px] font-bold text-[#2957a1]">Resident Information</h3>
+                    <div className="rounded-3xl bg-gray-50 p-5">
+                      <div className="mb-5">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Resident</Label>
+                        <p className="mt-2 text-[30px] font-bold leading-tight text-gray-900 break-words">
+                          {viewingRequest.residentName}
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-slate-500">{viewingRequest.residentId}</p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contact Number</Label>
+                          <p className="mt-2 text-lg font-semibold text-gray-900">{viewingRequest.contactNumber || 'Not provided'}</p>
+                        </div>
+                        <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Email</Label>
+                          <p className="mt-2 text-sm font-medium text-gray-900 break-all">
+                            {viewingRequest.email || 'Not provided'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[28px] border border-gray-200 bg-white p-6 shadow-sm">
+                    <h3 className="mb-4 text-[15px] font-bold text-[#2957a1]">Request Information</h3>
+                    <div className="rounded-3xl bg-gray-50 p-5 space-y-5">
+                      <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Purpose</Label>
+                        <p className="mt-2 text-lg font-semibold text-gray-900 break-words">
+                          {viewingRequest.purpose || 'No purpose provided'}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Request Type</Label>
+                          <p className="mt-2 text-lg font-semibold text-gray-900">{viewingRequest.documentType}</p>
+                        </div>
+                        <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Current Status</Label>
+                          <div className="mt-2">
+                            <Badge className={getStatusColor(viewingRequest.status)}>{viewingRequest.status}</Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {activeTab === 'other' && viewingRequest.status === 'Processing' && (
-                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-blue-700" />
-                      <p className="text-sm font-semibold text-blue-900">Appointment Details</p>
+                  <div className="rounded-[28px] border border-blue-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4 flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-[#2957a1]" />
+                      <p className="text-[15px] font-bold text-[#2957a1]">Appointment Details</p>
                     </div>
-                    <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      <div>
-                        <Label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Date</Label>
-                        <p className="mt-1 font-semibold text-gray-900">
-                          {viewingRequest.appointmentDate ? formatWordDate(viewingRequest.appointmentDate) : 'Not set'}
-                        </p>
+                    <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <div className="rounded-2xl bg-white/80 px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Appointment Date</Label>
+                          <p className="mt-2 text-lg font-semibold text-gray-900">
+                            {viewingRequest.appointmentDate ? formatWordDate(viewingRequest.appointmentDate) : 'Not set'}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl bg-white/80 px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Appointment Time</Label>
+                          <p className="mt-2 text-lg font-semibold text-gray-900">
+                            {viewingRequest.appointmentTime ? formatAppointmentTime(viewingRequest.appointmentTime) : 'Not set'}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl bg-white/80 px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Set By</Label>
+                          <p className="mt-2 text-lg font-semibold text-gray-900">
+                            {viewingRequest.appointmentSetByAdmin || 'Barangay Admin'}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <Label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Time</Label>
-                        <p className="mt-1 font-semibold text-gray-900">
-                          {viewingRequest.appointmentTime ? formatAppointmentTime(viewingRequest.appointmentTime) : 'Not set'}
+                      {!viewingRequest.appointmentDate && !viewingRequest.appointmentTime && (
+                        <p className="mt-4 text-sm font-medium text-blue-900/80">
+                          No appointment date and time have been recorded for this request yet.
                         </p>
-                      </div>
-                      <div>
-                        <Label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Set By</Label>
-                        <p className="mt-1 font-semibold text-gray-900">
-                          {viewingRequest.appointmentSetByAdmin || 'Barangay Admin'}
-                        </p>
-                      </div>
+                      )}
                     </div>
-                    {!viewingRequest.appointmentDate && !viewingRequest.appointmentTime && (
-                      <p className="mt-3 text-sm text-blue-900/80">
-                        No appointment date/time has been recorded for this request yet.
-                      </p>
-                    )}
                   </div>
                 )}
+
                 {viewingRequest.rejectionReason && (
-                  <div>
-                    <Label className="text-xs text-gray-500">Rejection Reason</Label>
-                    <p className="text-red-600">{viewingRequest.rejectionReason}</p>
+                  <div className="rounded-[28px] border border-red-200 bg-white p-6 shadow-sm">
+                    <div className="rounded-3xl border border-red-100 bg-red-50 p-5">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-red-700" />
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-red-700">Rejection Reason</Label>
+                      </div>
+                      <p className="mt-3 text-base font-medium text-red-700">{viewingRequest.rejectionReason}</p>
+                    </div>
                   </div>
                 )}
               </div>
+              <DialogFooter className="-mx-6 -mb-6 mt-6 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
+                <Button variant="outline" onClick={() => setViewingRequest(null)}>
+                  Close
+                </Button>
+              </DialogFooter>
             </>
           )}
         </DialogContent>
@@ -1052,24 +1108,56 @@ export function OnlineRequests({
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="appointmentDate" className="font-semibold">Appointment Date *</Label>
-                    <Input
-                      id="appointmentDate"
-                      type="date"
-                      value={appointmentDetails.date}
-                      onChange={(e) => setAppointmentDetails({ ...appointmentDetails, date: e.target.value })}
-                      min={new Date().toISOString().split('T')[0]}
-                      className={appointmentAttempted && !appointmentDetails.date ? 'border-red-500 text-left focus-visible:ring-red-500' : 'text-left'}
-                    />
+                    <div className="relative">
+                      <Input
+                        ref={appointmentDateInputRef}
+                        id="appointmentDate"
+                        type="date"
+                        value={appointmentDetails.date}
+                        onChange={(e) => setAppointmentDetails({ ...appointmentDetails, date: e.target.value })}
+                        min={new Date().toISOString().split('T')[0]}
+                        className={appointmentAttempted && !appointmentDetails.date
+                          ? 'border-red-500 pr-12 text-left [color-scheme:light] focus-visible:ring-red-500 [&::-webkit-calendar-picker-indicator]:opacity-0'
+                          : 'pr-12 text-left [color-scheme:light] [&::-webkit-calendar-picker-indicator]:opacity-0'}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Open appointment date picker"
+                        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-gray-700 hover:text-[#2957a1]"
+                        onClick={() => {
+                          appointmentDateInputRef.current?.showPicker?.();
+                          appointmentDateInputRef.current?.focus();
+                        }}
+                      >
+                        <Calendar className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="appointmentTime" className="font-semibold">Appointment Time *</Label>
-                    <Input
-                      id="appointmentTime"
-                      type="time"
-                      value={appointmentDetails.time}
-                      onChange={(e) => setAppointmentDetails({ ...appointmentDetails, time: e.target.value })}
-                      className={appointmentAttempted && !appointmentDetails.time ? 'border-red-500 text-left focus-visible:ring-red-500' : 'text-left'}
-                    />
+                    <div className="relative">
+                      <Input
+                        ref={appointmentTimeInputRef}
+                        id="appointmentTime"
+                        type="time"
+                        value={appointmentDetails.time}
+                        onChange={(e) => setAppointmentDetails({ ...appointmentDetails, time: e.target.value })}
+                        className={appointmentAttempted && !appointmentDetails.time
+                          ? 'border-red-500 pr-12 text-left [color-scheme:light] focus-visible:ring-red-500 [&::-webkit-calendar-picker-indicator]:opacity-0'
+                          : 'pr-12 text-left [color-scheme:light] [&::-webkit-calendar-picker-indicator]:opacity-0'}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Open appointment time picker"
+                        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-gray-700 hover:text-[#2957a1]"
+                        onClick={() => {
+                          appointmentTimeInputRef.current?.showPicker?.();
+                          appointmentTimeInputRef.current?.focus();
+                        }}
+                      >
+                        <Clock className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 

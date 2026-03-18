@@ -196,13 +196,14 @@ export function BarangayOfficials() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [resetPasswordOfficial, setResetPasswordOfficial] = useState<Official | null>(null);
   const [confirmResetOfficial, setConfirmResetOfficial] = useState<Official | null>(null);
-  const [confirmEditOfficial, setConfirmEditOfficial] = useState<Official | null>(null);
   const [viewingOfficial, setViewingOfficial] = useState<Official | null>(null);
   const [editingOfficial, setEditingOfficial] = useState<OfficialEditForm | null>(null);
   const [showDiscardEditDialog, setShowDiscardEditDialog] = useState(false);
+  const [showConfirmSaveEditDialog, setShowConfirmSaveEditDialog] = useState(false);
   const [profileImagePreview, setProfileImagePreview] = useState<string>("");
   const [showDiscardOfficialDialog, setShowDiscardOfficialDialog] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
+  const [nameWarning, setNameWarning] = useState("");
 
   // STEP 2 + STEP 3 dialog states
   const [showDataPrivacyDialog, setShowDataPrivacyDialog] = useState(false);
@@ -230,6 +231,7 @@ export function BarangayOfficials() {
 
     setProfileImagePreview("");
     setSaveAttempted(false);
+    setNameWarning("");
 
     setShowDataPrivacyDialog(false);
     setShowPasswordDialog(false);
@@ -320,6 +322,8 @@ export function BarangayOfficials() {
   }, [officials, searchTerm]);
 
   const gmailRegex = /^[a-z0-9](\.?[a-z0-9]){5,29}@gmail\.com$/i;
+  const hasInvalidNameCharacters =
+    formData.name.trim().length > 0 && /[^A-Z\s]/i.test(formData.name);
   const emailInvalidFormat =
     formData.email.trim().length > 0 && !gmailRegex.test(formData.email.trim());
   const emailValidFormat =
@@ -336,6 +340,10 @@ export function BarangayOfficials() {
 
     if (!formData.name.trim()) {
       toast.error("Full Name is required");
+      return;
+    }
+    if (hasInvalidNameCharacters) {
+      toast.error("Full Name must contain letters and spaces only");
       return;
     }
     if (!formData.email.trim()) {
@@ -490,7 +498,8 @@ export function BarangayOfficials() {
       const res = await api.patch(`/api/officials/${id}/status`, {
         status: nextStatus,
       });
-      const updated = res.data as Official;
+      const currentOfficial = officials.find((o) => o.barangayadminid === id);
+      const updated = normalizeOfficialRecord(res.data, currentOfficial);
 
       setOfficials((prev) =>
         prev.map((o) => (o.barangayadminid === id ? updated : o))
@@ -535,7 +544,26 @@ export function BarangayOfficials() {
   );
 
   const handleCancelEdit = () => {
+    if (!hasUnsavedEditChanges) {
+      setViewingOfficial(null);
+      setEditingOfficial(null);
+      setShowDiscardEditDialog(false);
+      return;
+    }
     setShowDiscardEditDialog(true);
+  };
+
+  const handleStartSaveOfficialEdit = () => {
+    if (!viewingOfficial || !editingOfficial) return;
+    const hasChanges =
+      JSON.stringify(editingOfficial) !==
+      JSON.stringify(buildOfficialEditForm(viewingOfficial));
+    if (!hasChanges) {
+      setViewingOfficial(null);
+      setEditingOfficial(null);
+      return;
+    }
+    setShowConfirmSaveEditDialog(true);
   };
 
   const handleConfirmDiscardEdit = () => {
@@ -599,8 +627,9 @@ export function BarangayOfficials() {
           official.barangayadminid === normalized.barangayadminid ? normalized : official
         )
       );
-      setViewingOfficial(normalized);
-      setEditingOfficial(buildOfficialEditForm(normalized));
+      setShowConfirmSaveEditDialog(false);
+      setViewingOfficial(null);
+      setEditingOfficial(null);
       toast.success("Official information updated.");
     } catch (err: any) {
       const errorMessage =
@@ -695,14 +724,38 @@ export function BarangayOfficials() {
                     <Input
                       id="name"
                       value={formData.name}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const rawValue = e.target.value;
+                        const hasInvalidCharacters = /[^a-zA-Z\s]/.test(rawValue);
+                        const sanitizedValue = toUppercaseInput(
+                          rawValue.replace(/[^a-zA-Z\s]/g, "")
+                        );
+
                         setFormData({
                           ...formData,
-                          name: toUppercaseInput(e.target.value),
-                        })
-                      }
+                          name: sanitizedValue,
+                        });
+                        setNameWarning(
+                          hasInvalidCharacters
+                            ? "Full Name must contain letters only. Numbers and special characters are not allowed."
+                            : ""
+                        );
+                      }}
                       placeholder="Enter full name"
+                      className={
+                        (saveAttempted && !formData.name.trim()) || nameWarning
+                          ? "border-red-500 ring-red-500"
+                          : ""
+                      }
                     />
+                    {nameWarning && (
+                      <p className="text-xs text-red-500 mt-1">{nameWarning}</p>
+                    )}
+                    {saveAttempted && !formData.name.trim() && !nameWarning && (
+                      <p className="text-xs text-red-500 mt-1">
+                        Full Name is required.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -1066,6 +1119,9 @@ export function BarangayOfficials() {
         open={!!viewingOfficial}
         onOpenChange={(open) => {
           if (!open) {
+            if (showConfirmSaveEditDialog) {
+              return;
+            }
             handleCancelEdit();
             return;
           }
@@ -1078,10 +1134,16 @@ export function BarangayOfficials() {
           }}
           onInteractOutside={(event) => {
             event.preventDefault();
+            if (showConfirmSaveEditDialog) {
+              return;
+            }
             handleCancelEdit();
           }}
           onEscapeKeyDown={(event) => {
             event.preventDefault();
+            if (showConfirmSaveEditDialog) {
+              return;
+            }
             handleCancelEdit();
           }}
         >
@@ -1118,12 +1180,12 @@ export function BarangayOfficials() {
                     </span>
                     <span
                       className={`rounded-full px-3 py-1 text-sm font-medium ${
-                        editingOfficial.status
+                        viewingOfficial.status
                           ? "bg-green-100 text-green-700"
                           : "bg-gray-200 text-gray-700"
                       }`}
                     >
-                      {formatStatusLabel(editingOfficial.status)}
+                      {formatStatusLabel(viewingOfficial.status)}
                     </span>
                   </div>
                 </div>
@@ -1268,7 +1330,7 @@ export function BarangayOfficials() {
             </div>
           )}
 
-          <DialogFooter className="-mx-6 -mb-6 mt-4 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
+          <DialogFooter className="-mx-6 -mb-6 mt-100 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
             <Button
               variant="outline"
               onClick={handleCancelEdit}
@@ -1277,7 +1339,7 @@ export function BarangayOfficials() {
             </Button>
             <Button
               className="bg-[#2957a1] hover:bg-[#1e3f7a]"
-              onClick={handleSaveOfficialEdit}
+              onClick={handleStartSaveOfficialEdit}
               disabled={loading}
             >
               Save Changes
@@ -1285,6 +1347,32 @@ export function BarangayOfficials() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={showConfirmSaveEditDialog}
+        onOpenChange={setShowConfirmSaveEditDialog}
+      >
+        <AlertDialogContent className="max-w-[420px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save official changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {viewingOfficial
+                ? `Are you sure you want to save the changes for ${viewingOfficial.adminname}?`
+                : "Are you sure you want to save these official changes?"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleSaveOfficialEdit()}
+              className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+              disabled={loading}
+            >
+              Confirm Save
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={showDiscardEditDialog}
@@ -1341,38 +1429,6 @@ export function BarangayOfficials() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog
-        open={!!confirmEditOfficial}
-        onOpenChange={(open) => {
-          if (!open) setConfirmEditOfficial(null);
-        }}
-      >
-        <AlertDialogContent className="max-w-[420px]">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Edit official information?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmEditOfficial
-                ? `Are you sure you want to edit the information of ${confirmEditOfficial.adminname}?`
-                : "Are you sure you want to edit this official's information?"}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-[#2957a1] hover:bg-[#1e3f7a]"
-              onClick={() => {
-                if (confirmEditOfficial) {
-                  openEditOfficial(confirmEditOfficial);
-                }
-                setConfirmEditOfficial(null);
-              }}
-            >
-              Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       {/* Officials Grid */}
       {loading ? (
         <Card>
@@ -1419,15 +1475,15 @@ export function BarangayOfficials() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 px-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                        onClick={() => setConfirmEditOfficial(official)}
+                        className="h-8 px-3 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                        onClick={() => openEditOfficial(official)}
                       >
                         Edit Info
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 px-3 text-[#2957a1] hover:text-[#1e3f7a] hover:bg-blue-50"
+                        className="h-8 px-3 text-sm font-medium text-[#2957a1] hover:text-[#1e3f7a] hover:bg-blue-50"
                         onClick={() => handleForgotPassword(official)}
                       >
                         Forgot Password
@@ -1438,7 +1494,7 @@ export function BarangayOfficials() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 px-3 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                              className="h-8 px-3 text-sm font-medium text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                               disabled={loading}
                             >
                               Deactivate
@@ -1470,19 +1526,19 @@ export function BarangayOfficials() {
                                 className="bg-orange-600 hover:bg-orange-700"
                                 disabled={loading}
                               >
-                                Inactivate
+                                Deactivate
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
                       ) : (
-                        // ✅ ADDED CONFIRMATION FOR REACTIVATE
+                        // ADDED CONFIRMATION FOR REACTIVATE
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 px-3 text-green-600 hover:text-green-700 hover:bg-green-50"
+                              className="h-8 px-3 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50"
                               disabled={loading}
                             >
                               Reactivate
@@ -1529,9 +1585,9 @@ export function BarangayOfficials() {
                       {official.adminname}
                     </h3>
                     <p className="text-sm font-semibold text-[#2957a1]">
-                      {official.position ?? "—"}
+                      {official.position ?? "-"}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="font - semibold text-sm text-gray-500">
                       Username: {official.barangayadminid}
                     </p>
                     {(official.termstart || official.termend) && (
@@ -1551,7 +1607,7 @@ export function BarangayOfficials() {
 
                     <div className="pt-2 space-y-1">
                       {official.email ? (
-                        <p className="text-xs text-gray-600">📧 {official.email}</p>
+                        <p className="text-sm text-gray-600">📧 {official.email}</p>
                       ) : null}
                     </div>
 

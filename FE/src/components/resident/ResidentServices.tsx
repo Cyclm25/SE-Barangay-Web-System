@@ -144,6 +144,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
   });
 
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [showFinalSubmitConfirm, setShowFinalSubmitConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -193,17 +194,25 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
   const finalDocumentType =
     formData.documentType === 'Others' ? formData.customDocumentType : formData.documentType;
 
-  const handleSubmitClick = () => {
+  const handleSubmitClick = (event?: React.MouseEvent<HTMLButtonElement>) => {
+    event?.preventDefault();
+    event?.stopPropagation();
     if (!finalDocumentType || !formData.purpose) return;
-    setShowSubmitConfirm(true);
+    requestAnimationFrame(() => setShowSubmitConfirm(true));
   };
 
   //  real submit to DB + notifications
   const handleConfirmSubmit = async () => {
     const residentId = residentProfile?.ResidentID;
-    if (!residentId) return;
+    if (!residentId) {
+      setShowSubmitConfirm(false);
+      return;
+    }
 
-    if (!finalDocumentType || !formData.purpose) return;
+    if (!finalDocumentType || !formData.purpose) {
+      setShowSubmitConfirm(false);
+      return;
+    }
 
     const token =
       localStorage.getItem("token") ||
@@ -230,16 +239,26 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
       if (!res.ok) {
         // backend sends {error, detail, code}
         console.error("Request submit failed:", data);
+        setShowSubmitConfirm(false);
         return;
       }
 
       // optional callback to parent
       if (onRequestSubmit && residentProfile) {
+        const fullName = [
+          residentProfile.FirstName,
+          residentProfile.MiddleName,
+          residentProfile.LastName,
+        ]
+          .filter((part) => {
+            const value = String(part ?? "").trim();
+            return value && value.toLowerCase() !== "null" && value.toLowerCase() !== "undefined";
+          })
+          .join(" ");
+
         onRequestSubmit({
           residentId,
-          name: `${residentProfile.FirstName} ${residentProfile.MiddleName} ${residentProfile.LastName}`
-            .replace(/\s+/g, " ")
-            .trim(),
+          name: fullName,
           documentType: finalDocumentType,
           purpose: formData.purpose,
           serviceType,
@@ -250,6 +269,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
 
       // reset form
       setFormData({ documentType: "", customDocumentType: "", purpose: "" });
+      setShowFinalSubmitConfirm(false);
       setShowSubmitConfirm(false);
     } finally {
       setIsSubmitting(false);
@@ -266,7 +286,12 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
   };
 
   const nameText = residentProfile
-    ? `${residentProfile.FirstName} ${residentProfile.MiddleName} ${residentProfile.LastName}`.replace(/\s+/g, ' ').trim()
+    ? [residentProfile.FirstName, residentProfile.MiddleName, residentProfile.LastName]
+        .filter((part) => {
+          const value = String(part ?? '').trim();
+          return value && value.toLowerCase() !== 'null' && value.toLowerCase() !== 'undefined';
+        })
+        .join(' ')
     : "Unknown Resident";
 
   return (
@@ -512,6 +537,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleSubmitClick}
                 disabled={isSubmitting || loadingProfile || !residentProfile}
                 className="px-10 py-3 rounded-lg text-[14px] font-bold text-white bg-[#5CE36C] hover:bg-[#4bc95b] transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -527,11 +553,12 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
       <ConfirmDialog
         isOpen={showSubmitConfirm}
         onClose={() => setShowSubmitConfirm(false)}
-        onConfirm={handleConfirmSubmit}
+        onConfirm={() => setShowFinalSubmitConfirm(true)}
         title="Confirm Document Request"
         message="Please review your request details before submitting:"
-        confirmText={isSubmitting ? "Submitting..." : "Submit Request"}
+        confirmText="Continue"
         cancelText="Cancel"
+        closeOnConfirm={false}
       >
         <div className="bg-blue-50 border-2 border-[#2957a1] rounded-lg p-4 space-y-2">
           <div className="flex justify-between">
@@ -552,6 +579,18 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
           </div>
         </div>
       </ConfirmDialog>
+
+      <ConfirmDialog
+        isOpen={showFinalSubmitConfirm}
+        onClose={() => setShowFinalSubmitConfirm(false)}
+        onConfirm={handleConfirmSubmit}
+        title="Submit Request?"
+        message="Are you sure you want to submit this document request? This action will send your request to the barangay for processing."
+        confirmText={isSubmitting ? "Submitting..." : "Yes, Submit Request"}
+        cancelText="Go Back"
+        type="warning"
+        closeOnConfirm={false}
+      />
 
       {/* Confirm Cancel */}
       <ConfirmDialog

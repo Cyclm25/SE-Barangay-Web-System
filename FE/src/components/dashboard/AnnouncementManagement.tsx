@@ -50,6 +50,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../utils/api";
+import imgBarangayLogo from "../../assets/barangaylogo.png";
 
 interface Announcement {
   id: string;
@@ -67,6 +68,20 @@ interface Announcement {
   status: "draft" | "posted" | "archived";
   tags: string[];
 }
+
+const createEmptyAnnouncementForm = () => ({
+  title: "",
+  content: "",
+  images: [] as string[],
+  targetAudience: ["all"] as string[],
+  tags: [] as string[],
+  isScheduled: false,
+  scheduledDate: "",
+  scheduledTime: "",
+  hasExpiration: false,
+  expirationDate: "",
+  expirationTime: "",
+});
 
 function formatAnnouncementDate(dateValue?: string | null) {
   if (!dateValue) return "";
@@ -164,7 +179,7 @@ function mapApiAnnouncementToUI(a: any): Announcement {
 
   const rawImages = a.Images ?? a.images;
   let parsedImages: string[] = [];
-  
+
   if (Array.isArray(rawImages)) {
     parsedImages = rawImages;
   } else if (typeof rawImages === 'string') {
@@ -190,7 +205,7 @@ function mapApiAnnouncementToUI(a: any): Announcement {
     id: String(a.AnnouncementID ?? a.announcementid ?? a.id),
     title: a.Title ?? a.title ?? "",
     content: a.Body ?? a.body ?? a.Content ?? a.content ?? "",
-    images: fixedImages, 
+    images: fixedImages,
     targetAudience: normalizeTargetAudienceArray(
       Array.isArray(a.Category)
         ? a.Category
@@ -222,43 +237,24 @@ export function AnnouncementManagement() {
   const [imageUploadSizes, setImageUploadSizes] = useState<Record<number, number>>({});
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [publishTarget, setPublishTarget] = useState<Announcement | null>(null);
+  const [isPostConfirmOpen, setIsPostConfirmOpen] = useState(false);
   const [isScheduleConfirmOpen, setIsScheduleConfirmOpen] = useState(false);
   const [activeAnnouncementTab, setActiveAnnouncementTab] = useState("posted");
   const previousDraftIdsRef = useRef<string[]>([]);
 
-  const [formData, setFormData] = useState({
-    title: "",
-    content: "",
-    images: [] as string[],
-    targetAudience: ["all"] as string[],
-    tags: [] as string[],
-    isScheduled: false,
-    scheduledDate: "",
-    scheduledTime: "",
-    hasExpiration: false,
-    expirationDate: "",
-    expirationTime: "",
-  });
+  const [formData, setFormData] = useState(createEmptyAnnouncementForm);
 
   const [newCustomAudience, setNewCustomAudience] = useState("");
 
   const resetForm = () => {
-    setFormData({
-      title: "",
-      content: "",
-      images: [],
-      targetAudience: ["all"],
-      tags: [],
-      isScheduled: false,
-      scheduledDate: "",
-      scheduledTime: "",
-      hasExpiration: false,
-      expirationDate: "",
-      expirationTime: "",
-    });
+    setFormData(createEmptyAnnouncementForm());
     setEditingAnnouncement(null);
     setNewCustomAudience("");
     setImageUploadSizes({});
+  };
+
+  const closeFullScreenImage = () => {
+    setFullScreenImage(null);
   };
 
   const closeAnnouncementDialog = () => {
@@ -266,8 +262,63 @@ export function AnnouncementManagement() {
     resetForm();
   };
 
+  const buildAnnouncementFormState = (announcement?: Announcement | null) => {
+    if (!announcement) {
+      return createEmptyAnnouncementForm();
+    }
+
+    let extractedSchDate = "";
+    let extractedSchTime = "";
+    if (announcement.scheduledPublishDate) {
+      const d = new Date(announcement.scheduledPublishDate);
+      extractedSchDate = d.toISOString().split("T")[0];
+      extractedSchTime = d.toTimeString().substring(0, 5);
+    }
+
+    let extractedExpDate = "";
+    let extractedExpTime = "";
+    if (announcement.expirationDate) {
+      const d = new Date(announcement.expirationDate);
+      extractedExpDate = d.toISOString().split("T")[0];
+      extractedExpTime = d.toTimeString().substring(0, 5);
+    }
+
+    return {
+      title: announcement.title,
+      content: announcement.content,
+      images: announcement.images,
+      targetAudience: announcement.targetAudience,
+      tags: announcement.tags,
+      isScheduled: announcement.isScheduled ?? false,
+      scheduledDate: extractedSchDate,
+      scheduledTime: extractedSchTime,
+      hasExpiration: !!announcement.expirationDate,
+      expirationDate: extractedExpDate,
+      expirationTime: extractedExpTime,
+    };
+  };
+
+  const hasAnnouncementDraftChanges = () => {
+    const baseline = buildAnnouncementFormState(editingAnnouncement);
+
+    const normalize = (value: typeof formData) => ({
+      ...value,
+      title: value.title.trim(),
+      content: value.content.trim(),
+      images: value.images.filter(Boolean),
+      targetAudience: [...value.targetAudience].sort(),
+      tags: [...value.tags].sort(),
+    });
+
+    return JSON.stringify(normalize(formData)) !== JSON.stringify(normalize(baseline));
+  };
+
   const requestAnnouncementDialogClose = () => {
-    if (editingAnnouncement) {
+    if (isPostConfirmOpen || isScheduleConfirmOpen || !!publishTarget || isSaving) {
+      return;
+    }
+
+    if (hasAnnouncementDraftChanges()) {
       setIsCancelConfirmOpen(true);
       return;
     }
@@ -294,6 +345,24 @@ export function AnnouncementManagement() {
     const interval = setInterval(fetchAnnouncements, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!fullScreenImage) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setFullScreenImage(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = "";
+    };
+  }, [fullScreenImage]);
 
   const handleImageFileUpload = async (file: File, index: number) => {
     if (!file) return;
@@ -431,7 +500,7 @@ export function AnnouncementManagement() {
         try {
           const actionType = editingAnnouncement ? "Updated Announcement" : "Created Announcement";
           const actionDetails = `Announcements - ${editingAnnouncement ? 'Updated' : 'Created'} announcement: ${formData.title.trim()} (Success)`;
-          
+
           await api.post("/api/transactions", {
             accountId: postedById,
             type: postedByRole,
@@ -447,10 +516,10 @@ export function AnnouncementManagement() {
           saveAsDraft
             ? "Announcement saved as draft"
             : formData.isScheduled
-            ? "Announcement scheduled successfully"
-            : editingAnnouncement
-            ? "Announcement updated successfully"
-            : "Announcement posted successfully"
+              ? "Announcement scheduled successfully"
+              : editingAnnouncement
+                ? "Announcement updated successfully"
+                : "Announcement posted successfully"
         );
         closeAnnouncementDialog();
         await fetchAnnouncements();
@@ -471,36 +540,7 @@ export function AnnouncementManagement() {
 
   const handleEdit = (announcement: Announcement) => {
     setEditingAnnouncement(announcement);
-    
-    let extractedSchDate = "";
-    let extractedSchTime = "";
-    if (announcement.scheduledPublishDate) {
-      const d = new Date(announcement.scheduledPublishDate);
-      extractedSchDate = d.toISOString().split("T")[0];
-      extractedSchTime = d.toTimeString().substring(0, 5);
-    }
-
-    let extractedExpDate = "";
-    let extractedExpTime = "";
-    if (announcement.expirationDate) {
-      const d = new Date(announcement.expirationDate);
-      extractedExpDate = d.toISOString().split("T")[0];
-      extractedExpTime = d.toTimeString().substring(0, 5);
-    }
-
-    setFormData({
-      title: announcement.title,
-      content: announcement.content,
-      images: announcement.images,
-      targetAudience: announcement.targetAudience,
-      tags: announcement.tags,
-      isScheduled: announcement.isScheduled ?? false,
-      scheduledDate: extractedSchDate,
-      scheduledTime: extractedSchTime,
-      hasExpiration: !!announcement.expirationDate,
-      expirationDate: extractedExpDate,
-      expirationTime: extractedExpTime,
-    });
+    setFormData(buildAnnouncementFormState(announcement));
     setIsDialogOpen(true);
   };
 
@@ -530,18 +570,18 @@ export function AnnouncementManagement() {
     try {
       const target = announcements.find(a => a.id === id);
       if (target) {
-         await api.put(`/api/announcements/${id}`, {
-           title: target.title,
-           body: target.content,
-           targetAudience: target.targetAudience,
-           status: 'posted',
-           images: target.images,
-           isScheduled: false,
-         });
-         toast.success("Announcement published");
-         await fetchAnnouncements();
+        await api.put(`/api/announcements/${id}`, {
+          title: target.title,
+          body: target.content,
+          targetAudience: target.targetAudience,
+          status: 'posted',
+          images: target.images,
+          isScheduled: false,
+        });
+        toast.success("Announcement published");
+        await fetchAnnouncements();
       }
-    } catch(err) {
+    } catch (err) {
       toast.error("Failed to publish");
     }
   };
@@ -549,6 +589,11 @@ export function AnnouncementManagement() {
   const handlePrimaryAnnouncementAction = () => {
     if (formData.isScheduled && !editingAnnouncement) {
       setIsScheduleConfirmOpen(true);
+      return;
+    }
+
+    if (!editingAnnouncement && !formData.isScheduled) {
+      setIsPostConfirmOpen(true);
       return;
     }
 
@@ -611,8 +656,12 @@ export function AnnouncementManagement() {
                 )}
               </div>
             ) : (
-              <div className="w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center">
-                <ImageIcon className="w-8 h-8 text-gray-400" />
+              <div className="w-32 h-32 rounded-lg border border-gray-200 bg-white flex items-center justify-center overflow-hidden">
+                <img
+                  src={imgBarangayLogo}
+                  alt="Barangay Logo"
+                  className="h-20 w-20 object-contain"
+                />
               </div>
             )}
           </div>
@@ -741,7 +790,7 @@ export function AnnouncementManagement() {
                       <AlertDialogAction
                         onClick={() => void handleArchive(announcement.id)}
                       >
-                        Yes, archive it
+                        Confirm
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -811,8 +860,12 @@ export function AnnouncementManagement() {
                     />
                   </div>
                 ) : (
-                  <div className="flex h-24 w-24 items-center justify-center rounded-xl bg-gray-100">
-                    <ImageIcon className="h-6 w-6 text-gray-400" />
+                  <div className="flex h-24 w-24 items-center justify-center rounded-xl border border-gray-200 bg-white overflow-hidden">
+                    <img
+                      src={imgBarangayLogo}
+                      alt="Barangay Logo"
+                      className="h-14 w-14 object-contain"
+                    />
                   </div>
                 )}
               </div>
@@ -914,7 +967,7 @@ export function AnnouncementManagement() {
                       <AlertDialogAction
                         onClick={() => void handleArchive(announcement.id)}
                       >
-                        Yes, archive it
+                        Confirm
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -965,14 +1018,14 @@ export function AnnouncementManagement() {
               {announcement.isScheduled && announcement.scheduledPublishDate
                 ? formatAnnouncementDate(announcement.scheduledPublishDate)
                 : announcement.datePosted
-                ? formatAnnouncementDate(announcement.datePosted)
-                : formatAnnouncementDate(announcement.dateCreated)}
+                  ? formatAnnouncementDate(announcement.datePosted)
+                  : formatAnnouncementDate(announcement.dateCreated)}
               <div className="mt-1 text-xs font-medium text-gray-500">
                 {announcement.isScheduled && announcement.scheduledPublishDate
                   ? formatAnnouncementTime(announcement.scheduledPublishDate)
                   : announcement.datePosted
-                  ? formatAnnouncementTime(announcement.datePosted)
-                  : formatAnnouncementTime(announcement.dateCreated)}
+                    ? formatAnnouncementTime(announcement.datePosted)
+                    : formatAnnouncementTime(announcement.dateCreated)}
               </div>
             </div>
 
@@ -1000,8 +1053,12 @@ export function AnnouncementManagement() {
                   />
                 </div>
               ) : (
-                <div className="inline-flex h-20 w-20 items-center justify-center rounded-xl border border-gray-200 bg-gray-50">
-                  <ImageIcon className="h-6 w-6 text-gray-400" />
+                <div className="inline-flex h-20 w-20 items-center justify-center rounded-xl border border-gray-200 bg-white overflow-hidden">
+                  <img
+                    src={imgBarangayLogo}
+                    alt="Barangay Logo"
+                    className="h-12 w-12 object-contain"
+                  />
                 </div>
               )}
             </div>
@@ -1056,7 +1113,7 @@ export function AnnouncementManagement() {
                       <AlertDialogAction
                         onClick={() => void handleArchive(announcement.id)}
                       >
-                        Yes, archive it
+                        Confirm
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -1092,6 +1149,10 @@ export function AnnouncementManagement() {
                 return;
               }
 
+              if (isPostConfirmOpen || isScheduleConfirmOpen || !!publishTarget || isSaving) {
+                return;
+              }
+
               requestAnnouncementDialogClose();
             }}
           >
@@ -1103,21 +1164,33 @@ export function AnnouncementManagement() {
             </DialogTrigger>
 
             <DialogContent
-              className="max-w-2xl max-h-[90vh] overflow-y-auto"
+              className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto"
               onInteractOutside={(event) => {
-                if (editingAnnouncement) {
+                if (isPostConfirmOpen || isScheduleConfirmOpen || !!publishTarget || isSaving) {
+                  event.preventDefault();
+                  return;
+                }
+                if (hasAnnouncementDraftChanges()) {
                   event.preventDefault();
                   setIsCancelConfirmOpen(true);
                 }
               }}
               onEscapeKeyDown={(event) => {
-                if (editingAnnouncement) {
+                if (isPostConfirmOpen || isScheduleConfirmOpen || !!publishTarget || isSaving) {
+                  event.preventDefault();
+                  return;
+                }
+                if (hasAnnouncementDraftChanges()) {
                   event.preventDefault();
                   setIsCancelConfirmOpen(true);
                 }
               }}
               onPointerDownOutside={(event) => {
-                if (editingAnnouncement) {
+                if (isPostConfirmOpen || isScheduleConfirmOpen || !!publishTarget || isSaving) {
+                  event.preventDefault();
+                  return;
+                }
+                if (hasAnnouncementDraftChanges()) {
                   event.preventDefault();
                   setIsCancelConfirmOpen(true);
                 }
@@ -1199,11 +1272,10 @@ export function AnnouncementManagement() {
 
                           {/* File upload button */}
                           <label
-                            className={`cursor-pointer flex items-center gap-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors whitespace-nowrap ${
-                              uploadingIndex === index
+                            className={`cursor-pointer flex items-center gap-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors whitespace-nowrap ${uploadingIndex === index
                                 ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
                                 : "bg-white text-[#2957a1] border-[#2957a1] hover:bg-blue-50"
-                            }`}
+                              }`}
                           >
                             {uploadingIndex === index ? (
                               <span className="text-xs">Uploading…</span>
@@ -1252,6 +1324,42 @@ export function AnnouncementManagement() {
                               <X className="w-4 h-4" />
                             </button>
                           )}
+
+                          {/* Fullscreen Image Modal */}
+                          {fullScreenImage && (
+                            <div
+                              className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm cursor-zoom-out"
+                              onMouseDown={(e) => {
+                                if (e.target === e.currentTarget) {
+                                  closeFullScreenImage();
+                                }
+                              }}
+                              onClick={(e) => {
+                                if (e.target === e.currentTarget) {
+                                  closeFullScreenImage();
+                                }
+                              }}
+                              role="dialog"
+                              aria-modal="true"
+                              aria-label="Image preview"
+                            >
+                              <button
+                                type="button"
+                                aria-label="Close image preview"
+                                className="absolute top-5 right-5 z-[210] flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white shadow-lg transition-all duration-200 hover:scale-105 hover:bg-white hover:text-black focus:outline-none focus:ring-2 focus:ring-white/80"
+                                onClick={(e) => { e.stopPropagation(); closeFullScreenImage(); }}
+                                title="Close preview"
+                              >
+                                <X className="h-8 w-8" />
+                              </button>
+                              <img
+                                src={fullScreenImage}
+                                alt="Fullscreen"
+                                className="max-w-[95vw] max-h-[95vh] object-contain rounded-lg shadow-2xl cursor-zoom-out"
+                                onClick={(e) => { e.stopPropagation(); closeFullScreenImage(); }}
+                              />
+                            </div>
+                          )}
                         </div>
 
                         {typeof imageUploadSizes[index] === "number" && (
@@ -1260,7 +1368,6 @@ export function AnnouncementManagement() {
                             {(imageUploadSizes[index] / (1024 * 1024)).toFixed(2)} MB / 5.00 MB
                           </p>
                         )}
-
                         {/* Preview */}
                         {formData.images[index] && (
                           <img
@@ -1320,11 +1427,10 @@ export function AnnouncementManagement() {
                             key={option.value}
                             type="button"
                             onClick={() => toggleTargetAudience(option.value)}
-                            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
-                              isSelected
+                            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${isSelected
                                 ? "border-[#2957a1] bg-blue-50 text-[#2957a1]"
                                 : "border-gray-200 bg-white text-gray-700 hover:border-[#2957a1]/40"
-                            }`}
+                              }`}
                           >
                             <span>{option.label}</span>
                             <span className="text-xs font-semibold">
@@ -1406,16 +1512,15 @@ export function AnnouncementManagement() {
                         📅 Will be published on{" "}
                         {formData.scheduledDate
                           ? new Date(
-                              `${formData.scheduledDate}T${
-                                formData.scheduledTime || "00:00"
-                              }`
-                            ).toLocaleDateString("en-US", {
-                              weekday: "long",
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            }) +
-                            ` at ${new Date(`2000-01-01T${formData.scheduledTime || "00:00"}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+                            `${formData.scheduledDate}T${formData.scheduledTime || "00:00"
+                            }`
+                          ).toLocaleDateString("en-US", {
+                            weekday: "long",
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          }) +
+                          ` at ${new Date(`2000-01-01T${formData.scheduledTime || "00:00"}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
                           : "the selected date"}
                       </p>
                     </div>
@@ -1487,16 +1592,15 @@ export function AnnouncementManagement() {
                         🗂️ Will be archived on{" "}
                         {formData.expirationDate
                           ? new Date(
-                              `${formData.expirationDate}T${
-                                formData.expirationTime || "23:59"
-                              }`
-                            ).toLocaleDateString("en-US", {
-                              weekday: "long",
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            }) +
-                            ` at ${new Date(`2000-01-01T${formData.expirationTime || "23:59"}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+                            `${formData.expirationDate}T${formData.expirationTime || "23:59"
+                            }`
+                          ).toLocaleDateString("en-US", {
+                            weekday: "long",
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          }) +
+                          ` at ${new Date(`2000-01-01T${formData.expirationTime || "23:59"}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
                           : "the selected date"}
                       </p>
                     </div>
@@ -1526,12 +1630,12 @@ export function AnnouncementManagement() {
                   {isSaving
                     ? "Processing..."
                     : formData.isScheduled
-                    ? editingAnnouncement
-                      ? "Save Edit"
-                      : "Schedule Announcement"
-                    : editingAnnouncement
-                    ? "Save Edit"
-                    : "Post Announcement"}
+                      ? editingAnnouncement
+                        ? "Save Edit"
+                        : "Schedule Announcement"
+                      : editingAnnouncement
+                        ? "Save Edit"
+                        : "Post Announcement"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -1543,9 +1647,15 @@ export function AnnouncementManagement() {
           >
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Cancel announcement editing?</AlertDialogTitle>
+                <AlertDialogTitle>
+                  {editingAnnouncement
+                    ? "Cancel announcement editing?"
+                    : "Cancel announcement creation?"}
+                </AlertDialogTitle>
                 <AlertDialogDescription>
-                  Are you sure you want to cancel editing this announcement? Any unsaved changes will be lost.
+                  {editingAnnouncement
+                    ? "Are you sure you want to cancel editing this announcement? Any unsaved changes will be lost."
+                    : "Are you sure you want to cancel creating this announcement? Any unsaved details will be lost."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -1595,6 +1705,31 @@ export function AnnouncementManagement() {
           </AlertDialog>
 
           <AlertDialog
+            open={isPostConfirmOpen}
+            onOpenChange={setIsPostConfirmOpen}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Post Announcement?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to post this announcement now? Residents will be able to view it immediately after confirmation.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    setIsPostConfirmOpen(false);
+                    void handleCreateOrUpdate(false);
+                  }}
+                >
+                  Confirm
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog
             open={isScheduleConfirmOpen}
             onOpenChange={setIsScheduleConfirmOpen}
           >
@@ -1605,13 +1740,13 @@ export function AnnouncementManagement() {
                   Are you sure you want to schedule this announcement for{" "}
                   {formData.scheduledDate
                     ? `${new Date(`${formData.scheduledDate}T00:00:00`).toLocaleDateString("en-US", {
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                      })} at ${new Date(`2000-01-01T${formData.scheduledTime || "00:00"}`).toLocaleTimeString("en-US", {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}`
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })} at ${new Date(`2000-01-01T${formData.scheduledTime || "00:00"}`).toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}`
                     : "the selected date and time"}
                   ?
                 </AlertDialogDescription>
@@ -1756,25 +1891,32 @@ export function AnnouncementManagement() {
                 </DialogHeader>
                 <div className="space-y-6 py-4">
                   {viewingAnnouncement.images &&
-                    viewingAnnouncement.images.length > 0 && (
-                      <div
-                        className={`grid ${
-                          viewingAnnouncement.images.length > 1
-                            ? "grid-cols-2"
-                            : "grid-cols-1"
+                    viewingAnnouncement.images.length > 0 ? (
+                    <div
+                      className={`grid ${viewingAnnouncement.images.length > 1
+                          ? "grid-cols-2"
+                          : "grid-cols-1"
                         } gap-2`}
-                      >
-                        {viewingAnnouncement.images.map((img, idx) => (
-                          <img
-                            key={idx}
-                            src={img}
-                            alt={`${viewingAnnouncement.title} - Image ${idx + 1}`}
-                            className="w-full h-64 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => setFullScreenImage(img)}
-                          />
-                        ))}
-                      </div>
-                    )}
+                    >
+                      {viewingAnnouncement.images.map((img, idx) => (
+                        <img
+                          key={idx}
+                          src={img}
+                          alt={`${viewingAnnouncement.title} - Image ${idx + 1}`}
+                          className="w-full h-64 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => setFullScreenImage(img)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center rounded-xl border border-gray-200 bg-gray-50 p-8">
+                      <img
+                        src={imgBarangayLogo}
+                        alt="Barangay Logo"
+                        className="h-32 w-32 object-contain"
+                      />
+                    </div>
+                  )}
                   <div className="prose max-w-none">
                     <p className="text-gray-700 whitespace-pre-wrap text-base leading-relaxed">
                       {viewingAnnouncement.content}
@@ -1792,19 +1934,19 @@ export function AnnouncementManagement() {
                       <span className="font-medium">
                         {viewingAnnouncement.datePosted
                           ? `Posted: ${new Date(
-                              viewingAnnouncement.datePosted
-                            ).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })}`
+                            viewingAnnouncement.datePosted
+                          ).toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })}`
                           : `Created: ${new Date(
-                              viewingAnnouncement.dateCreated
-                            ).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })}`}
+                            viewingAnnouncement.dateCreated
+                          ).toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })}`}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -1826,21 +1968,36 @@ export function AnnouncementManagement() {
 
       {/* Fullscreen Image Modal */}
       {fullScreenImage && (
-        <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm cursor-zoom-out"
-          onClick={() => setFullScreenImage(null)}
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm cursor-zoom-out"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              closeFullScreenImage();
+            }
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closeFullScreenImage();
+            }
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Image preview"
         >
-          <button 
-            className="absolute top-6 right-6 text-white hover:text-gray-300 bg-black/50 hover:bg-black/80 rounded-full p-2 transition-colors"
-            onClick={(e) => { e.stopPropagation(); setFullScreenImage(null); }}
+          <button
+            type="button"
+            aria-label="Close image preview"
+            className="absolute top-5 right-5 z-[210] flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white shadow-lg transition-all duration-200 hover:scale-105 hover:bg-white hover:text-black focus:outline-none focus:ring-2 focus:ring-white/80"
+            onClick={(e) => { e.stopPropagation(); closeFullScreenImage(); }}
+            title="Close preview"
           >
-            <X className="w-8 h-8" />
+            <X className="h-8 w-8" />
           </button>
-          <img 
-            src={fullScreenImage} 
-            alt="Fullscreen" 
-            className="max-w-[95vw] max-h-[95vh] object-contain rounded-lg shadow-2xl cursor-default"
-            onClick={(e) => e.stopPropagation()} 
+          <img
+            src={fullScreenImage}
+            alt="Fullscreen"
+            className="max-w-[95vw] max-h-[95vh] object-contain rounded-lg shadow-2xl cursor-zoom-out"
+            onClick={(e) => { e.stopPropagation(); closeFullScreenImage(); }}
           />
         </div>
       )}

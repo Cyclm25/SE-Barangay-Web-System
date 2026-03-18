@@ -259,7 +259,19 @@ router.patch("/:id/status", async (req, res) => {
         );
 
         if (result.rowCount === 0) return res.status(404).json({ message: "Official not found" });
-        res.json(result.rows[0]);
+        const row = result.rows[0];
+        res.json({
+            barangayadminid: row.BarangayAdminID,
+            adminname: row.AdminName,
+            position: row.Position,
+            email: row.Email,
+            status: row.Status,
+            datecreated: row.DateCreated,
+            contactnumber: row.ContactNumber,
+            termstart: normalizeDateValue(row.TermStart),
+            termend: normalizeDateValue(row.TermEnd),
+            profileimage: row.ProfileImage,
+        });
     } catch (err) {
         console.error("PATCH /api/officials/:id/status error:", err);
         res.status(500).json({ message: "Server error" });

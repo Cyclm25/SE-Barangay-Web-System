@@ -67,6 +67,18 @@ function formatRecentActivity(row: RecentActivityApiRow) {
     };
   }
 
+  const isRequestActivity =
+    /request/i.test(module) ||
+    /clearance|certificate|cedula|barangay id|business permit|document/i.test(action) ||
+    /\(pending\)|\bbarangay clearance\b|\bcertificate\b|\bcedula\b|\bbarangay id\b|\bbusiness permit\b/i.test(details);
+
+  if (isRequestActivity && /\bcreated\b/i.test(action)) {
+    return {
+      action: [account, action.replace(/\bcreated\b/gi, 'Requested'), module].filter(Boolean).join(' '),
+      name: details && details !== action ? details : '',
+    };
+  }
+
   const primary = [account, action, module].filter(Boolean).join(' ') || account;
   const secondary = details && details !== primary ? details : '';
 
@@ -219,7 +231,7 @@ export function DashboardHome({
   );
 
   const hasResidentChart = residentData.length > 0;
-  const hasVoterChart = voterData.length > 0;
+  const hasVoterChart = voterData.length > 0 && totalVoters > 0;
   const hasTrendChart = weeklyTrendData.length > 0;
 
   // Default weekly trend data (used when backend returns nothing)
@@ -451,8 +463,8 @@ export function DashboardHome({
 
         {/* Total Registered Residents */}
         <Card className="border-[#2957a1] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardContent className="p-4">
-            <p className="text-xs text-gray-700 mb-2">Total Registered Residents</p>
+          <CardContent className="flex h-full min-h-[190px] flex-col p-4">
+            <p className="text-md font-bold text-gray-700 mb-2">Total Registered Residents</p>
 
             <p className="text-[20px] font-semibold text-[#2957a1]">
               {statText(stats.totalResidents)}
@@ -461,7 +473,7 @@ export function DashboardHome({
             <button
               type="button"
               onClick={() => onNavigate?.('residents', 'all')}
-              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#2957a1] px-3 py-1.5 text-[13px] font-semibold text-[#2957a1] transition-all duration-200 hover:bg-[#2957a1] hover:text-white hover:shadow-sm sm:w-auto"
+              className="mt-auto inline-flex w-full items-center justify-center rounded-md border border-[#2957a1] px-3 py-1.5 text-[13px] font-semibold text-[#2957a1] transition-all duration-200 hover:bg-[#2957a1] hover:text-white hover:shadow-sm sm:w-auto"
             >
               View all residents
             </button>
@@ -470,9 +482,9 @@ export function DashboardHome({
 
         {/* New Residents */}
         <Card className="border-[#51c55f] bg-gradient-to-br from-green-50 to-white border-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardContent className="p-4">
+          <CardContent className="flex h-full min-h-[190px] flex-col p-4">
             <div className="flex justify-between items-start mb-2">
-              <p className="text-xs text-gray-700 font-semibold">New Residents</p>
+              <p className="text-md font-bold text-gray-700 mb-2">New Residents</p>
               <UserPlus className="w-4 h-4 text-green-600" />
             </div>
 
@@ -487,7 +499,7 @@ export function DashboardHome({
             <button
               type="button"
               onClick={() => onNavigate?.('residents', 'new')}
-              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#16a34a] px-3 py-1.5 text-[13px] font-semibold text-[#16a34a] transition-all duration-200 hover:bg-[#16a34a] hover:text-white hover:shadow-sm sm:w-auto"
+              className="mt-auto inline-flex w-full items-center justify-center rounded-md border border-[#16a34a] px-3 py-1.5 text-[13px] font-semibold text-[#16a34a] transition-all duration-200 hover:bg-[#16a34a] hover:text-white hover:shadow-sm sm:w-auto"
             >
               View new residents
             </button>
@@ -497,9 +509,9 @@ export function DashboardHome({
         {/* Total Barangay Officials */}
         {userRole === 'admin' && (
         <Card className="border-[#ffa62e] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardContent className="p-4">
+          <CardContent className="flex h-full min-h-[190px] flex-col p-4">
             <div className="flex justify-between items-start mb-2">
-              <p className="text-xs text-gray-700">Total Barangay Officials</p>
+              <p className="text-md font-bold text-gray-700">Total Barangay Officials</p>
               <Users className="w-4 h-4 text-orange-500" />
             </div>
 
@@ -510,7 +522,7 @@ export function DashboardHome({
             <button
               type="button"
               onClick={() => onNavigate?.('officials')}
-              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#f97316] px-3 py-1.5 text-[13px] font-semibold text-[#f97316] transition-all duration-200 hover:bg-[#f97316] hover:text-white hover:shadow-sm sm:w-auto"
+              className="mt-auto inline-flex w-full items-center justify-center rounded-md border border-[#f97316] px-3 py-1.5 text-[13px] font-semibold text-[#f97316] transition-all duration-200 hover:bg-[#f97316] hover:text-white hover:shadow-sm sm:w-auto"
             >
               Manage officials
             </button>
@@ -520,8 +532,8 @@ export function DashboardHome({
 
         {/* Total Pending Requests */}
         <Card className="border-[#f4b400] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardContent className="p-4">
-            <p className="text-xs text-gray-700 mb-2">Total Pending Requests</p>
+          <CardContent className="flex h-full min-h-[190px] flex-col p-4">
+            <p className="text-md font-bold text-gray-700 mb-2">Total Pending Requests</p>
 
             <p className="text-[20px] font-semibold text-[#2957a1]">
               {statText(stats.pendingRequests)}
@@ -530,7 +542,7 @@ export function DashboardHome({
             <button
               type="button"
               onClick={() => onNavigate?.('requests', 'pending')}
-              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#f4b400] px-3 py-1.5 text-[13px] font-semibold text-[#f4b400] transition-all duration-200 hover:bg-[#f4b400] hover:text-white hover:shadow-sm sm:w-auto"
+              className="mt-auto inline-flex w-full items-center justify-center rounded-md border border-[#f4b400] px-3 py-1.5 text-[13px] font-semibold text-[#f4b400] transition-all duration-200 hover:bg-[#f4b400] hover:text-white hover:shadow-sm sm:w-auto"
             >
               View pending
             </button>
@@ -539,8 +551,8 @@ export function DashboardHome({
 
         {/* Total Documents to Pickup */}
         <Card className="border-[#2957a1] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardContent className="p-4">
-            <p className="text-xs text-gray-700 mb-2">Total Documents to Pickup</p>
+          <CardContent className="flex h-full min-h-[190px] flex-col p-4">
+            <p className="text-md font-bold text-gray-700 mb-2">Total Documents to Pickup</p>
 
             <p className="text-[20px] font-semibold text-[#2957a1]">
               {statText(stats.documentsToPickup)}
@@ -549,7 +561,7 @@ export function DashboardHome({
             <button
               type="button"
               onClick={() => onNavigate?.('requests', 'pickup')}
-              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#2957a1] px-3 py-1.5 text-[13px] font-semibold text-[#2957a1] transition-all duration-200 hover:bg-[#2957a1] hover:text-white hover:shadow-sm sm:w-auto"
+              className="mt-auto inline-flex w-full items-center justify-center rounded-md border border-[#2957a1] px-3 py-1.5 text-[13px] font-semibold text-[#2957a1] transition-all duration-200 hover:bg-[#2957a1] hover:text-white hover:shadow-sm sm:w-auto"
             >
               View documents
             </button>
@@ -562,7 +574,7 @@ export function DashboardHome({
       <div className="space-y-6">
         <Card className="border-[#5ce36c] bg-white">
           <CardHeader>
-            <CardTitle className="text-center text-base">Residents by Type</CardTitle>
+            <CardTitle className="text-center text-base text-md font-bold">Residents by Type</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[250px] w-full">
@@ -570,7 +582,7 @@ export function DashboardHome({
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={residentData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="category" tick={{ fontSize: 10 }} />
+                    <XAxis dataKey="category" tick={{ fontSize: 14, fill: "#000000" }} />
                     <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                     <Tooltip cursor={{ fill: 'transparent' }} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
@@ -581,7 +593,7 @@ export function DashboardHome({
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-[250px] flex items-center justify-center text-sm text-gray-500">
+                <div className="h-[250px] flex items-center justify-center text-sm text-black-500">
                   No resident data available.
                 </div>
               )}
@@ -593,7 +605,7 @@ export function DashboardHome({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="border-[#4ade80] bg-white">
             <CardHeader>
-              <CardTitle className="text-center text-base flex items-center justify-center gap-2">
+              <CardTitle className="text-md font-bold text-center text-base flex items-center justify-center gap-2">
                 <TrendingUp className="w-5 h-5 text-green-600" />
                 New Residents Growth Trend
               </CardTitle>
@@ -629,7 +641,7 @@ export function DashboardHome({
           {/* Voters Distribution */}
           <Card className="border-[#5ce36c] bg-white">
             <CardHeader>
-              <CardTitle className="text-center text-base">Voters Distribution</CardTitle>
+              <CardTitle className="text-md font-bold text-center text-base">Voters Distribution</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-[250px] w-full flex items-center justify-center">
@@ -686,7 +698,7 @@ export function DashboardHome({
       {/* Recent Activities */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2 text-base text-md font-bold">
             <Calendar className="w-5 h-5" />
             Recent Activities
           </CardTitle>
@@ -712,10 +724,10 @@ export function DashboardHome({
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-medium">{activity.action}</p>
-                    {activity.name && <p className="text-xs text-gray-600">{activity.name}</p>}
+                    {activity.name && <p className="text-md text-gray-600">{activity.name}</p>}
                   </div>
                   {activity.time && (
-                    <span className="text-xs text-gray-500 whitespace-nowrap">
+                    <span className="text-md text-gray-500 whitespace-nowrap">
                       {activity.time}
                     </span>
                   )}

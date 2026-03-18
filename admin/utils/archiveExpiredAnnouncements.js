@@ -54,7 +54,7 @@ async function archiveExpiredAnnouncements() {
       [now]
     );
 
-    console.log(`[Announcement Expiration] ✅ Archived ${result.rowCount} announcement(s):`);
+    console.log(`[Announcement Expiration] Archived ${result.rowCount} announcement(s):`);
     result.rows.forEach((row) => {
       console.log(`  - ${row.Title} (ID: ${row.AnnouncementID}) expired at ${row.ExpirationDate}`);
     });

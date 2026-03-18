@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { api } from "../../utils/api";
+import imgBarangayLogo from "../../assets/barangaylogo.png";
 
 export interface Announcement {
   id: string;
@@ -35,8 +36,7 @@ type DBAnnouncement = {
   ExpirationDate?: string | null;
 };
 
-const PLACEHOLDER_IMAGE =
-  "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1200&q=80";
+const PLACEHOLDER_IMAGE = imgBarangayLogo;
 
 const POLL_INTERVAL_MS = 60 * 1000;
 
@@ -260,7 +260,11 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
                 <div className="relative bg-gray-200 overflow-hidden h-[180px] md:h-[220px]">
                   <ImageWithFallback
                     src={announcement.image}
-                    alt={announcement.title}
+                    alt={
+                      announcement.image === PLACEHOLDER_IMAGE
+                        ? "Barangay Logo"
+                        : announcement.title
+                    }
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                   <div className="absolute top-2 md:top-3 right-2 md:right-3 bg-white/95 backdrop-blur-sm px-2 md:px-3 py-1 rounded-full shadow-md">

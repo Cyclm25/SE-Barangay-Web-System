@@ -158,11 +158,11 @@ app.get("/_dbinfo", async (req, res) => {
 const PORT = 5001;
 app.listen(PORT, async () => {
   console.log(`Server started on http://localhost:${PORT}`);
-  console.log("[Scheduler] Announcement automation started — checking every 60s");
+  console.log("[Scheduler] Announcement automation started — checking every 180s");
 
   // Run immediately now that the server + DB are ready
   await runAnnouncementScheduler("startup");
 
   // Then repeat every 60 seconds
-  setInterval(() => runAnnouncementScheduler("interval"), 60 * 1000);
+  setInterval(() => runAnnouncementScheduler("interval"), 180 * 1000);
 });

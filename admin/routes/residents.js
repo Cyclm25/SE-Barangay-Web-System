@@ -3,20 +3,25 @@ const pool = require("../db");
 const bcrypt = require("bcrypt");
 const verifyToken = require("../middleware/verifyToken");
 
-async function hasResidentReligionColumn(client) {
+async function getResidentColumnName(columnName, client) {
   const db = client || pool;
   const result = await db.query(
     `
-    SELECT 1
+    SELECT column_name
     FROM information_schema.columns
     WHERE table_schema = 'public'
       AND table_name = 'resident'
-      AND column_name = 'religion'
+      AND LOWER(column_name) = LOWER($1)
     LIMIT 1
-    `
+    `,
+    [columnName]
   );
 
-  return result.rows.length > 0;
+  return result.rows[0]?.column_name || null;
+}
+
+async function hasResidentReligionColumn(client) {
+  return !!(await getResidentColumnName("religion", client));
 }
 
 async function generateNextResidentId(client) {
@@ -127,7 +132,11 @@ router.get("/:id", async (req, res) => {
   console.log("HIT /residents/:id =", req.params.id);
   try {
     const { id } = req.params;
-    const includeReligion = await hasResidentReligionColumn();
+    const religionColumn = await getResidentColumnName("religion");
+    const nationalityColumn = await getResidentColumnName("nationality");
+    const cityColumn = await getResidentColumnName("city");
+    const provinceColumn = await getResidentColumnName("province");
+    const zipCodeColumn = await getResidentColumnName("zipcode");
 
     const selectFields = [
       `"ResidentID"`,
@@ -157,8 +166,20 @@ router.get("/:id", async (req, res) => {
       `"status"`,
     ];
 
-    if (includeReligion) {
-      selectFields.push(`religion AS "Religion"`);
+    if (religionColumn) {
+      selectFields.push(`"${religionColumn}" AS "Religion"`);
+    }
+    if (nationalityColumn) {
+      selectFields.push(`"${nationalityColumn}" AS "Nationality"`);
+    }
+    if (cityColumn) {
+      selectFields.push(`"${cityColumn}" AS "City"`);
+    }
+    if (provinceColumn) {
+      selectFields.push(`"${provinceColumn}" AS "Province"`);
+    }
+    if (zipCodeColumn) {
+      selectFields.push(`"${zipCodeColumn}" AS "ZipCode"`);
     }
 
     const result = await pool.query(
@@ -234,6 +255,7 @@ if (!isAdminActor || !actorId) {
       emergencyContactName,
       emergencyContactNumber,
       emergencyContactAddress,
+      zipCode,
       password,
     } = req.body;
 
@@ -295,7 +317,15 @@ if (!isAdminActor || !actorId) {
 
     const profileImage = req.body.profileImage || null;
     const residentReligion = req.body.religion || null;
-    const includeReligion = await hasResidentReligionColumn(client);
+    const residentNationality = req.body.nationality || null;
+    const residentCity = req.body.city || null;
+    const residentProvince = req.body.province || null;
+    const residentZipCode = req.body.zipCode || req.body.postalCode || null;
+    const religionColumn = await getResidentColumnName("religion", client);
+    const nationalityColumn = await getResidentColumnName("nationality", client);
+    const cityColumn = await getResidentColumnName("city", client);
+    const provinceColumn = await getResidentColumnName("province", client);
+    const zipCodeColumn = await getResidentColumnName("zipcode", client);
     const newResidentId = await generateNextResidentId(client);
 
     const residentColumns = [
@@ -351,9 +381,25 @@ if (!isAdminActor || !actorId) {
       "Active",
     ];
 
-    if (includeReligion) {
-      residentColumns.push(`religion`);
+    if (religionColumn) {
+      residentColumns.push(`"${religionColumn}"`);
       residentValues.push(residentReligion);
+    }
+    if (nationalityColumn) {
+      residentColumns.push(`"${nationalityColumn}"`);
+      residentValues.push(residentNationality);
+    }
+    if (cityColumn) {
+      residentColumns.push(`"${cityColumn}"`);
+      residentValues.push(residentCity);
+    }
+    if (provinceColumn) {
+      residentColumns.push(`"${provinceColumn}"`);
+      residentValues.push(residentProvince);
+    }
+    if (zipCodeColumn) {
+      residentColumns.push(`"${zipCodeColumn}"`);
+      residentValues.push(residentZipCode);
     }
 
     const residentInsert = await client.query(
@@ -463,6 +509,9 @@ router.put("/:id", verifyToken, async (req, res) => {
       gender,
       civilStatus,
       religion,
+      nationality,
+      city,
+      province,
       residentType,
       voterStatus,
       houseNo,
@@ -476,6 +525,7 @@ router.put("/:id", verifyToken, async (req, res) => {
       emergencyContactName,
       emergencyContactNumber,
       emergencyContactAddress,
+      zipCode,
       profileImage,
     } = req.body;
 
@@ -528,7 +578,11 @@ router.put("/:id", verifyToken, async (req, res) => {
       return res.status(409).json({ error: "Contact number already exists." });
     }
 
-    const includeReligion = await hasResidentReligionColumn(client);
+    const religionColumn = await getResidentColumnName("religion", client);
+    const nationalityColumn = await getResidentColumnName("nationality", client);
+    const cityColumn = await getResidentColumnName("city", client);
+    const provinceColumn = await getResidentColumnName("province", client);
+    const zipCodeColumn = await getResidentColumnName("zipcode", client);
     const updateFields = [
       `"FirstName" = $1`,
       `"MiddleName" = $2`,
@@ -577,9 +631,25 @@ router.put("/:id", verifyToken, async (req, res) => {
       profileImage || null,
     ];
 
-    if (includeReligion) {
-      updateFields.push(`religion = $${updateValues.length + 1}`);
+    if (religionColumn) {
+      updateFields.push(`"${religionColumn}" = $${updateValues.length + 1}`);
       updateValues.push(religion || null);
+    }
+    if (nationalityColumn) {
+      updateFields.push(`"${nationalityColumn}" = $${updateValues.length + 1}`);
+      updateValues.push(nationality || null);
+    }
+    if (cityColumn) {
+      updateFields.push(`"${cityColumn}" = $${updateValues.length + 1}`);
+      updateValues.push(city || null);
+    }
+    if (provinceColumn) {
+      updateFields.push(`"${provinceColumn}" = $${updateValues.length + 1}`);
+      updateValues.push(province || null);
+    }
+    if (zipCodeColumn) {
+      updateFields.push(`"${zipCodeColumn}" = $${updateValues.length + 1}`);
+      updateValues.push(zipCode || null);
     }
 
     updateValues.push(id);

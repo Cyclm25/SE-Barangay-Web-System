@@ -41,7 +41,7 @@ async function createTestAnnouncements() {
       ]
     );
 
-    console.log('✅ Created:');
+    console.log('Created:');
     console.log(`   ID: ${result1.rows[0].AnnouncementID}`);
     console.log(`   Title: ${result1.rows[0].Title}`);
     console.log(`   Status: ${result1.rows[0].Status}`);
@@ -73,7 +73,7 @@ async function createTestAnnouncements() {
       ]
     );
 
-    console.log('✅ Created:');
+    console.log('Created:');
     console.log(`   ID: ${result2.rows[0].AnnouncementID}`);
     console.log(`   Title: ${result2.rows[0].Title}`);
     console.log(`   Status: ${result2.rows[0].Status}`);
@@ -96,7 +96,7 @@ async function createTestAnnouncements() {
 
 createTestAnnouncements()
   .then(() => {
-    console.log('✅ Done!\n');
+    console.log('Done!\n');
     process.exit(0);
   })
   .catch((err) => {

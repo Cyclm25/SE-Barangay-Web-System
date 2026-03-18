@@ -20,6 +20,7 @@ export function ProfileSidebar({
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [residentId, setResidentId] = useState<string>("");
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   useEffect(() => {
     const id = localStorage.getItem("residentId");
@@ -33,6 +34,14 @@ export function ProfileSidebar({
         if (!res.ok) return;
 
         setResidentId(data.ResidentID);
+        if (data.ProfileImage) {
+          const imageUrl = data.ProfileImage.startsWith("data:")
+            ? data.ProfileImage
+            : `http://localhost:5001${data.ProfileImage}`;
+          setProfileImage(imageUrl);
+        } else {
+          setProfileImage(null);
+        }
       } catch (err) {
         console.error("Failed to load resident:", err);
       }
@@ -62,7 +71,7 @@ export function ProfileSidebar({
       <div className="fixed right-0 top-0 bottom-0 w-[350px] bg-white shadow-2xl z-50 flex flex-col">
         <div className="bg-gradient-to-r from-[#2957a1] to-[#1e4380] px-6 py-8 flex items-center justify-between">
           <div>
-            <h2 className="text-white text-[22px] font-bold">Profile Menu</h2>
+            <h2 className="text-white text-[22px] font-bold">Profile</h2>
             <p className="text-white/80 text-[13px] mt-1">Manage your account</p>
           </div>
           <button
@@ -76,10 +85,18 @@ export function ProfileSidebar({
         {/* Profile Info */}
         <div className="px-6 py-6 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-[#2957a1] to-[#1e4380] rounded-full flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-[22px]">
-                {residentName?.charAt(0)}
-              </span>
+            <div className="w-16 h-16 rounded-full shadow-lg overflow-hidden bg-gradient-to-br from-[#2957a1] to-[#1e4380] flex items-center justify-center">
+              {profileImage ? (
+                <img
+                  src={profileImage}
+                  alt={`${residentName} profile`}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-white font-bold text-[22px]">
+                  {residentName?.charAt(0)}
+                </span>
+              )}
             </div>
             <div>
               <p className="font-bold text-gray-900 text-[16px]">{residentName}</p>
