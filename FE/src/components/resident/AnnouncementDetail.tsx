@@ -1,4 +1,5 @@
 import { ArrowLeft, Calendar, User, X } from "lucide-react";
+import { InquiryForm } from "./InquiryForm";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { useState, useEffect } from "react";
 import { DBAnnouncement } from "./ResidentAnnouncements";
@@ -41,11 +42,8 @@ export function AnnouncementDetail({
   announcement,
   onBack,
 }: AnnouncementDetailProps) {
-  
   const a = announcement || {};
   const [liveData, setLiveData] = useState<any>(null);
-  
-  // NEW: State to track which image is currently open in full screen
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -57,7 +55,9 @@ export function AnnouncementDetail({
         const res = await fetch("http://localhost:5001/api/announcements");
         if (res.ok) {
           const allAnnouncements = await res.json();
-          const exactMatch = allAnnouncements.find((x: any) => String(x.AnnouncementID) === String(id));
+          const exactMatch = allAnnouncements.find(
+            (x: any) => String(x.AnnouncementID) === String(id)
+          );
           if (exactMatch) {
             setLiveData(exactMatch);
           }
@@ -73,38 +73,56 @@ export function AnnouncementDetail({
   const source = liveData || a;
 
   const title = source.Title || source.title || a.title || "Untitled Announcement";
-  const body = source.Body || source.body || source.content || a.content || "No content available.";
-  
-  const rawCategory = source.Category || source.category || source.targetAudience || a.targetAudience;
-  const categories = Array.isArray(rawCategory) 
-    ? rawCategory 
-    : (rawCategory && rawCategory !== "all" ? [rawCategory] : []);
+  const body =
+    source.Body ||
+    source.body ||
+    source.content ||
+    a.content ||
+    "No content available.";
+
+  const rawCategory =
+    source.Category || source.category || source.targetAudience || a.targetAudience;
+
+  const categories = Array.isArray(rawCategory)
+    ? rawCategory
+    : rawCategory && rawCategory !== "all"
+      ? [rawCategory]
+      : [];
 
   const rawImages = source.Images || source.images || a.images;
   let parsedImages: string[] = [];
-  
+
   if (Array.isArray(rawImages)) {
     parsedImages = rawImages;
-  } else if (typeof rawImages === 'string') {
+  } else if (typeof rawImages === "string") {
     try {
       parsedImages = JSON.parse(rawImages);
     } catch {
-      const cleaned = rawImages.replace(/^{|}$/g, '');
-      parsedImages = cleaned ? cleaned.split(',').map(s => s.replace(/(^"|"$)/g, '').trim()) : [];
+      const cleaned = rawImages.replace(/^{|}$/g, "");
+      parsedImages = cleaned
+        ? cleaned.split(",").map((s) => s.replace(/(^"|"$)/g, "").trim())
+        : [];
     }
   }
 
   const displayImages = parsedImages
     .filter((img: string) => img && img.trim() !== "")
     .map((img: string) => {
-      let cleanUrl = img.trim();
-      if (cleanUrl.startsWith('/uploads')) {
+      const cleanUrl = img.trim();
+      if (cleanUrl.startsWith("/uploads")) {
         return `http://localhost:5001${cleanUrl}`;
       }
       return cleanUrl;
     });
 
-  const rawDate = source.PublishedDate || source.publisheddate || source.CreatedAt || source.createdat || a.datePosted || a.dateCreated;
+  const rawDate =
+    source.PublishedDate ||
+    source.publisheddate ||
+    source.CreatedAt ||
+    source.createdat ||
+    a.datePosted ||
+    a.dateCreated;
+
   let displayDate = "Date unavailable";
   if (rawDate) {
     const d = new Date(rawDate);
@@ -119,23 +137,42 @@ export function AnnouncementDetail({
     }
   }
 
-  const expirationDate = source.ExpirationDate || source.expirationdate || a.expirationDate;
+  const expirationDate =
+    source.ExpirationDate || source.expirationdate || a.expirationDate;
 
-  let rawName = source.PostedByName || source.postedByName || source.postedbyname || a.postedBy || a.postedByName;
-  let posterName = typeof rawName === 'string' ? rawName.split('(AD')[0].trim() : "";
-  if (!posterName || posterName.toLowerCase() === 'official' || posterName.toLowerCase() === 'system') {
+  const rawName =
+    source.PostedByName ||
+    source.postedByName ||
+    source.postedbyname ||
+    a.postedBy ||
+    a.postedByName;
+
+  let posterName = typeof rawName === "string" ? rawName.split("(AD")[0].trim() : "";
+  if (
+    !posterName ||
+    posterName.toLowerCase() === "official" ||
+    posterName.toLowerCase() === "system"
+  ) {
     posterName = "Barangay Official";
   }
 
-  let rawRole = source.PostedByRole || source.postedByRole || source.postedbyrole || a.PostedByRole || a.role;
-  let posterRole = typeof rawRole === 'string' ? rawRole : "Admin";
-  if (posterRole.toLowerCase() === 'official' || posterRole.toLowerCase() === 'admin') {
+  const rawRole =
+    source.PostedByRole ||
+    source.postedByRole ||
+    source.postedbyrole ||
+    a.PostedByRole ||
+    a.role;
+
+  let posterRole = typeof rawRole === "string" ? rawRole : "Admin";
+  if (
+    posterRole.toLowerCase() === "official" ||
+    posterRole.toLowerCase() === "admin"
+  ) {
     posterRole = "Barangay Admin";
   }
 
-  let posterDisplay = posterName === posterRole 
-    ? posterName 
-    : `${posterName} - ${posterRole}`;
+  const posterDisplay =
+    posterName === posterRole ? posterName : `${posterName} - ${posterRole}`;
 
   const normalizedCategories = categories.map(normalizeCategoryLabel);
   const priority = getPriorityBadge(categories);
@@ -167,7 +204,9 @@ export function AnnouncementDetail({
                       <Calendar className="w-4 h-4" />
                       <span>{displayDate}</span>
                       <span className="text-gray-400">•</span>
-                      <span className={`${priority.color} text-white px-3 py-0.5 rounded-full text-[11px] font-semibold`}>
+                      <span
+                        className={`${priority.color} text-white px-3 py-0.5 rounded-full text-[11px] font-semibold`}
+                      >
                         {priority.text}
                       </span>
                     </div>
@@ -175,30 +214,50 @@ export function AnnouncementDetail({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {normalizedCategories.filter((cat) => cat !== "Announcement").map((cat, index) => (
-                    <span key={index} className="px-3 py-1 rounded-full bg-blue-50 border border-[#2957a1]/30 text-[11px] font-semibold text-[#2957a1]">
-                      {cat}
-                    </span>
-                  ))}
+                  {normalizedCategories
+                    .filter((cat) => cat !== "Announcement")
+                    .map((cat, index) => (
+                      <span
+                        key={index}
+                        className="px-3 py-1 rounded-full bg-blue-50 border border-[#2957a1]/30 text-[11px] font-semibold text-[#2957a1]"
+                      >
+                        {cat}
+                      </span>
+                    ))}
                 </div>
               </div>
+
               <h1 className="text-[28px] font-bold text-[#2957a1] leading-tight">{title}</h1>
             </div>
 
-            {/* Post Images - Wrapped with onClick handlers */}
             {displayImages.length > 0 && (
               <div className="relative bg-gray-100">
                 {displayImages.length === 1 && (
-                  <div className="cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullScreenImage(displayImages[0])}>
-                    <ImageWithFallback src={displayImages[0]} alt={title} className="w-full h-auto max-h-[500px] object-cover" />
+                  <div
+                    className="cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => setFullScreenImage(displayImages[0])}
+                  >
+                    <ImageWithFallback
+                      src={displayImages[0]}
+                      alt={title}
+                      className="w-full h-auto max-h-[500px] object-cover"
+                    />
                   </div>
                 )}
 
                 {displayImages.length === 2 && (
                   <div className="grid grid-cols-2 gap-1">
                     {displayImages.map((img: string, idx: number) => (
-                      <div key={idx} className="cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullScreenImage(img)}>
-                        <ImageWithFallback src={img} alt={`${title} ${idx + 1}`} className="w-full h-[350px] object-cover" />
+                      <div
+                        key={idx}
+                        className="cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => setFullScreenImage(img)}
+                      >
+                        <ImageWithFallback
+                          src={img}
+                          alt={`${title} ${idx + 1}`}
+                          className="w-full h-[350px] object-cover"
+                        />
                       </div>
                     ))}
                   </div>
@@ -206,14 +265,35 @@ export function AnnouncementDetail({
 
                 {displayImages.length === 3 && (
                   <div className="grid grid-cols-2 gap-1">
-                    <div className="cursor-pointer hover:opacity-90 transition-opacity row-span-2" onClick={() => setFullScreenImage(displayImages[0])}>
-                      <ImageWithFallback src={displayImages[0]} alt={`${title} 1`} className="w-full h-[500px] object-cover" />
+                    <div
+                      className="cursor-pointer hover:opacity-90 transition-opacity row-span-2"
+                      onClick={() => setFullScreenImage(displayImages[0])}
+                    >
+                      <ImageWithFallback
+                        src={displayImages[0]}
+                        alt={`${title} 1`}
+                        className="w-full h-[500px] object-cover"
+                      />
                     </div>
-                    <div className="cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullScreenImage(displayImages[1])}>
-                      <ImageWithFallback src={displayImages[1]} alt={`${title} 2`} className="w-full h-[249px] object-cover" />
+                    <div
+                      className="cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => setFullScreenImage(displayImages[1])}
+                    >
+                      <ImageWithFallback
+                        src={displayImages[1]}
+                        alt={`${title} 2`}
+                        className="w-full h-[249px] object-cover"
+                      />
                     </div>
-                    <div className="cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullScreenImage(displayImages[2])}>
-                      <ImageWithFallback src={displayImages[2]} alt={`${title} 3`} className="w-full h-[249px] object-cover" />
+                    <div
+                      className="cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => setFullScreenImage(displayImages[2])}
+                    >
+                      <ImageWithFallback
+                        src={displayImages[2]}
+                        alt={`${title} 3`}
+                        className="w-full h-[249px] object-cover"
+                      />
                     </div>
                   </div>
                 )}
@@ -221,8 +301,16 @@ export function AnnouncementDetail({
                 {displayImages.length === 4 && (
                   <div className="grid grid-cols-2 gap-1">
                     {displayImages.map((img: string, idx: number) => (
-                      <div key={idx} className="cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullScreenImage(img)}>
-                        <ImageWithFallback src={img} alt={`${title} ${idx + 1}`} className="w-full h-[300px] object-cover" />
+                      <div
+                        key={idx}
+                        className="cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => setFullScreenImage(img)}
+                      >
+                        <ImageWithFallback
+                          src={img}
+                          alt={`${title} ${idx + 1}`}
+                          className="w-full h-[300px] object-cover"
+                        />
                       </div>
                     ))}
                   </div>
@@ -230,20 +318,55 @@ export function AnnouncementDetail({
 
                 {displayImages.length === 5 && (
                   <div className="grid grid-cols-3 gap-1">
-                    <div className="cursor-pointer hover:opacity-90 transition-opacity col-span-2" onClick={() => setFullScreenImage(displayImages[0])}>
-                      <ImageWithFallback src={displayImages[0]} alt={`${title} 1`} className="w-full h-[400px] object-cover" />
+                    <div
+                      className="cursor-pointer hover:opacity-90 transition-opacity col-span-2"
+                      onClick={() => setFullScreenImage(displayImages[0])}
+                    >
+                      <ImageWithFallback
+                        src={displayImages[0]}
+                        alt={`${title} 1`}
+                        className="w-full h-[400px] object-cover"
+                      />
                     </div>
-                    <div className="cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullScreenImage(displayImages[1])}>
-                      <ImageWithFallback src={displayImages[1]} alt={`${title} 2`} className="w-full h-[400px] object-cover" />
+                    <div
+                      className="cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => setFullScreenImage(displayImages[1])}
+                    >
+                      <ImageWithFallback
+                        src={displayImages[1]}
+                        alt={`${title} 2`}
+                        className="w-full h-[400px] object-cover"
+                      />
                     </div>
-                    <div className="cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullScreenImage(displayImages[2])}>
-                      <ImageWithFallback src={displayImages[2]} alt={`${title} 3`} className="w-full h-[199px] object-cover" />
+                    <div
+                      className="cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => setFullScreenImage(displayImages[2])}
+                    >
+                      <ImageWithFallback
+                        src={displayImages[2]}
+                        alt={`${title} 3`}
+                        className="w-full h-[199px] object-cover"
+                      />
                     </div>
-                    <div className="cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullScreenImage(displayImages[3])}>
-                      <ImageWithFallback src={displayImages[3]} alt={`${title} 4`} className="w-full h-[199px] object-cover" />
+                    <div
+                      className="cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => setFullScreenImage(displayImages[3])}
+                    >
+                      <ImageWithFallback
+                        src={displayImages[3]}
+                        alt={`${title} 4`}
+                        className="w-full h-[199px] object-cover"
+                      />
                     </div>
-                    <div className="cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullScreenImage(displayImages[4])}>
-                      <ImageWithFallback src={displayImages[4]} alt={`${title} 5`} className="w-full h-[199px] object-cover" />
+                    <div
+                      className="cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => setFullScreenImage(displayImages[4])}
+                    >
+                      <ImageWithFallback
+                        src={displayImages[4]}
+                        alt={`${title} 5`}
+                        className="w-full h-[199px] object-cover"
+                      />
                     </div>
                   </div>
                 )}
@@ -251,14 +374,31 @@ export function AnnouncementDetail({
                 {displayImages.length > 5 && (
                   <div className="grid grid-cols-2 gap-1">
                     {displayImages.slice(0, 3).map((img: string, idx: number) => (
-                      <div key={idx} className="cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullScreenImage(img)}>
-                        <ImageWithFallback src={img} alt={`${title} ${idx + 1}`} className="w-full h-[300px] object-cover" />
+                      <div
+                        key={idx}
+                        className="cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => setFullScreenImage(img)}
+                      >
+                        <ImageWithFallback
+                          src={img}
+                          alt={`${title} ${idx + 1}`}
+                          className="w-full h-[300px] object-cover"
+                        />
                       </div>
                     ))}
-                    <div className="relative cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullScreenImage(displayImages[3])}>
-                      <ImageWithFallback src={displayImages[3]} alt={`${title} 4`} className="w-full h-[300px] object-cover" />
+                    <div
+                      className="relative cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => setFullScreenImage(displayImages[3])}
+                    >
+                      <ImageWithFallback
+                        src={displayImages[3]}
+                        alt={`${title} 4`}
+                        className="w-full h-[300px] object-cover"
+                      />
                       <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                        <span className="text-white text-2xl font-bold">+{displayImages.length - 4}</span>
+                        <span className="text-white text-2xl font-bold">
+                          +{displayImages.length - 4}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -268,14 +408,22 @@ export function AnnouncementDetail({
 
             <div className="p-6">
               <div className="mb-6">
-                <p className="text-[16px] text-gray-800 leading-relaxed whitespace-pre-wrap">{body}</p>
+                <p className="text-[16px] text-gray-800 leading-relaxed whitespace-pre-wrap">
+                  {body}
+                </p>
               </div>
 
               {expirationDate && (
                 <div className="mb-4 px-4 py-2 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-700">
-                  This announcement expires on <span className="font-semibold">
-                    {new Date(expirationDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
-                  </span>.
+                  This announcement expires on{" "}
+                  <span className="font-semibold">
+                    {new Date(expirationDate).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </span>
+                  .
                 </div>
               )}
 
@@ -289,26 +437,30 @@ export function AnnouncementDetail({
               </div>
             </div>
           </div>
+
+          <InquiryForm announcementTitle={title} inline={true} />
         </div>
       </div>
 
-      {/* NEW: Fullscreen Image Modal */}
       {fullScreenImage && (
-        <div 
+        <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm cursor-zoom-out"
           onClick={() => setFullScreenImage(null)}
         >
-          <button 
+          <button
             className="absolute top-6 right-6 text-white hover:text-gray-300 bg-black/50 hover:bg-black/80 rounded-full p-2 transition-colors"
-            onClick={(e) => { e.stopPropagation(); setFullScreenImage(null); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setFullScreenImage(null);
+            }}
           >
             <X className="w-8 h-8" />
           </button>
-          <img 
-            src={fullScreenImage} 
-            alt="Fullscreen" 
+          <img
+            src={fullScreenImage}
+            alt="Fullscreen"
             className="max-w-[95vw] max-h-[95vh] object-contain rounded-lg shadow-2xl cursor-default"
-            onClick={(e) => e.stopPropagation()} 
+            onClick={(e) => e.stopPropagation()}
           />
         </div>
       )}

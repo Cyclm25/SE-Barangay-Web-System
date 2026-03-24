@@ -3,6 +3,21 @@ const pool = require("../db");
 const bcrypt = require("bcrypt");
 const verifyToken = require("../middleware/verifyToken");
 
+
+function calculateAge(birthday) {
+  const today = new Date();
+  const birth = new Date(birthday);
+
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+
+  return age;
+}
+
 async function hasResidentReligionColumn(client) {
   const db = client || pool;
   const result = await db.query(
@@ -150,6 +165,8 @@ router.get("/:id", async (req, res) => {
       LIMIT 1
       `,
       [id]
+
+      
     );
 
     if (result.rows.length === 0) {
@@ -216,6 +233,12 @@ if (!isAdminActor || !actorId) {
       emergencyContactAddress,
       password,
     } = req.body;
+
+    if (computedAge < 12) {
+  return res.status(400).json({
+    error: "Resident must be at least 12 years old.",
+  });
+}
 
     if (!password) {
       return res.status(400).json({ error: "Password is required" });
@@ -305,7 +328,7 @@ if (!isAdminActor || !actorId) {
       firstName,
       middleName,
       lastName,
-      parseInt(age, 10),
+    computedAge,
       birthday,
       gender,
       civilStatus,
