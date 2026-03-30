@@ -174,6 +174,14 @@ function toUppercaseInput(value: string) {
 }
 
 export function BarangayOfficials() {
+  // SK Kagawad read-only: disable all action buttons but keep them visible
+  const isReadOnly = (() => {
+    try {
+      const position = localStorage.getItem("position") ?? "";
+      return position.toLowerCase() === "sk kagawad";
+    } catch { return false; }
+  })();
+
   const initialFormData = {
     profileImage: "",
     name: "",
@@ -639,7 +647,7 @@ export function BarangayOfficials() {
             <DialogTrigger asChild>
               <Button
                 className="bg-[#2957a1] hover:bg-[#1e3f7a] text-white"
-                disabled={loading}
+                disabled={loading || isReadOnly}
               >
                 ADD NEW OFFICIAL
               </Button>
@@ -1361,6 +1369,7 @@ export function BarangayOfficials() {
                         size="sm"
                         className="h-8 px-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                         onClick={() => setConfirmEditOfficial(official)}
+                        disabled={isReadOnly}
                       >
                         Edit Info
                       </Button>
@@ -1369,6 +1378,7 @@ export function BarangayOfficials() {
                         size="sm"
                         className="h-8 px-3 text-[#2957a1] hover:text-[#1e3f7a] hover:bg-blue-50"
                         onClick={() => handleForgotPassword(official)}
+                        disabled={isReadOnly}
                       >
                         Forgot Password
                       </Button>
@@ -1379,7 +1389,7 @@ export function BarangayOfficials() {
                               variant="ghost"
                               size="sm"
                               className="h-8 px-3 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                              disabled={loading}
+                              disabled={loading || isReadOnly}
                             >
                               Deactivate
                             </Button>
@@ -1423,7 +1433,7 @@ export function BarangayOfficials() {
                               variant="ghost"
                               size="sm"
                               className="h-8 px-3 text-green-600 hover:text-green-700 hover:bg-green-50"
-                              disabled={loading}
+                              disabled={loading || isReadOnly}
                             >
                               Reactivate
                             </Button>

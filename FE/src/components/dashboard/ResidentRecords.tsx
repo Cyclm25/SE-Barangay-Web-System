@@ -60,6 +60,7 @@ interface ResidentRecordsProps {
   initialFilter?: 'all' | 'new';
   registrationCutoffDate?: string;
   onUpdateCutoffDate?: (date: string) => void;
+  userRole?: 'admin' | 'official' | 'sk_kagawad';
 }
 
 type ResidentStatus = "Active" | "Inactive";
@@ -517,7 +518,16 @@ export function ResidentRecords({
   initialFilter = 'all',
   registrationCutoffDate = getDefaultCutoffDate(),
   onUpdateCutoffDate,
+  userRole = 'admin',
 }: ResidentRecordsProps) {
+  // Dual-check: prop takes priority, but also verify via localStorage as a safety net
+  const isSkKagawad = userRole === 'sk_kagawad' || (() => {
+    try {
+      const appUser = JSON.parse(localStorage.getItem('app_user') || '{}');
+      return appUser?.role === 'sk_kagawad';
+    } catch { return false; }
+  })();
+
   const birthdayInputRef = useRef<HTMLInputElement | null>(null);
   const initialFormData = {
     profileImage: "",
@@ -1196,6 +1206,7 @@ export function ResidentRecords({
     toast.success("Resident list downloaded successfully!");
   };
 
+
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-full">
       <div className="flex items-center justify-between">
@@ -1249,7 +1260,8 @@ export function ResidentRecords({
             <span>Settings</span>
           </Button>
 
-          {/* Add New Resident Dialog */}
+          {/* Add New Resident Dialog — hidden for SK Kagawad (view-only role) */}
+          {!isSkKagawad && (
           <Dialog
             open={isAddDialogOpen}
             onOpenChange={handleAddDialogOpenChange}
@@ -1875,6 +1887,7 @@ export function ResidentRecords({
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          )} {/* end sk_kagawad gate */}
         </div>
       </div>
 
@@ -2004,6 +2017,7 @@ export function ResidentRecords({
                       </Button>
 
                       {resident.status === "Active" ? (
+                        !isSkKagawad && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
@@ -2039,7 +2053,9 @@ export function ResidentRecords({
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
+                        )
                       ) : (
+                        !isSkKagawad && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
@@ -2075,6 +2091,7 @@ export function ResidentRecords({
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
+                        )
                       )}
                     </div>
                   </TableCell>

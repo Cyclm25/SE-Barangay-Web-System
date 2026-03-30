@@ -50,6 +50,7 @@ interface OnlineRequestsProps {
   initialTab?: 'certificates' | 'other';
   onFilterChange?: (filter: string) => void;
   onTabChange?: (tab: 'certificates' | 'other') => void;
+  userRole?: 'admin' | 'official' | 'sk_kagawad';
 }
 
 export function OnlineRequests({
@@ -57,7 +58,17 @@ export function OnlineRequests({
   initialTab = 'certificates',
   onFilterChange,
   onTabChange,
+  userRole = 'admin',
 }: OnlineRequestsProps = {}) {
+  // SK Kagawad is view-only: cannot process, deny, or complete any requests
+  // Dual-check: prop takes priority, but also verify via localStorage as a safety net
+  const isReadOnly = userRole === 'sk_kagawad' || (() => {
+    try {
+      const appUser = JSON.parse(localStorage.getItem('app_user') || '{}');
+      return appUser?.role === 'sk_kagawad';
+    } catch { return false; }
+  })();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'certificates' | 'other'>(initialTab);
   const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>(
@@ -439,7 +450,7 @@ export function OnlineRequests({
                   )}
                 </div>
 
-                {request.status === 'Pending' && (
+                {request.status === 'Pending' && !isReadOnly && (
                   <>
                     {isOtherDocuments ? (
                       <Button
@@ -464,7 +475,7 @@ export function OnlineRequests({
                   </>
                 )}
 
-                {request.status === 'Processing' && (
+                {request.status === 'Processing' && !isReadOnly && (
                   <Button
                     size="sm"
                     className="bg-green-600 hover:bg-green-700 text-white"
@@ -474,7 +485,7 @@ export function OnlineRequests({
                   </Button>
                 )}
 
-                {request.status === 'Ready for Pickup' && (
+                {request.status === 'Ready for Pickup' && !isReadOnly && (
                   <Button
                     size="sm"
                     className="bg-gray-600 hover:bg-gray-700 text-white"
@@ -943,4 +954,3 @@ export function OnlineRequests({
     </div>
   );
 }
-

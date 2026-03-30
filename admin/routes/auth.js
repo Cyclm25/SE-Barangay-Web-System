@@ -33,7 +33,8 @@ router.post("/login", async (req, res) => {
         ra."BarangayAdminID" AS "BarangayAdminID",
         ra."SuperAdminID" AS "SuperAdminID",
         r."status" AS "ResidentStatus",
-        COALESCE(r."FirstName", ba."AdminName", 'Super Admin') AS "DisplayName"
+        COALESCE(r."FirstName", ba."AdminName", 'Super Admin') AS "DisplayName",
+        ba."Position" AS "Position"
       FROM residentaccount ra
       LEFT JOIN resident r ON ra."ResidentID" = r."ResidentID"
       LEFT JOIN barangayadmin ba ON ra."BarangayAdminID" = ba."BarangayAdminID"
@@ -62,6 +63,7 @@ router.post("/login", async (req, res) => {
 
     const ResidentStatus = row.ResidentStatus ?? row.residentstatus ?? null;
     const DisplayName = row.DisplayName ?? row.displayname ?? null;
+    const Position = row.Position ?? row.position ?? null;
 
     // Block only inactive residents
     if (ResidentID != null && ResidentStatus === "Inactive") {
@@ -99,6 +101,7 @@ router.post("/login", async (req, res) => {
         accountId: ResidentAccountID,
         type: userType,
         role: Role,
+        position: Position,
         residentId: ResidentID,
         barangayAdminId: BarangayAdminID,
         superAdminId: SuperAdminID,
@@ -114,6 +117,7 @@ router.post("/login", async (req, res) => {
         id: ResidentAccountID,
         type: userType,
         role: Role,
+        position: Position,
         displayName: DisplayName,
         residentId: ResidentID,
         barangayAdminId: BarangayAdminID,
