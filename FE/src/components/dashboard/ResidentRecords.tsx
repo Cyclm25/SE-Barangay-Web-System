@@ -1466,7 +1466,7 @@ export function ResidentRecords({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     <div className="space-y-2">
                       <Label>Age</Label>
                       <Input
@@ -1516,19 +1516,39 @@ export function ResidentRecords({
                       </Select>
                     </div>
 
+                  </div>
+
+                  {/* Religion — full row so long names don't overflow */}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Religion</Label>
-                      <Input
-                        className="text-sm uppercase"
-                        value={formData.religion}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            religion: toUppercaseInput(e.target.value),
-                          })
+                      <Select
+                        value={formData.religion || ""}
+                        onValueChange={(v) =>
+                          setFormData({ ...formData, religion: v })
                         }
-                        placeholder="Enter religion"
-                      />
+                      >
+                        <SelectTrigger className="uppercase">
+                          <SelectValue placeholder="SELECT RELIGION" />
+                        </SelectTrigger>
+                        <SelectContent className="uppercase">
+                          <SelectItem value="Roman Catholic">ROMAN CATHOLIC</SelectItem>
+                          <SelectItem value="Islam">ISLAM</SelectItem>
+                          <SelectItem value="Iglesia ni Cristo">IGLESIA NI CRISTO</SelectItem>
+                          <SelectItem value="Aglipayan">AGLIPAYAN (PHILIPPINE INDEPENDENT CHURCH)</SelectItem>
+                          <SelectItem value="Seventh-day Adventist">SEVENTH-DAY ADVENTIST</SelectItem>
+                          <SelectItem value="Bible Baptist Church">BIBLE BAPTIST CHURCH</SelectItem>
+                          <SelectItem value="United Church of Christ">UNITED CHURCH OF CHRIST</SelectItem>
+                          <SelectItem value="Jehovah's Witnesses">JEHOVAH'S WITNESSES</SelectItem>
+                          <SelectItem value="The Church of Jesus Christ">THE CHURCH OF JESUS CHRIST (LDS)</SelectItem>
+                          <SelectItem value="Born Again Christian">BORN AGAIN CHRISTIAN</SelectItem>
+                          <SelectItem value="Dating Daan">DATING DAAN (MCGI)</SelectItem>
+                          <SelectItem value="Buddhism">BUDDHISM</SelectItem>
+                          <SelectItem value="Hinduism">HINDUISM</SelectItem>
+                          <SelectItem value="None">NONE / NO RELIGION</SelectItem>
+                          <SelectItem value="Other">OTHER</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -2065,9 +2085,9 @@ export function ResidentRecords({
                               DEACTIVATE
                             </Button>
                           </AlertDialogTrigger>
-                          <AlertDialogContent>
+                          <AlertDialogContent className="sm:max-w-xl p-8">
                             <AlertDialogHeader>
-                              <AlertDialogTitle>
+                              <AlertDialogTitle className="text-2xl font-bold">
                                 Deactivate this account?
                               </AlertDialogTitle>
                               <AlertDialogDescription>
@@ -2104,9 +2124,9 @@ export function ResidentRecords({
                             </Button>
                           </AlertDialogTrigger>
 
-                          <AlertDialogContent>
+                          <AlertDialogContent className="sm:max-w-xl p-8">
                             <AlertDialogHeader>
-                              <AlertDialogTitle>
+                              <AlertDialogTitle className="text-2xl font-bold">
                                 Reactivate Account?
                               </AlertDialogTitle>
                               <AlertDialogDescription>
