@@ -101,13 +101,15 @@ export default function App() {
     let normalizedRole: 'admin' | 'official' | 'resident' | 'sk_kagawad';
 
     const dbRole = roleFromDb.toLowerCase().replace(/\s+/g, '').trim();
-    const position = (localStorage.getItem('position') ?? '').toLowerCase().trim();
+    const rawPosition = localStorage.getItem('position') ?? '';
+    const position = rawPosition.toLowerCase().replace(/\s+/g, ' ').trim();
 
     if (dbRole === 'superadmin') {
       normalizedRole = 'admin';
     } else if (dbRole === 'barangayadmin' || dbRole === 'admin') {
-      // Check if this admin is SK Kagawad
-      normalizedRole = position === 'sk kagawad' ? 'sk_kagawad' : 'official';
+      // Check if this admin is SK Kagawad — handle any casing/spacing variant
+      const isSkKagawad = position.includes('sk') && position.includes('kagawad');
+      normalizedRole = isSkKagawad ? 'sk_kagawad' : 'official';
     } else {
       normalizedRole = 'resident';
     }
@@ -116,9 +118,11 @@ export default function App() {
       id: username,
       name: firstName,
       role: normalizedRole,
-      position: localStorage.getItem('position') ?? '',
+      position: rawPosition,
     };
 
+    // Keep position in sync so components can read it independently
+    localStorage.setItem('position', rawPosition);
     setUser(userData);
     setIsAuthenticated(true);
     setAuthView('dashboard');
@@ -178,7 +182,7 @@ export default function App() {
           />
         );
       case 'officials':
-        return (user.role === 'admin' || user.role === 'official' || user.role === 'sk_kagawad') ? (
+        return (user.role === 'admin' || user.role === 'official') ? (
           <BarangayOfficials />
         ) : (
           <DashboardHome
@@ -201,14 +205,14 @@ export default function App() {
       case 'announcements':
         return <AnnouncementManagement />;
       case 'transactions':
-        return (user.role === 'admin' || user.role === 'official' || user.role === 'sk_kagawad') ? (
+        return (user.role === 'admin' || user.role === 'official') ? (
           <TransactionHistory />
         ) : (
           <DashboardHome
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
-            userRole={user.role === 'admin' ? 'admin' : 'official'}
+            userRole={user.role === 'sk_kagawad' ? 'official' : user.role}
           />
         );
       default:
@@ -293,7 +297,7 @@ export default function App() {
         onLogout={handleLogout}
         adminName={user.name}
         adminId={user.id}
-        userRole={user.role === 'sk_kagawad' ? 'sk_kagawad' : user.role === 'admin' ? 'admin' : user.role === 'official' ? 'official' : 'admin'}
+        userRole={user.role === 'admin' ? 'admin' : user.role === 'sk_kagawad' ? 'sk_kagawad' : user.role === 'official' ? 'official' : 'admin'}
       />
       <div className="flex-1 overflow-auto">{renderMainContent()}</div>
       <Toaster position="top-right" />

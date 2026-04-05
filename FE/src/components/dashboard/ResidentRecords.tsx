@@ -672,6 +672,13 @@ export function ResidentRecords({
     (invalidContact(formData.contactNumber) || contactNumberAlreadyExists);
   const emailError =
     saveAttempted && (invalidEmail(formData.email) || emailAlreadyExists);
+  // Address & Contact required fields
+  const houseNoError = saveAttempted && isBlank(formData.houseNo);
+  const streetAddressError = saveAttempted && isBlank(formData.streetAddress);
+  // Emergency contact required fields
+  const emergencyNameError = saveAttempted && isBlank(formData.emergencyContactName);
+  const emergencyNumberError = saveAttempted && invalidContact(formData.emergencyContactNumber);
+  const emergencyAddressError = saveAttempted && isBlank(formData.emergencyContactAddress);
 
   // ADDED FEATURE: SETTINGS HANDLER
   const handleSaveSettings = () => {
@@ -884,7 +891,12 @@ export function ResidentRecords({
       invalidContact(formData.contactNumber) ||
       contactNumberAlreadyExists ||
       invalidEmail(formData.email) ||
-      emailAlreadyExists
+      emailAlreadyExists ||
+      isBlank(formData.houseNo) ||
+      isBlank(formData.streetAddress) ||
+      isBlank(formData.emergencyContactName) ||
+      invalidContact(formData.emergencyContactNumber) ||
+      isBlank(formData.emergencyContactAddress)
     ) {
       toast.error("Please fill in all required fields correctly.");
       return;
@@ -1571,7 +1583,7 @@ export function ResidentRecords({
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>House No.</Label>
+                      <Label>House No. *</Label>
                       <Input
                         value={formData.houseNo}
                         onChange={(e) =>
@@ -1581,10 +1593,14 @@ export function ResidentRecords({
                           })
                         }
                         placeholder="House number"
+                        className={houseNoError ? "border-red-500 ring-red-500" : ""}
                       />
+                      {houseNoError && (
+                        <p className="text-xs text-red-500 mt-1">House number is required.</p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <Label>Street Address</Label>
+                      <Label>Street Address *</Label>
                       <Input
                         value={formData.streetAddress}
                         onChange={(e) =>
@@ -1594,7 +1610,11 @@ export function ResidentRecords({
                           })
                         }
                         placeholder="Street address"
+                        className={streetAddressError ? "border-red-500 ring-red-500" : ""}
                       />
+                      {streetAddressError && (
+                        <p className="text-xs text-red-500 mt-1">Street address is required.</p>
+                      )}
                     </div>
                   </div>
 
@@ -1814,7 +1834,7 @@ export function ResidentRecords({
                   </h3>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Name</Label>
+                      <Label>Name *</Label>
                       <Input
                         value={formData.emergencyContactName}
                         onChange={(e) =>
@@ -1826,10 +1846,14 @@ export function ResidentRecords({
                           })
                         }
                         placeholder="Emergency contact name"
+                        className={emergencyNameError ? "border-red-500 ring-red-500" : ""}
                       />
+                      {emergencyNameError && (
+                        <p className="text-xs text-red-500 mt-1">Emergency contact name is required.</p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <Label>Emergency Contact Number</Label>
+                      <Label>Emergency Contact Number *</Label>
                       <Input
                         type="text"
                         inputMode="numeric"
@@ -1843,9 +1867,11 @@ export function ResidentRecords({
                           });
                         }}
                         className={
-                          formData.emergencyContactNumber.length > 11
+                          formData.emergencyContactNumber.length > 11 || emergencyNumberError
                             ? "border-red-500 ring-red-500"
-                            : ""
+                            : formData.emergencyContactNumber.length === 11
+                              ? "border-green-500 ring-green-500"
+                              : ""
                         }
                         placeholder="09XX XXX XXXX"
                       />
@@ -1854,10 +1880,18 @@ export function ResidentRecords({
                           Contact number must not exceed 11 digits.
                         </p>
                       )}
+                      {emergencyNumberError && formData.emergencyContactNumber.length <= 11 && (
+                        <p className="text-xs text-red-500 mt-1">
+                          Emergency contact number must be 11 digits.
+                        </p>
+                      )}
+                      {formData.emergencyContactNumber.length === 11 && (
+                        <p className="text-xs text-green-600 mt-1">Contact number complete (11 digits)✅</p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Address</Label>
+                    <Label>Address *</Label>
                     <Input
                       value={formData.emergencyContactAddress}
                       onChange={(e) =>
@@ -1869,7 +1903,11 @@ export function ResidentRecords({
                         })
                       }
                       placeholder="Emergency contact address"
+                      className={emergencyAddressError ? "border-red-500 ring-red-500" : ""}
                     />
+                    {emergencyAddressError && (
+                      <p className="text-xs text-red-500 mt-1">Emergency contact address is required.</p>
+                    )}
                   </div>
                 </div>
               </div>

@@ -19,7 +19,7 @@ interface DashboardHomeProps {
   adminName: string;
   onNavigate?: (tab: string, filter?: string) => void;
   registrationCutoffDate?: string;
-  userRole?: 'admin' | 'official' | 'resident';
+  userRole?: 'admin' | 'official' | 'resident' | 'sk_kagawad';
 }
 
 type DashboardStatsResponse = {
