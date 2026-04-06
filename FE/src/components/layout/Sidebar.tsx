@@ -20,6 +20,7 @@ interface SidebarProps {
   onLogout: () => void;
   adminName: string;
   adminId: string;
+  position?: string;
   userRole?: 'admin' | 'official' | 'superadmin' | 'sk_kagawad';
 }
 
@@ -32,8 +33,20 @@ const navigation = [
   { id: 'transactions',  label: 'Transaction History',icon: History,         roles: ['admin', 'superadmin'] },
 ];
 
-export function Sidebar({ activeTab, onTabChange, onLogout, adminName, adminId, userRole = 'admin' }: SidebarProps) {
+export function Sidebar({
+  activeTab,
+  onTabChange,
+  onLogout,
+  adminName,
+  adminId,
+  position,
+  userRole = 'admin'
+}: SidebarProps) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const displayRoleLabel =
+    userRole === 'superadmin'
+      ? 'Super Administrator'
+      : position?.trim() || (userRole === 'sk_kagawad' ? 'SK Kagawad' : 'Barangay Official');
 
   // Filters navigation based on the userRole string passed from App.tsx
   const filteredNavigation = navigation.filter(item => item.roles.includes(userRole));
@@ -91,10 +104,7 @@ export function Sidebar({ activeTab, onTabChange, onLogout, adminName, adminId, 
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-semibold truncate">{adminName}</p>
             <p className="text-[11px] text-white/70 truncate">
-              {/* Dynamic role label */}
-              {userRole === 'superadmin' ? 'Super Administrator' :
-                userRole === 'admin' ? 'Barangay Secretary' :
-                userRole === 'sk_kagawad' ? 'SK Kagawad' : 'Barangay Official'}
+              {displayRoleLabel}
             </p>
           </div>
         </div>

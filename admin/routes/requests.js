@@ -2,6 +2,8 @@
 const router = require("express").Router();
 const pool = require("../db");
 const nodemailer = require("nodemailer");
+const verifyToken = require("../middleware/verifyToken");
+const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
 require("dotenv").config();
 
 /* ==============================
@@ -145,7 +147,7 @@ router.post("/", async (req, res) => {
    + SEND EMAIL TO RESIDENT
 ============================== */
 
-router.patch("/:id/status", async (req, res) => {
+router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, res) => {
   const client = await pool.connect();
 
   try {

@@ -49,6 +49,7 @@ import { format } from "date-fns";
 import dayjs from "dayjs";
 import { cn } from "../../utils/cn";
 import { ProfileImageUpload } from "../ui/ProfileImageUpload";
+import { api } from "../../utils/api";
 
 // Helper: Get default cutoff date (30 days ago)
 const getDefaultCutoffDate = () => {
@@ -99,6 +100,13 @@ interface Resident {
   religion?: string | null;
 
 }
+
+const dataPrivacyHighlights = [
+  "The information provided is true and correct to the best of your knowledge.",
+  "The collected data will only be used for legitimate barangay management and record-keeping purposes.",
+  "Authorized barangay personnel may access and process the information in accordance with applicable data privacy laws.",
+  "Reasonable security measures will be applied to protect personal information from unauthorized access or disclosure.",
+];
 
 type ResidentRow = {
   ResidentID: string;
@@ -1032,28 +1040,7 @@ export function ResidentRecords({
         Math.floor(Math.random() * 9999)
       ).padStart(4, "0")}`;
 
-      let token =
-        localStorage.getItem("token") ||
-        localStorage.getItem("authToken") ||
-        localStorage.getItem("jwt") ||
-        null;
-
-      if (token) {
-        token = token.replace(/^"|"$/g, '');
-      }
-
-      if (!token) {
-        toast.error("Missing login token. Please log in again.");
-        return;
-      }
-
-      const response = await fetch(`${API_BASE}/residents/register`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+      const response = await api.post("/residents/register", {
           residentNo: nextNo,
           profileImage: pendingResident.profileImage,
           firstName: pendingResident.firstName,
@@ -1080,12 +1067,10 @@ export function ResidentRecords({
           emergencyContactNumber: pendingResident.emergencyContactNumber,
           emergencyContactAddress: pendingResident.emergencyContactAddress,
           password,
-        }),
       });
+      const data = response.data;
 
-      const data = await response.json();
-
-      if (response.ok) {
+      if (response.status >= 200 && response.status < 300) {
         toast.success("Resident and Account successfully saved!");
         await loadResidents();
         setShowPasswordDialog(false);
@@ -1103,8 +1088,19 @@ export function ResidentRecords({
         }
         toast.error(data?.error || "Database failed to save record.");
       }
-    } catch (err) {
-      toast.error("Could not reach backend server.");
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      if (status === 409) {
+        const message = String(data?.error || "").toLowerCase();
+        if (message.includes("email")) {
+          setEmailAlreadyExists(true);
+        }
+        if (message.includes("contact")) {
+          setContactNumberAlreadyExists(true);
+        }
+      }
+      toast.error(data?.error || "Could not reach backend server.");
       console.error(err);
     }
   };
@@ -1128,28 +1124,7 @@ export function ResidentRecords({
     }
 
     try {
-      let token =
-        localStorage.getItem("token") ||
-        localStorage.getItem("authToken") ||
-        localStorage.getItem("jwt") ||
-        null;
-
-      if (token) {
-        token = token.replace(/^"|"$/g, "");
-      }
-
-      if (!token) {
-        toast.error("Missing login token. Please log in again.");
-        return;
-      }
-
-      const response = await fetch(`${API_BASE}/residents/${editingResident.residentNo}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+      const response = await api.put(`/residents/${editingResident.residentNo}`, {
           profileImage: formData.profileImage,
           firstName: formData.firstName,
           middleName: formData.middleName,
@@ -1174,12 +1149,10 @@ export function ResidentRecords({
           emergencyContactName: formData.emergencyContactName,
           emergencyContactNumber: formData.emergencyContactNumber,
           emergencyContactAddress: formData.emergencyContactAddress,
-        }),
       });
+      const data = response.data;
 
-      const data = await response.json();
-
-      if (!response.ok) {
+      if (response.status < 200 || response.status >= 300) {
         if (response.status === 409) {
           const message = String(data?.error || "").toLowerCase();
           if (message.includes("email")) setEmailAlreadyExists(true);
@@ -1196,8 +1169,15 @@ export function ResidentRecords({
       setEditingResident(null);
       resetForm();
       await loadResidents();
-    } catch (err) {
-      toast.error("Could not reach backend server.");
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      if (status === 409) {
+        const message = String(data?.error || "").toLowerCase();
+        if (message.includes("email")) setEmailAlreadyExists(true);
+        if (message.includes("contact")) setContactNumberAlreadyExists(true);
+      }
+      toast.error(data?.error || "Could not reach backend server.");
       console.error(err);
     }
   };
@@ -1211,42 +1191,34 @@ export function ResidentRecords({
 
   const handleInactivate = async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE}/residents/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Inactive" }),
-      });
-      const data = await response.json();
+      const response = await api.patch(`/residents/${id}/status`, { status: "Inactive" });
+      const data = response.data;
 
-      if (response.ok) {
+      if (response.status >= 200 && response.status < 300) {
         await loadResidents();
         toast.success("Record updated to Inactive");
       } else {
         toast.error(data?.error || "Update failed.");
       }
-    } catch (err) {
-      toast.error("Update failed.");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Update failed.");
       console.error(err);
     }
   };
 
   const handleReactivate = async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE}/residents/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Active" }),
-      });
-      const data = await response.json();
+      const response = await api.patch(`/residents/${id}/status`, { status: "Active" });
+      const data = response.data;
 
-      if (response.ok) {
+      if (response.status >= 200 && response.status < 300) {
         await loadResidents();
         toast.success("Record reactivated");
       } else {
         toast.error(data?.error || "Reactivation failed.");
       }
-    } catch (err) {
-      toast.error("Reactivation failed.");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Reactivation failed.");
       console.error(err);
     }
   };

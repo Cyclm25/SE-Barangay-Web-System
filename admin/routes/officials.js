@@ -2,6 +2,65 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const bcrypt = require("bcrypt");
+const verifyToken = require("../middleware/verifyToken");
+const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
+
+const OFFICIAL_POSITIONS = new Set([
+    "Barangay Captain",
+    "Kagawad",
+    "SK Kagawad",
+    "SK Chairman",
+    "Secretary",
+    "Treasurer",
+]);
+
+function cleanString(value) {
+    return String(value ?? "").trim();
+}
+
+function normalizeDigits(value) {
+    return String(value ?? "").replace(/\D/g, "").trim();
+}
+
+function isValidGmail(value) {
+    return /^[a-z0-9](\.?[a-z0-9]){5,29}@gmail\.com$/i.test(cleanString(value).toLowerCase());
+}
+
+function isLettersAndSpaces(value) {
+    return /^[A-Za-z\s]+$/.test(cleanString(value));
+}
+
+function validateOfficialPayload({
+    adminName,
+    position,
+    email,
+    contactnumber,
+    requirePassword = false,
+    password,
+    termStart,
+    termEnd,
+}) {
+    if (!cleanString(adminName)) return "Full name is required.";
+    if (!isLettersAndSpaces(adminName)) return "Full name must contain letters and spaces only.";
+    if (cleanString(adminName).length > 50) return "Full name must not exceed 50 characters.";
+
+    if (!cleanString(position)) return "Position is required.";
+    if (!OFFICIAL_POSITIONS.has(cleanString(position))) return "Position is invalid.";
+
+    if (!cleanString(email)) return "Email is required.";
+    if (!isValidGmail(email)) return "Only valid Gmail addresses are allowed.";
+    if (cleanString(email).length > 60) return "Email must not exceed 60 characters.";
+
+    if (!/^\d{11}$/.test(contactnumber)) return "Contact number must be exactly 11 digits.";
+
+    if (requirePassword && !cleanString(password)) return "Password is required.";
+
+    if (termStart && termEnd && termEnd < termStart) {
+        return "Term end date cannot be earlier than term start date.";
+    }
+
+    return null;
+}
 
 function normalizeDateValue(value) {
     if (!value) return null;
@@ -67,7 +126,7 @@ router.get("/", async (req, res) => {
 });
 
 // POST create official (with bcrypt + generated BarangayAdminID)
-router.post("/", async (req, res) => {
+router.post("/", verifyToken, requireNonSkWriteAccess, async (req, res) => {
     const client = await pool.connect();
     try {
         const adminName = req.body.adminName ?? req.body.adminname;
@@ -84,14 +143,18 @@ router.post("/", async (req, res) => {
             .replace(/\D/g, "")
             .trim();
 
-        if (!/^\d{11}$/.test(contactnumber)) {
-            return res.status(400).json({
-                message: "Contact number must be exactly 11 digits."
-            });
-        }
-
-        if (!adminName || !email || !password) {
-            return res.status(400).json({ message: "adminName, email and password are required" });
+        const validationError = validateOfficialPayload({
+            adminName,
+            position,
+            email,
+            contactnumber,
+            requirePassword: true,
+            password,
+            termStart,
+            termEnd,
+        });
+        if (validationError) {
+            return res.status(400).json({ message: validationError });
         }
 
         await client.query("BEGIN");
@@ -161,7 +224,7 @@ router.post("/", async (req, res) => {
 });
 
 // PUT update official
-router.put("/:id", async (req, res) => {
+router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
     try {
         const { id } = req.params;
         const adminName = req.body.adminName ?? req.body.adminname;
@@ -184,10 +247,16 @@ router.put("/:id", async (req, res) => {
             .replace(/\D/g, "")
             .trim();
 
-        if (contactnumber && !/^\d{11}$/.test(contactnumber)) {
-            return res.status(400).json({
-                message: "Contact number must be exactly 11 digits."
-            });
+        const validationError = validateOfficialPayload({
+            adminName,
+            position,
+            email,
+            contactnumber,
+            termStart,
+            termEnd,
+        });
+        if (validationError) {
+            return res.status(400).json({ message: validationError });
         }
 
         const result = await pool.query(
@@ -239,7 +308,7 @@ router.put("/:id", async (req, res) => {
 });
 
 // PATCH toggle active/inactive (Status boolean)
-router.patch("/:id/status", async (req, res) => {
+router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;

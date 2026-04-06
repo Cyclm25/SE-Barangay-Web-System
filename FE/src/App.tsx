@@ -311,6 +311,7 @@ export default function App() {
         onLogout={handleLogout}
         adminName={user.name}
         adminId={user.id}
+        position={user.position}
         userRole={user.role === 'admin' ? 'admin' : user.role === 'sk_kagawad' ? 'sk_kagawad' : user.role === 'official' ? 'official' : 'admin'}
       />
       <div className="flex-1 overflow-auto">{renderMainContent()}</div>

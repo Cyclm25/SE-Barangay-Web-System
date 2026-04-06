@@ -2,7 +2,119 @@ const router = require("express").Router();
 const pool = require("../db");
 const bcrypt = require("bcrypt");
 const verifyToken = require("../middleware/verifyToken");
+const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
 const nodemailer = require("nodemailer");
+
+function cleanString(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeDigits(value) {
+  return String(value ?? "").replace(/\D/g, "").trim();
+}
+
+function isValidGmail(value) {
+  return /^[a-z0-9](\.?[a-z0-9]){5,29}@gmail\.com$/i.test(cleanString(value).toLowerCase());
+}
+
+function isLettersAndSpaces(value) {
+  return /^[A-Za-z\s]+$/.test(cleanString(value));
+}
+
+function isPositiveWholeNumber(value) {
+  return /^\d+$/.test(cleanString(value));
+}
+
+function isValidDateInput(value) {
+  const raw = cleanString(value);
+  if (!raw) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return false;
+
+  const parsed = new Date(`${raw}T00:00:00`);
+  return !Number.isNaN(parsed.getTime());
+}
+
+function validateResidentPayload(payload, { requirePassword = false } = {}) {
+  const firstName = cleanString(payload.firstName);
+  const middleName = cleanString(payload.middleName);
+  const lastName = cleanString(payload.lastName);
+  const birthday = cleanString(payload.birthday);
+  const gender = cleanString(payload.gender);
+  const civilStatus = cleanString(payload.civilStatus);
+  const residentType = cleanString(payload.residentType);
+  const houseNo = cleanString(payload.houseNo);
+  const streetAddress = cleanString(payload.streetAddress);
+  const contactNumber = normalizeDigits(payload.contactNumber);
+  const email = cleanString(payload.email).toLowerCase();
+  const emergencyContactName = cleanString(payload.emergencyContactName);
+  const emergencyContactNumber = normalizeDigits(payload.emergencyContactNumber);
+  const emergencyContactAddress = cleanString(payload.emergencyContactAddress);
+  const postalCode = cleanString(payload.zipCode ?? payload.postalCode);
+  const ageValue = cleanString(payload.age);
+  const numberOfChildrenValue = cleanString(payload.numberOfChildren);
+  const password = cleanString(payload.password);
+
+  if (!firstName) return "First name is required.";
+  if (!isLettersAndSpaces(firstName)) return "First name must contain letters and spaces only.";
+  if (firstName.length > 50) return "First name must not exceed 50 characters.";
+
+  if (middleName) {
+    if (!isLettersAndSpaces(middleName)) return "Middle name must contain letters and spaces only.";
+    if (middleName.length > 50) return "Middle name must not exceed 50 characters.";
+  }
+
+  if (!lastName) return "Last name is required.";
+  if (!isLettersAndSpaces(lastName)) return "Last name must contain letters and spaces only.";
+  if (lastName.length > 50) return "Last name must not exceed 50 characters.";
+
+  if (!birthday) return "Birthday is required.";
+  if (!isValidDateInput(birthday)) return "Birthday must be a valid date.";
+  if (!gender) return "Gender is required.";
+  if (!civilStatus) return "Civil status is required.";
+  if (!residentType) return "Resident type is required.";
+
+  if (!ageValue || !isPositiveWholeNumber(ageValue)) return "Age must be a valid whole number.";
+
+  if (!houseNo) return "House number is required.";
+  if (!streetAddress) return "Street address is required.";
+
+  if (!/^\d{11}$/.test(contactNumber)) return "Contact number must be exactly 11 digits.";
+  if (!email) return "Email is required.";
+  if (!isValidGmail(email)) return "Only valid Gmail addresses are allowed.";
+
+  if (!emergencyContactName) return "Emergency contact name is required.";
+  if (!/^\d{11}$/.test(emergencyContactNumber)) return "Emergency contact number must be exactly 11 digits.";
+  if (!emergencyContactAddress) return "Emergency contact address is required.";
+
+  if (postalCode && !/^\d{4}$/.test(postalCode)) return "Postal code must be exactly 4 digits.";
+
+  if (numberOfChildrenValue && !isPositiveWholeNumber(numberOfChildrenValue)) {
+    return "Number of children must be a valid whole number.";
+  }
+
+  if (requirePassword && !password) return "Password is required.";
+
+  return null;
+}
+
+function validateResidentSelfProfilePayload(payload) {
+  const civilStatus = cleanString(payload.civilStatus);
+  const contactNumber = normalizeDigits(payload.contactNumber);
+  const email = cleanString(payload.email).toLowerCase();
+  const contactPerson = cleanString(payload.contactPerson ?? payload.emergencyContactName);
+  const contactPersonNo = normalizeDigits(payload.contactPersonNo ?? payload.emergencyContactNumber);
+  const contactPersonAddress = cleanString(payload.contactPersonAddress ?? payload.emergencyContactAddress);
+
+  if (!civilStatus) return "Civil status is required.";
+  if (!/^\d{11}$/.test(contactNumber)) return "Contact number must be exactly 11 digits.";
+  if (!email) return "Email is required.";
+  if (!isValidGmail(email)) return "Only Gmail addresses are allowed.";
+  if (!contactPerson) return "Emergency contact name is required.";
+  if (!/^\d{11}$/.test(contactPersonNo)) return "Emergency contact number must be exactly 11 digits.";
+  if (!contactPersonAddress) return "Emergency contact address is required.";
+
+  return null;
+}
 
 
 function calculateAge(birthday) {
@@ -254,7 +366,7 @@ router.get("/:id", async (req, res) => {
    POST /residents/register
    Requires Authorization: Bearer <token>
 ========================= */
-router.post("/register", verifyToken, async (req, res) => {
+router.post("/register", verifyToken, requireNonSkWriteAccess, async (req, res) => {
   const client = await pool.connect();
 
   const toBool = (v) => {
@@ -311,21 +423,18 @@ router.post("/register", verifyToken, async (req, res) => {
       });
     }
 
-    if (!password) {
-      return res.status(400).json({ error: "Password is required" });
-    }
-    if (!firstName || !lastName || !age || !birthday || !gender || !civilStatus || !residentType || !contactNumber || !email) {
-      return res.status(400).json({ error: "Missing required resident fields." });
+    const validationError = validateResidentPayload(req.body, { requirePassword: true });
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
-    const normalizedContactNumber = String(contactNumber).trim();
-    if (!/^[^\s@]+@gmail\.com$/i.test(normalizedEmail)) {
-      return res.status(400).json({ error: "Only valid Gmail addresses are allowed." });
-    }
-    if (!/^\d{11}$/.test(normalizedContactNumber)) {
-      return res.status(400).json({ error: "Contact number must be exactly 11 digits." });
-    }
+    const normalizedEmail = cleanString(email).toLowerCase();
+    const normalizedContactNumber = normalizeDigits(contactNumber);
+    const normalizedEmergencyContactNumber = normalizeDigits(emergencyContactNumber);
+    const normalizedZipCode = cleanString(zipCode);
+    const normalizedNumberOfChildren = cleanString(numberOfChildren)
+      ? parseInt(cleanString(numberOfChildren), 10)
+      : 0;
 
     await client.query("BEGIN");
 
@@ -424,9 +533,9 @@ router.post("/register", verifyToken, async (req, res) => {
       fatherName || null,
       motherName || null,
       spouseName || null,
-      parseInt(numberOfChildren, 10) || 0,
+      normalizedNumberOfChildren,
       emergencyContactName || null,
-      emergencyContactNumber || null,
+      normalizedEmergencyContactNumber || null,
       emergencyContactAddress || null,
       "N/A",
       profileImage,
@@ -451,7 +560,7 @@ router.post("/register", verifyToken, async (req, res) => {
     }
     if (zipCodeColumn) {
       residentColumns.push(`"${zipCodeColumn}"`);
-      residentValues.push(residentZipCode);
+      residentValues.push(normalizedZipCode || residentZipCode || null);
     }
 
     const residentInsert = await client.query(
@@ -522,7 +631,7 @@ router.post("/register", verifyToken, async (req, res) => {
   }
 });
 
-router.put("/:id", verifyToken, async (req, res) => {
+router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
   const client = await pool.connect();
 
   const toBool = (v) => {
@@ -567,20 +676,18 @@ router.put("/:id", verifyToken, async (req, res) => {
       profileImage,
     } = req.body;
 
-    if (!firstName || !lastName || !age || !birthday || !gender || !civilStatus || !residentType || !contactNumber || !email) {
-      return res.status(400).json({ error: "Missing required resident fields." });
+    const validationError = validateResidentPayload(req.body);
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
-    const normalizedContactNumber = String(contactNumber).trim();
-
-    if (!/^[^\s@]+@gmail\.com$/i.test(normalizedEmail)) {
-      return res.status(400).json({ error: "Only valid Gmail addresses are allowed." });
-    }
-
-    if (!/^\d{11}$/.test(normalizedContactNumber)) {
-      return res.status(400).json({ error: "Contact number must be exactly 11 digits." });
-    }
+    const normalizedEmail = cleanString(email).toLowerCase();
+    const normalizedContactNumber = normalizeDigits(contactNumber);
+    const normalizedEmergencyContactNumber = normalizeDigits(emergencyContactNumber);
+    const normalizedZipCode = cleanString(zipCode);
+    const normalizedNumberOfChildren = cleanString(numberOfChildren)
+      ? parseInt(cleanString(numberOfChildren), 10)
+      : 0;
 
     await client.query("BEGIN");
 
@@ -662,9 +769,9 @@ router.put("/:id", verifyToken, async (req, res) => {
       fatherName || null,
       motherName || null,
       spouseName || null,
-      parseInt(numberOfChildren, 10) || 0,
+      normalizedNumberOfChildren,
       emergencyContactName || null,
-      emergencyContactNumber || null,
+      normalizedEmergencyContactNumber || null,
       emergencyContactAddress || null,
       profileImage || null,
     ];
@@ -687,7 +794,7 @@ router.put("/:id", verifyToken, async (req, res) => {
     }
     if (zipCodeColumn) {
       updateFields.push(`"${zipCodeColumn}" = $${updateValues.length + 1}`);
-      updateValues.push(zipCode || null);
+      updateValues.push(normalizedZipCode || null);
     }
 
     updateValues.push(id);
@@ -721,7 +828,7 @@ router.put("/:id", verifyToken, async (req, res) => {
 /* =========================
    UPDATE RESIDENT STATUS
 ========================= */
-router.patch("/:id/status", async (req, res) => {
+router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -758,7 +865,7 @@ router.patch("/:id/status", async (req, res) => {
    Only allows fields the resident can self-edit.
    Admin can also call this to update any resident.
 ========================= */
-router.put("/:id", async (req, res) => {
+router.put("/:id/profile", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -770,9 +877,17 @@ router.put("/:id", async (req, res) => {
       contactPersonAddress,
     } = req.body;
 
-    // Validate email format if provided
-    if (email && !/^[^\s@]+@gmail\.com$/i.test(email.trim())) {
-      return res.status(400).json({ error: "Only Gmail addresses are allowed." });
+    if (!req.user?.residentId && req.user?.type !== "superadmin" && req.user?.type !== "barangayadmin") {
+      return res.status(403).json({ error: "Unauthorized profile update." });
+    }
+
+    if (req.user?.residentId && String(req.user.residentId).trim() !== String(id).trim()) {
+      return res.status(403).json({ error: "You can only update your own profile." });
+    }
+
+    const validationError = validateResidentSelfProfilePayload(req.body);
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
     }
 
     // Check email uniqueness (exclude current resident)
@@ -810,11 +925,11 @@ router.put("/:id", async (req, res) => {
       RETURNING *
       `,
       [
-        civilStatus        || null,
-        contactNumber      || null,
+        civilStatus.trim() || null,
+        normalizeDigits(contactNumber) || null,
         email              ? email.trim().toLowerCase() : null,
         contactPerson      || null,
-        contactPersonNo    || null,
+        normalizeDigits(contactPersonNo) || null,
         contactPersonAddress || null,
         id,
       ]

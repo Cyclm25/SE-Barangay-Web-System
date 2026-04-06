@@ -784,6 +784,7 @@ export function BarangayOfficials() {
                           Barangay Captain
                         </SelectItem>
                         <SelectItem value="Kagawad">Kagawad</SelectItem>
+                        <SelectItem value="SK Kagawad">SK Kagawad</SelectItem>
                         <SelectItem value="SK Chairman">SK Chairman</SelectItem>
                         <SelectItem value="Secretary">Secretary</SelectItem>
                         <SelectItem value="Treasurer">Treasurer</SelectItem>

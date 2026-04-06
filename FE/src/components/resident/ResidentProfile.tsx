@@ -328,11 +328,13 @@ export function ResidentProfile() {
         emergencyContactAddress: updatedProfile.emergencyContactAddress.trim(),
       };
 
-      const res = await fetch(`http://localhost:5001/residents/${encodeURIComponent(residentId)}`, {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5001/residents/${encodeURIComponent(residentId)}/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(payload),
       });
