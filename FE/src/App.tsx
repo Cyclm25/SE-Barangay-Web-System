@@ -29,7 +29,8 @@ const loadCutoffDate = () => {
 interface User {
   id: string;
   name: string;
-  role: 'admin' | 'official' | 'resident';
+  role: 'admin' | 'official' | 'resident' | 'sk_kagawad';
+  position?: string;
 }
 
 type ActiveTab =
@@ -103,18 +104,26 @@ export default function App() {
       setUser(parsedUser);
       setIsAuthenticated(true);
       setAuthView('dashboard');
+      // Restore position to localStorage so components can read it
+      if (parsedUser.position) {
+        localStorage.setItem('position', parsedUser.position);
+      }
     }
   }, []);
 
   const handleLoginSuccess = (username: string, roleFromDb: string, firstName: string) => {
-    let normalizedRole: 'admin' | 'official' | 'resident';
+    let normalizedRole: 'admin' | 'official' | 'resident' | 'sk_kagawad';
 
     const dbRole = roleFromDb.toLowerCase().replace(/\s+/g, '').trim();
+    const rawPosition = localStorage.getItem('position') ?? '';
+    const position = rawPosition.toLowerCase().replace(/\s+/g, ' ').trim();
 
     if (dbRole === 'superadmin') {
       normalizedRole = 'admin';
     } else if (dbRole === 'barangayadmin' || dbRole === 'admin') {
-      normalizedRole = 'official';
+      // Check if this admin is SK Kagawad — handle any casing/spacing variant
+      const isSkKagawad = position.includes('sk') && position.includes('kagawad');
+      normalizedRole = isSkKagawad ? 'sk_kagawad' : 'official';
     } else {
       normalizedRole = 'resident';
     }
@@ -123,8 +132,11 @@ export default function App() {
       id: username,
       name: firstName,
       role: normalizedRole,
+      position: rawPosition,
     };
 
+    // Keep position in sync so components can read it independently
+    localStorage.setItem('position', rawPosition);
     setUser(userData);
     setIsAuthenticated(true);
     setAuthView('dashboard');
@@ -139,7 +151,7 @@ export default function App() {
     setActiveTab('dashboard');
     setUser(null);
     localStorage.removeItem('app_user');
-    localStorage.removeItem('admin_active_tab');
+    localStorage.removeItem('position');
     toast.success('Logged out successfully.');
   };
 
@@ -171,7 +183,7 @@ export default function App() {
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
-            userRole={user.role}
+            userRole={user.role === 'sk_kagawad' ? 'official' : user.role}
           />
         );
       case 'residents':
@@ -180,17 +192,18 @@ export default function App() {
             initialFilter={residentFilter}
             registrationCutoffDate={registrationCutoffDate}
             onUpdateCutoffDate={(date) => setRegistrationCutoffDate(date)}
+            userRole={user.role === 'admin' ? 'admin' : user.role === 'sk_kagawad' ? 'sk_kagawad' : 'official'}
           />
         );
       case 'officials':
-        return user.role === 'admin' ? (
+        return (user.role === 'admin' || user.role === 'official') ? (
           <BarangayOfficials />
         ) : (
           <DashboardHome
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
-            userRole={user.role}
+            userRole={user.role === 'sk_kagawad' ? 'official' : user.role}
           />
         );
       case 'requests':
@@ -200,19 +213,20 @@ export default function App() {
             initialTab={requestTab}
             onFilterChange={(filter) => setRequestFilter(filter as any)}
             onTabChange={(tab) => setRequestTab(tab)}
+            userRole={user.role === 'admin' ? 'admin' : user.role === 'sk_kagawad' ? 'sk_kagawad' : 'official'}
           />
         );
       case 'announcements':
         return <AnnouncementManagement />;
       case 'transactions':
-        return user.role === 'admin' ? (
+        return (user.role === 'admin' || user.role === 'official') ? (
           <TransactionHistory />
         ) : (
           <DashboardHome
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
-            userRole={user.role}
+            userRole={user.role === 'sk_kagawad' ? 'official' : user.role}
           />
         );
       default:
@@ -221,7 +235,7 @@ export default function App() {
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
-            userRole={user.role}
+            userRole={user.role === 'sk_kagawad' ? 'official' : user.role}
           />
         );
     }
@@ -297,7 +311,7 @@ export default function App() {
         onLogout={handleLogout}
         adminName={user.name}
         adminId={user.id}
-        userRole={user.role}
+        userRole={user.role === 'admin' ? 'admin' : user.role === 'sk_kagawad' ? 'sk_kagawad' : user.role === 'official' ? 'official' : 'admin'}
       />
       <div className="flex-1 overflow-auto">{renderMainContent()}</div>
       <Toaster position="top-right" />

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { History, Search, User, Shield, Calendar, UserPlus, FileCheck, ShieldAlert, UserX } from "lucide-react";
+import { History, Search, User, Shield, Calendar, FileCheck, ShieldAlert, UserX } from "lucide-react";
 
 interface Transaction {
   id: string;
@@ -70,6 +70,9 @@ function formatTransactionDetails(details: string, residentNames: Record<string,
 
 export function TransactionHistory() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateFilter, setDateFilter] = useState<'all' | '1' | '7' | '30' | 'custom'>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [residentNames, setResidentNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -132,14 +135,36 @@ export function TransactionHistory() {
 
   const filteredTransactions = useMemo(() => {
     const q = searchTerm.toLowerCase();
-    return transactions.filter(
-      (t) =>
+    const now = new Date();
+
+    return transactions.filter((t) => {
+      const matchesSearch =
         (t.account ?? "").toLowerCase().includes(q) ||
         (t.action ?? "").toLowerCase().includes(q) ||
         formatTransactionDetails(t.details ?? "", residentNames).toLowerCase().includes(q) ||
-        (t.module ?? "").toLowerCase().includes(q)
-    );
-  }, [transactions, searchTerm, residentNames]);
+        (t.module ?? "").toLowerCase().includes(q);
+
+      if (!matchesSearch) return false;
+
+      if (dateFilter === 'all') return true;
+
+      const ts = new Date(t.timestamp);
+      if (Number.isNaN(ts.getTime())) return true;
+
+      if (dateFilter === 'custom') {
+        const from = customFrom ? new Date(customFrom + 'T00:00:00') : null;
+        const to = customTo ? new Date(customTo + 'T23:59:59') : null;
+        if (from && ts < from) return false;
+        if (to && ts > to) return false;
+        return true;
+      }
+
+      const days = parseInt(dateFilter);
+      const cutoff = new Date(now);
+      cutoff.setDate(now.getDate() - days);
+      return ts >= cutoff;
+    });
+  }, [transactions, searchTerm, residentNames, dateFilter, customFrom, customTo]);
 
   const computedStats = useMemo(() => {
     const total = transactions.length;
@@ -150,21 +175,7 @@ export function TransactionHistory() {
 
     const residentActions = total - adminActions;
 
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
-
-    const residentsAddedThisMonth = transactions.filter((t) => {
-      const action = String(t.action ?? "").toLowerCase();
-      if (!action.includes("created resident account") && !action.includes("created resident")) {
-        return false;
-      }
-
-      const timestamp = new Date(t.timestamp);
-      return !Number.isNaN(timestamp.getTime()) && timestamp >= startOfMonth;
-    }).length;
-
-    return { total, adminActions, residentActions, residentsAddedThisMonth };
+    return { total, adminActions, residentActions };
   }, [transactions]);
 
   const recentActivityFeed = useMemo(() => {
@@ -236,7 +247,7 @@ export function TransactionHistory() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -285,21 +296,6 @@ export function TransactionHistory() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Residents Added This Month</p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {loading ? "…" : computedStats.residentsAddedThisMonth}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
-                <UserPlus className="w-6 h-6 text-emerald-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Table */}
@@ -311,17 +307,71 @@ export function TransactionHistory() {
               All Transactions
             </CardTitle>
 
-            <div className="flex items-center gap-2">
-              <Label className="text-sm">Search:</Label>
-              <div className="relative w-72">
-                <Input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by account, action, details..."
-                  className="pr-8"
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Date Filter Buttons */}
+              <div className="flex items-center gap-1">
+                {(['all', '1', '7', '30'] as const).map((val) => (
+                  <button
+                    key={val}
+                    onClick={() => { setDateFilter(val); setCustomFrom(''); setCustomTo(''); }}
+                    className={`px-3 py-1.5 rounded text-xs font-semibold border transition-colors ${
+                      dateFilter === val
+                        ? 'bg-[#2957a1] text-white border-[#2957a1]'
+                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                    }`}
+                    disabled={loading}
+                  >
+                    {val === 'all' ? 'All' : val === '1' ? 'Today' : val === '7' ? 'Last 7 Days' : 'Last 30 Days'}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setDateFilter('custom')}
+                  className={`px-3 py-1.5 rounded text-xs font-semibold border transition-colors ${
+                    dateFilter === 'custom'
+                      ? 'bg-[#2957a1] text-white border-[#2957a1]'
+                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                  }`}
                   disabled={loading}
-                />
-                <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                >
+                  Custom
+                </button>
+              </div>
+
+              {/* Custom Date Range */}
+              {dateFilter === 'custom' && (
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-gray-500">From</Label>
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    max={customTo || undefined}
+                    className="text-xs border border-gray-300 rounded px-2 py-1.5 bg-white"
+                  />
+                  <Label className="text-xs text-gray-500">To</Label>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    min={customFrom || undefined}
+                    className="text-xs border border-gray-300 rounded px-2 py-1.5 bg-white"
+                  />
+                </div>
+              )}
+
+              {/* Search */}
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">Search:</Label>
+                <div className="relative w-64">
+                  <Input
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search by account, action, details..."
+                    className="pr-8"
+                    disabled={loading}
+                  />
+                  <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                </div>
               </div>
             </div>
           </div>

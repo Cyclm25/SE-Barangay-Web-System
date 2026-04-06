@@ -2,6 +2,48 @@ const router = require("express").Router();
 const pool = require("../db");
 const bcrypt = require("bcrypt");
 const verifyToken = require("../middleware/verifyToken");
+const nodemailer = require("nodemailer");
+
+
+function calculateAge(birthday) {
+  const today = new Date();
+  const birth = new Date(birthday);
+
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+
+  return age;
+}
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+async function sendResidentAccountCreatedEmail({ to, firstName, lastName, residentId }) {
+  if (!to) return;
+
+  await transporter.sendMail({
+    from: `"Barangay Office" <${process.env.EMAIL_USER}>`,
+    to,
+    subject: "Resident Account Created Successfully",
+    html: `
+      <p>Good day, ${firstName || ""} ${lastName || ""},</p>
+      <p>Your resident account has been successfully created.</p>
+      <p><strong>Resident Number:</strong> ${residentId}</p>
+      <p>Please keep this resident number for login and verification purposes.</p>
+      <p>Thank you.</p>
+      <p>Barangay Office</p>
+    `,
+  });
+}
 
 async function getResidentColumnName(columnName, client) {
   const db = client || pool;
@@ -191,6 +233,8 @@ router.get("/:id", async (req, res) => {
       LIMIT 1
       `,
       [id]
+
+      
     );
 
     if (result.rows.length === 0) {
@@ -227,11 +271,11 @@ router.post("/register", verifyToken, async (req, res) => {
   try {
     // Only admins should create residents
     const isAdminActor = req.user?.type === "superadmin" || req.user?.type === "barangayadmin";
-const actorId = req.user?.superAdminId || req.user?.barangayAdminId || null;
+    const actorId = req.user?.superAdminId || req.user?.barangayAdminId || null;
 
-if (!isAdminActor || !actorId) {
-  return res.status(403).json({ error: "Only admin/superadmin can register residents." });
-}
+    if (!isAdminActor || !actorId) {
+      return res.status(403).json({ error: "Only admin/superadmin can register residents." });
+    }
 
     const {
       firstName,
@@ -258,6 +302,14 @@ if (!isAdminActor || !actorId) {
       zipCode,
       password,
     } = req.body;
+
+    const computedAge = calculateAge(birthday);
+
+    if (computedAge < 12) {
+      return res.status(400).json({
+        error: "Resident must be at least 12 years old.",
+      });
+    }
 
     if (!password) {
       return res.status(400).json({ error: "Password is required" });
@@ -359,7 +411,7 @@ if (!isAdminActor || !actorId) {
       firstName,
       middleName,
       lastName,
-      parseInt(age, 10),
+      computedAge,
       birthday,
       gender,
       civilStatus,
@@ -446,6 +498,18 @@ if (!isAdminActor || !actorId) {
     );
 
     await client.query("COMMIT");
+
+    try {
+      await sendResidentAccountCreatedEmail({
+        to: normalizedEmail,
+        firstName,
+        lastName,
+        residentId: newResidentId,
+      });
+    } catch (emailErr) {
+      console.error("REGISTER EMAIL ERROR:", emailErr.message);
+    }
+
     return res.status(201).json(residentInsert.rows[0]);
   } catch (err) {
     try {

@@ -61,6 +61,7 @@ interface ResidentRecordsProps {
   initialFilter?: 'all' | 'new';
   registrationCutoffDate?: string;
   onUpdateCutoffDate?: (date: string) => void;
+  userRole?: 'admin' | 'official' | 'sk_kagawad';
 }
 
 type ResidentStatus = "Active" | "Inactive";
@@ -538,12 +539,16 @@ export function ResidentRecords({
   initialFilter = 'all',
   registrationCutoffDate = getDefaultCutoffDate(),
   onUpdateCutoffDate,
+  userRole = 'admin',
 }: ResidentRecordsProps) {
-  const dataPrivacyHighlights = [
-    "The information you provide is accurate and complete.",
-    "You consent to the collection and processing of your data for legitimate barangay operations.",
-    "You understand your rights to access, correct, or request deletion of your personal data, subject to applicable regulations.",
-  ];
+  // Dual-check: prop takes priority, but also verify via localStorage as a safety net
+  const isSkKagawad = userRole === 'sk_kagawad' || (() => {
+    try {
+      const appUser = JSON.parse(localStorage.getItem('app_user') || '{}');
+      return appUser?.role === 'sk_kagawad';
+    } catch { return false; }
+  })();
+
   const birthdayInputRef = useRef<HTMLInputElement | null>(null);
   const initialFormData = {
     profileImage: "",
@@ -690,6 +695,13 @@ export function ResidentRecords({
     (invalidContact(formData.contactNumber) || contactNumberAlreadyExists);
   const emailError =
     saveAttempted && (invalidEmail(formData.email) || emailAlreadyExists);
+  // Address & Contact required fields
+  const houseNoError = saveAttempted && isBlank(formData.houseNo);
+  const streetAddressError = saveAttempted && isBlank(formData.streetAddress);
+  // Emergency contact required fields
+  const emergencyNameError = saveAttempted && isBlank(formData.emergencyContactName);
+  const emergencyNumberError = saveAttempted && invalidContact(formData.emergencyContactNumber);
+  const emergencyAddressError = saveAttempted && isBlank(formData.emergencyContactAddress);
 
   // ADDED FEATURE: SETTINGS HANDLER
   const handleSaveSettings = () => {
@@ -908,7 +920,12 @@ export function ResidentRecords({
       invalidContact(formData.contactNumber) ||
       contactNumberAlreadyExists ||
       invalidEmail(formData.email) ||
-      emailAlreadyExists
+      emailAlreadyExists ||
+      isBlank(formData.houseNo) ||
+      isBlank(formData.streetAddress) ||
+      isBlank(formData.emergencyContactName) ||
+      invalidContact(formData.emergencyContactNumber) ||
+      isBlank(formData.emergencyContactAddress)
     ) {
       toast.error("Please fill in all required fields correctly.");
       return;
@@ -1366,6 +1383,7 @@ export function ResidentRecords({
     toast.success("Resident list downloaded successfully!");
   };
 
+
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-full">
       <div className="flex items-center justify-between">
@@ -1419,7 +1437,8 @@ export function ResidentRecords({
             <span>Settings</span>
           </Button>
 
-          {/* Add New Resident Dialog */}
+          {/* Add New Resident Dialog — hidden for SK Kagawad (view-only role) */}
+          {!isSkKagawad && (
           <Dialog
             open={isAddDialogOpen}
             onOpenChange={handleAddDialogOpenChange}
@@ -1615,7 +1634,7 @@ export function ResidentRecords({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     <div className="space-y-2">
                       <Label>Age</Label>
                       <Input
@@ -1665,19 +1684,39 @@ export function ResidentRecords({
                       </Select>
                     </div>
 
+                  </div>
+
+                  {/* Religion — full row so long names don't overflow */}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Religion</Label>
-                      <Input
-                        className="text-sm uppercase"
-                        value={formData.religion}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            religion: toUppercaseInput(e.target.value),
-                          })
+                      <Select
+                        value={formData.religion || ""}
+                        onValueChange={(v) =>
+                          setFormData({ ...formData, religion: v })
                         }
-                        placeholder="Enter religion"
-                      />
+                      >
+                        <SelectTrigger className="uppercase">
+                          <SelectValue placeholder="SELECT RELIGION" />
+                        </SelectTrigger>
+                        <SelectContent className="uppercase">
+                          <SelectItem value="Roman Catholic">ROMAN CATHOLIC</SelectItem>
+                          <SelectItem value="Islam">ISLAM</SelectItem>
+                          <SelectItem value="Iglesia ni Cristo">IGLESIA NI CRISTO</SelectItem>
+                          <SelectItem value="Aglipayan">AGLIPAYAN (PHILIPPINE INDEPENDENT CHURCH)</SelectItem>
+                          <SelectItem value="Seventh-day Adventist">SEVENTH-DAY ADVENTIST</SelectItem>
+                          <SelectItem value="Bible Baptist Church">BIBLE BAPTIST CHURCH</SelectItem>
+                          <SelectItem value="United Church of Christ">UNITED CHURCH OF CHRIST</SelectItem>
+                          <SelectItem value="Jehovah's Witnesses">JEHOVAH'S WITNESSES</SelectItem>
+                          <SelectItem value="The Church of Jesus Christ">THE CHURCH OF JESUS CHRIST (LDS)</SelectItem>
+                          <SelectItem value="Born Again Christian">BORN AGAIN CHRISTIAN</SelectItem>
+                          <SelectItem value="Dating Daan">DATING DAAN (MCGI)</SelectItem>
+                          <SelectItem value="Buddhism">BUDDHISM</SelectItem>
+                          <SelectItem value="Hinduism">HINDUISM</SelectItem>
+                          <SelectItem value="None">NONE / NO RELIGION</SelectItem>
+                          <SelectItem value="Other">OTHER</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -1732,7 +1771,7 @@ export function ResidentRecords({
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>House No.</Label>
+                      <Label>House No. *</Label>
                       <Input
                         value={formData.houseNo}
                         onChange={(e) =>
@@ -1742,10 +1781,14 @@ export function ResidentRecords({
                           })
                         }
                         placeholder="House number"
+                        className={houseNoError ? "border-red-500 ring-red-500" : ""}
                       />
+                      {houseNoError && (
+                        <p className="text-xs text-red-500 mt-1">House number is required.</p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <Label>Street Address</Label>
+                      <Label>Street Address *</Label>
                       <Input
                         value={formData.streetAddress}
                         onChange={(e) =>
@@ -1755,7 +1798,11 @@ export function ResidentRecords({
                           })
                         }
                         placeholder="Street address"
+                        className={streetAddressError ? "border-red-500 ring-red-500" : ""}
                       />
+                      {streetAddressError && (
+                        <p className="text-xs text-red-500 mt-1">Street address is required.</p>
+                      )}
                     </div>
                   </div>
 
@@ -1975,7 +2022,7 @@ export function ResidentRecords({
                   </h3>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Name</Label>
+                      <Label>Name *</Label>
                       <Input
                         value={formData.emergencyContactName}
                         onChange={(e) =>
@@ -1987,10 +2034,14 @@ export function ResidentRecords({
                           })
                         }
                         placeholder="Emergency contact name"
+                        className={emergencyNameError ? "border-red-500 ring-red-500" : ""}
                       />
+                      {emergencyNameError && (
+                        <p className="text-xs text-red-500 mt-1">Emergency contact name is required.</p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <Label>Emergency Contact Number</Label>
+                      <Label>Emergency Contact Number *</Label>
                       <Input
                         type="text"
                         inputMode="numeric"
@@ -2004,9 +2055,11 @@ export function ResidentRecords({
                           });
                         }}
                         className={
-                          formData.emergencyContactNumber.length > 11
+                          formData.emergencyContactNumber.length > 11 || emergencyNumberError
                             ? "border-red-500 ring-red-500"
-                            : ""
+                            : formData.emergencyContactNumber.length === 11
+                              ? "border-green-500 ring-green-500"
+                              : ""
                         }
                         placeholder="09XX XXX XXXX"
                       />
@@ -2015,10 +2068,18 @@ export function ResidentRecords({
                           Contact number must not exceed 11 digits.
                         </p>
                       )}
+                      {emergencyNumberError && formData.emergencyContactNumber.length <= 11 && (
+                        <p className="text-xs text-red-500 mt-1">
+                          Emergency contact number must be 11 digits.
+                        </p>
+                      )}
+                      {formData.emergencyContactNumber.length === 11 && (
+                        <p className="text-xs text-green-600 mt-1">Contact number complete (11 digits)✅</p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Address</Label>
+                    <Label>Address *</Label>
                     <Input
                       value={formData.emergencyContactAddress}
                       onChange={(e) =>
@@ -2030,7 +2091,11 @@ export function ResidentRecords({
                         })
                       }
                       placeholder="Emergency contact address"
+                      className={emergencyAddressError ? "border-red-500 ring-red-500" : ""}
                     />
+                    {emergencyAddressError && (
+                      <p className="text-xs text-red-500 mt-1">Emergency contact address is required.</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2063,6 +2128,7 @@ export function ResidentRecords({
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          )} {/* end sk_kagawad gate */}
         </div>
       </div>
 
@@ -2200,78 +2266,83 @@ export function ResidentRecords({
                           <Eye className="w-6 h-6" />
                           <span>View Info</span>
                         </Button>
+
                         {resident.status === "Active" ? (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] h-7 px-2"
-                              >
-                                DEACTIVATE
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Deactivate this account?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to deactivate the account of{" "}
-                                  <span className="font-semibold">
-                                    {resident.firstName} {resident.lastName}
-                                  </span>
-                                  ? This will set the account to inactive.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() =>
-                                    handleInactivate(resident.residentNo)
-                                  }
-                                  className="bg-orange-600"
+                          !isSkKagawad && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] h-7 px-2"
                                 >
-                                  Deactivate
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                                  DEACTIVATE
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="sm:max-w-xl p-8">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="text-2xl font-bold">
+                                    Deactivate this account?
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you certain you want to deactivate the account of{" "}
+                                    <span className="font-semibold">
+                                      {resident.firstName} {resident.lastName}
+                                    </span>
+                                    ? This will set the account to inactive.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() =>
+                                      handleInactivate(resident.residentNo)
+                                    }
+                                    className="bg-orange-600"
+                                  >
+                                    Deactivate
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )
                         ) : (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                className="bg-green-500 hover:bg-green-600 text-white text-[10px] h-7 px-2"
-                              >
-                                REACTIVATE
-                              </Button>
-                            </AlertDialogTrigger>
-
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Reactivate Account?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to activate the account of{" "}
-                                  <span className="font-semibold">
-                                    {resident.firstName} {resident.lastName}
-                                  </span>
-                                  ? This will set the account to active.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleReactivate(resident.residentNo)}
-                                  className="bg-green-600"
+                          !isSkKagawad && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  className="bg-green-500 hover:bg-green-600 text-white text-[10px] h-7 px-2"
                                 >
-                                  Reactivate
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                                  REACTIVATE
+                                </Button>
+                              </AlertDialogTrigger>
+
+                              <AlertDialogContent className="sm:max-w-xl p-8">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="text-2xl font-bold">
+                                    Reactivate Account?
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you certain you want to activate the account of{" "}
+                                    <span className="font-semibold">
+                                      {resident.firstName} {resident.lastName}
+                                    </span>
+                                    ? This will set the account to active.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleReactivate(resident.residentNo)}
+                                    className="bg-green-600"
+                                  >
+                                    Reactivate
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )
                         )}
                       </div>
                     </TableCell>

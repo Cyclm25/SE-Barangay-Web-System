@@ -20,18 +20,16 @@ interface SidebarProps {
   onLogout: () => void;
   adminName: string;
   adminId: string;
-  // Added 'superadmin' to the interface
-  userRole?: 'admin' | 'official' | 'superadmin';
+  userRole?: 'admin' | 'official' | 'superadmin' | 'sk_kagawad';
 }
 
 const navigation = [
-  // Defined which roles can see which tabs based on your ERD
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'official', 'superadmin'] },
-  { id: 'residents', label: 'Resident Records', icon: Users, roles: ['admin', 'official'] },
-  { id: 'officials', label: 'Barangay Officials', icon: User, roles: ['admin', 'superadmin'] },
-  { id: 'requests', label: 'Online Requests', icon: FileText, roles: ['admin', 'official'] },
-  { id: 'announcements', label: 'Announcements', icon: Megaphone, roles: ['admin', 'official'] },
-  { id: 'transactions', label: 'Transaction History', icon: History, roles: ['admin', 'superadmin'] },
+  { id: 'dashboard',     label: 'Dashboard',          icon: LayoutDashboard, roles: ['admin', 'official', 'superadmin', 'sk_kagawad'] },
+  { id: 'residents',     label: 'Resident Records',   icon: Users,           roles: ['admin', 'official', 'sk_kagawad'] },
+  { id: 'officials',     label: 'Barangay Officials', icon: User,            roles: ['admin', 'superadmin'] },
+  { id: 'requests',      label: 'Online Requests',    icon: FileText,        roles: ['admin', 'official', 'sk_kagawad'] },
+  { id: 'announcements', label: 'Announcements',      icon: Megaphone,       roles: ['admin', 'official', 'sk_kagawad'] },
+  { id: 'transactions',  label: 'Transaction History',icon: History,         roles: ['admin', 'superadmin'] },
 ];
 
 export function Sidebar({ activeTab, onTabChange, onLogout, adminName, adminId, userRole = 'admin' }: SidebarProps) {
@@ -95,7 +93,8 @@ export function Sidebar({ activeTab, onTabChange, onLogout, adminName, adminId, 
             <p className="text-[11px] text-white/70 truncate">
               {/* Dynamic role label */}
               {userRole === 'superadmin' ? 'Super Administrator' :
-                userRole === 'admin' ? 'Barangay Secretary' : 'Barangay Official'}
+                userRole === 'admin' ? 'Barangay Secretary' :
+                userRole === 'sk_kagawad' ? 'SK Kagawad' : 'Barangay Official'}
             </p>
           </div>
         </div>

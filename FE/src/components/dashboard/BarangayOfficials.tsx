@@ -64,6 +64,13 @@ interface OfficialEditForm {
   profileimage: string;
 }
 
+const dataPrivacyHighlights = [
+  "The information provided is true and correct to the best of your knowledge.",
+  "The collected data will only be used for legitimate barangay management and record-keeping purposes.",
+  "Authorized barangay personnel may access and process the information in accordance with applicable data privacy laws.",
+  "Reasonable security measures will be applied to protect personal information from unauthorized access or disclosure.",
+];
+
 function toStatusText(statusBool: boolean): StatusText {
   return statusBool ? "Active" : "Inactive";
 }
@@ -174,11 +181,14 @@ function toUppercaseInput(value: string) {
 }
 
 export function BarangayOfficials() {
-  const dataPrivacyHighlights = [
-    "The information you provide is accurate and complete.",
-    "You consent to the collection and processing of your data for legitimate barangay operations.",
-    "You understand your rights to access, correct, or request deletion of your personal data, subject to applicable regulations.",
-  ];
+  // SK Kagawad read-only: disable all action buttons but keep them visible
+  const isReadOnly = (() => {
+    try {
+      const position = localStorage.getItem("position") ?? "";
+      return position.toLowerCase() === "sk kagawad";
+    } catch { return false; }
+  })();
+
   const initialFormData = {
     profileImage: "",
     name: "",
@@ -681,7 +691,7 @@ export function BarangayOfficials() {
             <DialogTrigger asChild>
               <Button
                 className="bg-[#2957a1] hover:bg-[#1e3f7a] text-white"
-                disabled={loading}
+                disabled={loading || isReadOnly}
               >
                 ADD NEW OFFICIAL
               </Button>
@@ -1505,8 +1515,9 @@ export function BarangayOfficials() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 px-3 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                        className="h-8 px-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                         onClick={() => openEditOfficial(official)}
+                        disabled={isReadOnly}
                       >
                         Edit Info
                       </Button>
@@ -1515,6 +1526,7 @@ export function BarangayOfficials() {
                         size="sm"
                         className="h-8 px-3 text-sm font-medium text-[#2957a1] hover:text-[#1e3f7a] hover:bg-blue-50"
                         onClick={() => handleForgotPassword(official)}
+                        disabled={isReadOnly}
                       >
                         Forgot Password
                       </Button>
@@ -1524,8 +1536,8 @@ export function BarangayOfficials() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 px-3 text-sm font-medium text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                              disabled={loading}
+                              className="h-8 px-3 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                              disabled={loading || isReadOnly}
                             >
                               Deactivate
                             </Button>
@@ -1568,8 +1580,8 @@ export function BarangayOfficials() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 px-3 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50"
-                              disabled={loading}
+                              className="h-8 px-3 text-green-600 hover:text-green-700 hover:bg-green-50"
+                              disabled={loading || isReadOnly}
                             >
                               Reactivate
                             </Button>

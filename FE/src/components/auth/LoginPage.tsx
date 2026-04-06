@@ -127,6 +127,10 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
       localStorage.setItem("role", String(role));
       localStorage.setItem("displayName", String(displayName));
 
+      // Save position for SK Kagawad read-only enforcement
+      const position = u?.Position ?? u?.position ?? "";
+      localStorage.setItem("position", String(position));
+
       if (residentId) {
         localStorage.setItem("residentId", String(residentId));
       }
