@@ -1,5 +1,5 @@
 // OnlineRequests.tsx
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -127,8 +127,15 @@ export function OnlineRequests({
     additionalNotes: ''
   });
   const [appointmentAttempted, setAppointmentAttempted] = useState(false);
-  const appointmentDateInputRef = useRef<HTMLInputElement | null>(null);
-  const appointmentTimeInputRef = useRef<HTMLInputElement | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [tpHour, setTpHour] = useState('08');
+  const [tpMinute, setTpMinute] = useState('00');
+  const [tpPeriod, setTpPeriod] = useState<'AM' | 'PM'>('AM');
+  const timePickerRef = useRef<HTMLDivElement | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const datePickerRef = useRef<HTMLDivElement | null>(null);
+  const [calViewYear, setCalViewYear] = useState(new Date().getFullYear());
+  const [calViewMonth, setCalViewMonth] = useState(new Date().getMonth());
   const [confirmAction, setConfirmAction] = useState<null | {
     request: Request;
     kind: 'process' | 'ready' | 'complete';
@@ -235,6 +242,17 @@ export function OnlineRequests({
     }
   };
 
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (timePickerRef.current && !timePickerRef.current.contains(e.target as Node))
+        setShowTimePicker(false);
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node))
+        setShowDatePicker(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     loadInbox(false);
@@ -1086,124 +1104,289 @@ export function OnlineRequests({
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] sm:max-w-[680px] md:max-w-[800px]">
           {appointmentRequest && (
             <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-blue-600" />
+              {/* ── Header ── */}
+              <DialogHeader className="pb-2 border-b border-gray-100">
+                <DialogTitle className="flex items-center gap-2 text-[#2957a1] text-xl font-bold">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2957a1]/10">
+                    <Mail className="w-4 h-4 text-[#2957a1]" />
+                  </div>
                   Schedule Appointment
                 </DialogTitle>
-                <DialogDescription>
+                <DialogDescription className="text-sm text-gray-500 mt-1">
                   Set the appointment details for this request and move it to processing.
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
-                  <div className="space-y-1 text-left">
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Request Number</Label>
-                    <p className="text-lg font-semibold text-gray-900">{appointmentRequest.requestNo}</p>
-                  </div>
-                  <div className="space-y-1 text-left">
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Document Type</Label>
-                    <p className="text-lg font-semibold text-gray-900">{appointmentRequest.documentType}</p>
-                  </div>
-                  <div className="space-y-1 text-left sm:col-span-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Resident</Label>
-                    <p className="text-lg font-semibold leading-snug text-gray-900 break-words">{appointmentRequest.residentName}</p>
-                    <p className="text-sm text-gray-500">{appointmentRequest.residentId}</p>
+              <div className="space-y-5 pt-1">
+                {/* ── Request info card ── */}
+                <div className="rounded-xl border border-[#2957a1]/15 bg-[#f4f7fc] p-4">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#2957a1]/60 mb-0.5">Request No.</p>
+                      <p className="text-sm font-bold text-gray-800">{appointmentRequest.requestNo}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#2957a1]/60 mb-0.5">Document Type</p>
+                      <p className="text-sm font-bold text-gray-800">{appointmentRequest.documentType}</p>
+                    </div>
+                    <div className="col-span-2 pt-1 border-t border-[#2957a1]/10">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#2957a1]/60 mb-0.5">Resident</p>
+                      <p className="text-sm font-bold text-gray-800">{appointmentRequest.residentName}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{appointmentRequest.residentId}</p>
+                    </div>
                   </div>
                 </div>
 
+                {/* ── Date & Time row ── */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="appointmentDate" className="font-semibold">Appointment Date *</Label>
-                    <div className="relative">
-                      <Input
-                        ref={appointmentDateInputRef}
-                        id="appointmentDate"
-                        type="date"
-                        value={appointmentDetails.date}
-                        onChange={(e) => setAppointmentDetails({ ...appointmentDetails, date: e.target.value })}
-                        min={new Date().toISOString().split('T')[0]}
-                        className={appointmentAttempted && !appointmentDetails.date
-                          ? 'border-red-500 pr-12 text-left [color-scheme:light] focus-visible:ring-red-500 [&::-webkit-calendar-picker-indicator]:opacity-0'
-                          : 'pr-12 text-left [color-scheme:light] [&::-webkit-calendar-picker-indicator]:opacity-0'}
-                      />
+
+                  {/* ── Custom Date Picker ── */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                      Appointment Date <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="relative" ref={datePickerRef}>
                       <button
                         type="button"
-                        aria-label="Open appointment date picker"
-                        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-gray-700 hover:text-[#2957a1]"
-                        onClick={() => {
-                          appointmentDateInputRef.current?.showPicker?.();
-                          appointmentDateInputRef.current?.focus();
-                        }}
+                        onClick={() => { setShowDatePicker((v) => !v); setShowTimePicker(false); }}
+                        className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-white transition-colors ${
+                          appointmentAttempted && !appointmentDetails.date
+                            ? 'border-red-400 ring-1 ring-red-400'
+                            : showDatePicker
+                            ? 'border-[#2957a1] ring-1 ring-[#2957a1]/40'
+                            : 'border-input hover:border-[#2957a1]/50'
+                        }`}
                       >
-                        <Calendar className="h-4 w-4" />
+                        <span className={appointmentDetails.date ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+                          {appointmentDetails.date
+                            ? new Date(appointmentDetails.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            : 'Select date'}
+                        </span>
+                        <Calendar className="h-4 w-4 text-gray-400" />
                       </button>
+
+                      {showDatePicker && (
+                        <div className="absolute left-0 z-50 mt-1.5 w-72 rounded-2xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+                          {/* Month nav */}
+                          <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (calViewMonth === 0) { setCalViewMonth(11); setCalViewYear(y => y - 1); }
+                                else setCalViewMonth(m => m - 1);
+                              }}
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors text-base"
+                            >‹</button>
+                            <span className="text-sm font-semibold text-gray-800">
+                              {new Date(calViewYear, calViewMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (calViewMonth === 11) { setCalViewMonth(0); setCalViewYear(y => y + 1); }
+                                else setCalViewMonth(m => m + 1);
+                              }}
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors text-base"
+                            >›</button>
+                          </div>
+                          {/* Day headers */}
+                          <div className="grid grid-cols-7 px-3 pb-1">
+                            {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+                              <p key={d} className="text-center text-[11px] font-medium text-gray-400 py-1">{d}</p>
+                            ))}
+                          </div>
+                          {/* Days */}
+                          <div className="px-3 pb-3">
+                            {(() => {
+                              const today = new Date(); today.setHours(0,0,0,0);
+                              const firstDay = new Date(calViewYear, calViewMonth, 1).getDay();
+                              const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
+                              const cells: React.ReactNode[] = [];
+                              for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} />);
+                              for (let d = 1; d <= daysInMonth; d++) {
+                                const dateObj = new Date(calViewYear, calViewMonth, d);
+                                const isPast = dateObj < today;
+                                const iso = `${calViewYear}-${String(calViewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                                const isSelected = appointmentDetails.date === iso;
+                                const isToday = dateObj.getTime() === today.getTime();
+                                cells.push(
+                                  <button
+                                    key={d}
+                                    type="button"
+                                    disabled={isPast}
+                                    onClick={() => { setAppointmentDetails({ ...appointmentDetails, date: iso }); setShowDatePicker(false); }}
+                                    className={`w-full aspect-square flex items-center justify-center rounded-full text-sm transition-colors
+                                      ${isPast ? 'text-gray-300 cursor-not-allowed' :
+                                        isSelected ? 'bg-[#2957a1] text-white font-semibold' :
+                                        isToday ? 'text-[#2957a1] font-semibold hover:bg-gray-100' :
+                                        'text-gray-700 hover:bg-gray-100'
+                                      }`}
+                                  >{d}</button>
+                                );
+                              }
+                              return <div className="grid grid-cols-7 gap-0.5">{cells}</div>;
+                            })()}
+                          </div>
+                          {/* Footer */}
+                          <div className="border-t border-gray-100 px-5 py-3 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => { setAppointmentDetails({ ...appointmentDetails, date: '' }); setShowDatePicker(false); }}
+                              className="text-sm text-gray-400 hover:text-gray-600 font-medium transition-colors"
+                            >Clear</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="appointmentTime" className="font-semibold">Appointment Time *</Label>
-                    <div className="relative">
-                      <Input
-                        ref={appointmentTimeInputRef}
-                        id="appointmentTime"
-                        type="time"
-                        value={appointmentDetails.time}
-                        onChange={(e) => setAppointmentDetails({ ...appointmentDetails, time: e.target.value })}
-                        className={appointmentAttempted && !appointmentDetails.time
-                          ? 'border-red-500 pr-12 text-left [color-scheme:light] focus-visible:ring-red-500 [&::-webkit-calendar-picker-indicator]:opacity-0'
-                          : 'pr-12 text-left [color-scheme:light] [&::-webkit-calendar-picker-indicator]:opacity-0'}
-                      />
+
+                  {/* ── Custom Time Picker ── */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                      Appointment Time <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="relative" ref={timePickerRef}>
                       <button
                         type="button"
-                        aria-label="Open appointment time picker"
-                        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-gray-700 hover:text-[#2957a1]"
-                        onClick={() => {
-                          appointmentTimeInputRef.current?.showPicker?.();
-                          appointmentTimeInputRef.current?.focus();
-                        }}
+                        onClick={() => { setShowTimePicker((v) => !v); setShowDatePicker(false); }}
+                        className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-white transition-colors ${
+                          appointmentAttempted && !appointmentDetails.time
+                            ? 'border-red-400 ring-1 ring-red-400'
+                            : showTimePicker
+                            ? 'border-[#2957a1] ring-1 ring-[#2957a1]/40'
+                            : 'border-input hover:border-[#2957a1]/50'
+                        }`}
                       >
-                        <Clock className="h-4 w-4" />
+                        <span className={appointmentDetails.time ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+                          {appointmentDetails.time
+                            ? (() => {
+                                const [h, m] = appointmentDetails.time.split(':');
+                                const hNum = parseInt(h, 10);
+                                const period = hNum >= 12 ? 'PM' : 'AM';
+                                const h12 = hNum % 12 === 0 ? 12 : hNum % 12;
+                                return `${String(h12).padStart(2,'0')}:${m} ${period}`;
+                              })()
+                            : 'Select time'}
+                        </span>
+                        <Clock className="h-4 w-4 text-gray-400" />
                       </button>
+
+                      {showTimePicker && (
+                        <div className="absolute left-0 right-0 z-50 mt-1.5 rounded-2xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+                          {/* Title */}
+                          <div className="px-5 pt-5 pb-4 border-b border-gray-100">
+                            <p className="text-sm font-semibold text-gray-800">Select Time</p>
+                          </div>
+                          {/* Controls */}
+                          <div className="flex items-center gap-2 px-5 py-4">
+                            {/* Hour select */}
+                            <div className="relative">
+                              <select
+                                value={tpHour}
+                                onChange={e => setTpHour(e.target.value)}
+                                className="appearance-none h-9 pl-3 pr-7 rounded-lg border border-gray-200 text-sm font-semibold text-gray-800 bg-white focus:outline-none focus:border-[#2957a1] focus:ring-1 focus:ring-[#2957a1]/30 cursor-pointer"
+                              >
+                                {['01','02','03','04','05','06','07','08','09','10','11','12'].map(h => (
+                                  <option key={h} value={h}>{h}</option>
+                                ))}
+                              </select>
+                              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400 text-xs">▾</span>
+                            </div>
+                            <span className="text-lg font-bold text-gray-500">:</span>
+                            {/* Minute select */}
+                            <div className="relative">
+                              <select
+                                value={tpMinute}
+                                onChange={e => setTpMinute(e.target.value)}
+                                className="appearance-none h-9 pl-3 pr-7 rounded-lg border border-gray-200 text-sm font-semibold text-gray-800 bg-white focus:outline-none focus:border-[#2957a1] focus:ring-1 focus:ring-[#2957a1]/30 cursor-pointer"
+                              >
+                                {['00','05','10','15','20','25','30','35','40','45','50','55'].map(m => (
+                                  <option key={m} value={m}>{m}</option>
+                                ))}
+                              </select>
+                              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400 text-xs">▾</span>
+                            </div>
+                            {/* AM/PM toggle */}
+                            <div className="ml-1 flex items-center gap-1">
+                              {(['AM','PM'] as const).map(p => (
+                                <button
+                                  key={p}
+                                  type="button"
+                                  onClick={() => setTpPeriod(p)}
+                                  className={`px-2.5 py-1 rounded-md text-sm font-semibold transition-colors ${
+                                    tpPeriod === p ? 'text-[#2957a1] font-bold' : 'text-gray-400 hover:text-gray-600'
+                                  }`}
+                                >{p}</button>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Footer */}
+                          <div className="border-t border-gray-100 px-5 py-3 flex items-center justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setShowTimePicker(false)}
+                              className="text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors"
+                            >Cancel</button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const hNum = parseInt(tpHour, 10);
+                                const h24 = tpPeriod === 'AM' ? (hNum === 12 ? 0 : hNum) : (hNum === 12 ? 12 : hNum + 12);
+                                setAppointmentDetails({ ...appointmentDetails, time: `${String(h24).padStart(2,'0')}:${tpMinute}` });
+                                setShowTimePicker(false);
+                              }}
+                              className="px-5 py-1.5 rounded-full bg-[#2957a1] text-sm font-semibold text-white hover:bg-[#1e4080] active:scale-[0.98] transition-all"
+                            >Apply</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="requirements" className="font-semibold">Required Documents to Bring *</Label>
+                {/* ── Required Documents ── */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="requirements" className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                    Required Documents to Bring <span className="text-red-500">*</span>
+                  </Label>
                   <Textarea
                     id="requirements"
                     value={appointmentDetails.requirements}
                     onChange={(e) => setAppointmentDetails({ ...appointmentDetails, requirements: e.target.value })}
                     placeholder="e.g., Valid ID, Proof of Residency, etc."
-                    rows={4}
-                    className={`resize-none ${appointmentAttempted && !appointmentDetails.requirements.trim() ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                    rows={3}
+                    className={`resize-none text-sm ${appointmentAttempted && !appointmentDetails.requirements.trim() ? 'border-red-400 focus-visible:ring-red-400' : 'focus-visible:ring-[#2957a1]/40 focus-visible:border-[#2957a1]'}`}
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="additionalNotes" className="font-semibold">Additional Notes (Optional)</Label>
+                {/* ── Additional Notes ── */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="additionalNotes" className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                    Additional Notes <span className="text-gray-400 font-normal normal-case tracking-normal">(Optional)</span>
+                  </Label>
                   <Textarea
                     id="additionalNotes"
                     value={appointmentDetails.additionalNotes}
                     onChange={(e) => setAppointmentDetails({ ...appointmentDetails, additionalNotes: e.target.value })}
                     placeholder="Any additional instructions..."
-                    rows={3}
-                    className="resize-none"
+                    rows={2}
+                    className="resize-none text-sm focus-visible:ring-[#2957a1]/40 focus-visible:border-[#2957a1]"
                   />
                 </div>
               </div>
 
-              <DialogFooter className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-gray-500">
-                  Sending the appointment will move this request to the Processing tab.
+              {/* ── Footer ── */}
+              <DialogFooter className="pt-2 border-t border-gray-100 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-gray-400">
+                  Sending the appointment will move this request to the <span className="font-semibold text-gray-500">Processing</span> tab.
                 </p>
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
+                    className="text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
                     onClick={() => {
                       setAppointmentRequest(null);
                       setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' });
@@ -1212,7 +1395,7 @@ export function OnlineRequests({
                   >
                     Cancel
                   </Button>
-                  <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleSendAppointment}>
+                  <Button className="bg-[#2957a1] hover:bg-[#1e4080] text-sm font-semibold" onClick={handleSendAppointment}>
                     <Mail className="w-4 h-4 mr-2" />
                     Send Appointment
                   </Button>

@@ -557,7 +557,6 @@ export function ResidentRecords({
     } catch { return false; }
   })();
 
-  const birthdayInputRef = useRef<HTMLInputElement | null>(null);
   const initialFormData = {
     profileImage: "",
     firstName: "",
@@ -1444,16 +1443,18 @@ export function ResidentRecords({
               </DialogHeader>
 
               <div className="space-y-6 py-4">
-                <div className="flex flex-col items-center gap-3 mb-2">
-                  <OcrScanner onDataExtracted={handleOcrData} />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="border-[#2957a1] text-[#2957a1] hover:bg-blue-50"
-                    onClick={() => setShowScannerInfoDialog(true)}
-                  >
-                    WHAT'S CAMERA SCANNER?
-                  </Button>
+                <div className="flex flex-col items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <OcrScanner onDataExtracted={handleOcrData} />
+                    <button
+                      type="button"
+                      onClick={() => setShowScannerInfoDialog(true)}
+                      className="w-6 h-6 rounded-full border-2 border-[#2957a1] text-[#2957a1] text-xs font-bold flex items-center justify-center hover:bg-blue-50 transition-colors flex-shrink-0"
+                      title="What's Camera Scanner?"
+                    >
+                      ?
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1564,57 +1565,58 @@ export function ResidentRecords({
                 {/* PERSONAL INFO */}
                 <div className="space-y-4">
 
-                  {/* BIRTHDAY */}
-                  <div className="space-y-2">
-                    <Label>Birthday *</Label>
-
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Input
-                        ref={birthdayInputRef}
-                        type="date"
-                        value={formData.birthday}
-                        max={new Date().toISOString().split("T")[0]}
-                        onChange={(e) => {
-                          const ymd = e.target.value;
-                          setFormData({
-                            ...formData,
-                            birthday: ymd,
-                            age: calculateAge(ymd),
-                          });
-                        }}
-                        className={cn(
-                          "bg-gray-100",
-                          birthdayError && "border-red-500 ring-red-500"
-                        )}
-                      />
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          birthdayInputRef.current?.focus();
-                          birthdayInputRef.current?.showPicker?.();
-                        }}
-                        className={cn(
-                          "w-full justify-center bg-gray-100 hover:bg-gray-200 sm:w-auto sm:px-4",
-                          birthdayError && "border-red-500 ring-red-500"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        Show date picker
-                      </Button>
+                  {/* BIRTHDAY + AGE + GENDER on same row */}
+                  <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-end">
+                    <div className="space-y-2">
+                      <Label>Birthday *</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal bg-gray-100",
+                              !formData.birthday && "text-muted-foreground",
+                              birthdayError && "border-red-500 ring-red-500"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                            {formData.birthday
+                              ? format(new Date(formData.birthday + "T00:00:00"), "MM/dd/yyyy")
+                              : <span>Select date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={formData.birthday ? new Date(formData.birthday + "T00:00:00") : undefined}
+                            onSelect={(date) => {
+                              if (!date) return;
+                              const ymd = date.toISOString().split("T")[0];
+                              setFormData({ ...formData, birthday: ymd, age: calculateAge(ymd) });
+                            }}
+                            disabled={(date) => date > new Date()}
+                            initialFocus
+                            captionLayout="dropdown-buttons"
+                            fromYear={1900}
+                            toYear={new Date().getFullYear()}
+                            className="rounded-md"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      {birthdayError && (
+                        <p className="text-xs text-red-500 mt-1">Birthday is required.</p>
+                      )}
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     <div className="space-y-2">
                       <Label>Age</Label>
                       <Input
                         type="number"
                         value={formData.age}
                         readOnly
-                        placeholder="Auto-calculated"
-                        className="uppercase"
+                        placeholder="—"
+                        className="w-24 text-center bg-gray-100"
                       />
                     </div>
 
@@ -1635,7 +1637,10 @@ export function ResidentRecords({
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
 
+                  {/* CIVIL STATUS + RELIGION on same row with equal widths */}
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Civil Status</Label>
                       <Select
@@ -1656,10 +1661,6 @@ export function ResidentRecords({
                       </Select>
                     </div>
 
-                  </div>
-
-                  {/* Religion — full row so long names don't overflow */}
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Religion</Label>
                       <Select
@@ -1854,7 +1855,7 @@ export function ResidentRecords({
 
                       {contactComplete && !contactTooLong && !isCheckingContactNumber && !contactNumberAlreadyExists && (
                         <p className="text-xs text-green-600 mt-1">
-                          Contact number complete (11 digits)âœ…
+                          Contact number complete (11 digits)
                         </p>
                       )}
 
@@ -2046,7 +2047,7 @@ export function ResidentRecords({
                         </p>
                       )}
                       {formData.emergencyContactNumber.length === 11 && (
-                        <p className="text-xs text-green-600 mt-1">Contact number complete (11 digits)✅</p>
+                        <p className="text-xs text-green-600 mt-1">Contact number complete (11 digits)</p>
                       )}
                     </div>
                   </div>
@@ -2245,7 +2246,7 @@ export function ResidentRecords({
                               <AlertDialogTrigger asChild>
                                 <Button
                                   size="sm"
-                                  className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] h-7 px-2"
+                                  className="bg-red-500 hover:bg-red-600 text-white text-[10px] h-7 px-2"
                                 >
                                   DEACTIVATE
                                 </Button>
@@ -2336,14 +2337,14 @@ export function ResidentRecords({
           }
         }}
       >
-        <AlertDialogContent className="max-w-2xl">
+        <AlertDialogContent className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px]">
           <AlertDialogHeader>
-            <AlertDialogTitle>Data Privacy Agreement</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-2xl font-bold text-[#2957a1]">Data Privacy Agreement</AlertDialogTitle>
+            <AlertDialogDescription className="text-base text-gray-600 mt-1">
               Please review and confirm the data privacy terms before creating this resident account.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-2 text-sm leading-7 text-gray-700">
+          <div className="max-h-[55vh] space-y-5 overflow-y-auto pr-2 text-base leading-8 text-gray-700">
             <p>
               By accessing and using the Tondocs Barangay Management Web Application, you agree to the
               collection, use, and processing of your personal information in accordance with applicable
@@ -2363,35 +2364,35 @@ export function ResidentRecords({
               Your information will not be shared with third parties without your consent, unless
               required by law or necessary for official government functions.
             </p>
-            <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-              <p className="font-semibold text-[#2957a1]">By continuing to use this system, you confirm that:</p>
-              <ul className="mt-3 list-disc space-y-2 pl-5 text-gray-700">
+            <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-4">
+              <p className="text-base font-bold text-[#2957a1]">By continuing to use this system, you confirm that:</p>
+              <ul className="mt-3 list-disc space-y-3 pl-6 text-base text-gray-700">
                 {dataPrivacyHighlights.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
             </div>
             <p>If you do not agree with this policy, please discontinue use of the system.</p>
-            <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+            <label className="flex items-start gap-4 rounded-lg border border-gray-200 bg-gray-50 px-5 py-4 cursor-pointer">
               <input
                 type="checkbox"
                 checked={residentPrivacyAccepted}
                 onChange={(event) => setResidentPrivacyAccepted(event.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-gray-300"
+                className="mt-1 h-5 w-5 rounded border-gray-300"
               />
-              <span className="text-sm font-medium text-gray-800">
+              <span className="text-base font-medium text-gray-800">
                 I have read and understood the Data Privacy Agreement, and I consent to the collection
                 and processing of this resident’s information for legitimate barangay operations.
               </span>
             </label>
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancelDataPrivacy}>
+          <AlertDialogFooter className="mt-2">
+            <AlertDialogCancel onClick={handleCancelDataPrivacy} className="text-base px-6 py-2">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmPrivacy}
-              className="bg-[#2957a1]"
+              className="bg-[#2957a1] text-base px-6 py-2"
               disabled={!residentPrivacyAccepted}
             >
               Agree and Continue

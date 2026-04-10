@@ -1132,8 +1132,7 @@ export function AnnouncementManagement() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
-              <Megaphone className="w-6 h-6" />
+            <h1 className="text-2xl font-bold text text-gray-900 flex items-center gap-2">
               Announcements
             </h1>
             <p className="text-gray-600 mt-1">

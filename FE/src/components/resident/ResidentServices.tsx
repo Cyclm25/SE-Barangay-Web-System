@@ -295,39 +295,39 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
     : "Unknown Resident";
 
   return (
-    <div className="min-h-[calc(100vh-73px)] md:min-h-[calc(100vh-93px)] bg-gradient-to-br from-gray-50 to-blue-50 px-4 md:px-8 py-6 md:py-10">
+    <div className="min-h-[calc(100vh-73px)] md:min-h-[calc(100vh-93px)] bg-gradient-to-br from-gray-50 to-blue-50 px-3 sm:px-6 py-4 sm:py-8">
       <div className="max-w-[1200px] mx-auto">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-[#2957a1] text-[14px] md:text-[16px] font-semibold hover:text-[#1e4380] transition-colors mb-6 md:mb-8"
+          className="flex items-center gap-2 text-[#2957a1] text-[14px] sm:text-[16px] font-semibold hover:text-[#1e4380] transition-colors mb-4 sm:mb-6"
         >
-          <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Back to Services
         </button>
 
-        <div className="bg-white rounded-xl md:rounded-2xl shadow-lg p-5 md:p-10">
-          <div className="mb-6 md:mb-8 pb-4 md:pb-6 border-b-2 border-gray-200">
-            <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-4">
-              <div className="w-12 h-12 md:w-16 md:h-16 bg-[#2957a1] rounded-full flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 md:w-8 md:h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 md:p-10">
+          <div className="mb-4 sm:mb-6 md:mb-8 pb-4 sm:pb-6 border-b-2 border-gray-200">
+            <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-[#2957a1] rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 sm:w-7 sm:h-7 md:w-8 md:h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
                 </svg>
               </div>
               <div>
-                <h2 className="text-[20px] md:text-[28px] text-[#2957a1] font-bold">Document Request Form</h2>
-                <p className="text-gray-600 text-[12px] md:text-[14px]">
+                <h2 className="text-[20px] sm:text-[24px] md:text-[28px] text-[#2957a1] font-bold">Document Request Form</h2>
+                <p className="text-gray-600 text-[12px] sm:text-[14px]">
                   {loadingProfile ? "Loading your profile..." : "Your information has been auto-filled from your profile"}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="space-y-6 md:space-y-8">
+          <div className="space-y-5 sm:space-y-6 md:space-y-8">
             {/* Personal Information */}
             <div>
-              <h3 className="text-[18px] font-bold text-[#2957a1] mb-4 flex items-center gap-2">
+              <h3 className="text-[15px] sm:text-[18px] font-bold text-[#2957a1] mb-4 flex items-center gap-2">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                 </svg>
@@ -377,7 +377,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
 
             {/* Demographics */}
             <div>
-              <h3 className="text-[18px] font-bold text-[#2957a1] mb-4 flex items-center gap-2">
+              <h3 className="text-[15px] sm:text-[18px] font-bold text-[#2957a1] mb-4 flex items-center gap-2">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
                 </svg>
@@ -430,7 +430,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
 
             {/* Address */}
             <div>
-              <h3 className="text-[18px] font-bold text-[#2957a1] mb-4 flex items-center gap-2">
+              <h3 className="text-[15px] sm:text-[18px] font-bold text-[#2957a1] mb-4 flex items-center gap-2">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                 </svg>
@@ -461,8 +461,8 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
             </div>
 
             {/* Document Details */}
-            <div className="bg-blue-50 border-2 border-[#2957a1] rounded-xl p-6">
-              <h3 className="text-[18px] font-bold text-[#2957a1] mb-6 flex items-center gap-2">
+            <div className="bg-blue-50 border-2 border-[#2957a1] rounded-xl p-4 sm:p-6">
+              <h3 className="text-[15px] sm:text-[18px] font-bold text-[#2957a1] mb-4 sm:mb-6 flex items-center gap-2">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
                 </svg>
@@ -490,7 +490,6 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                     ) : (
                       <>
                         <option value="Business Permit">Business Permit</option>
-                        <option value="Certificate of Residency">Certificate of Residency</option>
                         <option value="Cedula">Cedula</option>
                         <option value="Others">Others (Please Specify)</option>
                       </>
@@ -529,10 +528,10 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
             </div>
 
             {/* Buttons */}
-            <div className="flex justify-end gap-4 pt-6 border-t-2 border-gray-200">
+            <div className="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4 pt-4 sm:pt-6 border-t-2 border-gray-200">
               <button
                 onClick={handleCancelClick}
-                className="px-8 py-3 rounded-lg text-[14px] font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors"
+                className="w-full sm:w-auto px-8 py-3 rounded-lg text-[14px] font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors"
               >
                 Cancel
               </button>
@@ -540,7 +539,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                 type="button"
                 onClick={handleSubmitClick}
                 disabled={isSubmitting || loadingProfile || !residentProfile}
-                className="px-10 py-3 rounded-lg text-[14px] font-bold text-white bg-[#5CE36C] hover:bg-[#4bc95b] transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto px-10 py-3 rounded-lg text-[14px] font-bold text-white bg-[#5CE36C] hover:bg-[#4bc95b] transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? "Submitting..." : "Submit Request"}
               </button>

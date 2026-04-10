@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { Eye, EyeOff, Check, X } from "lucide-react";
+import { Eye, EyeOff, Check, X, MapPin } from "lucide-react";
 import { toast } from "sonner";
-import imgImage1 from "../../assets/citybg.png";
 import imgImage2 from "../../assets/barangaylogo.png";
 import { api } from "../../utils/api";
 
@@ -44,7 +43,6 @@ export function SetNewPasswordPage({ residentAccountId, otpCode, identity, onPas
       toast.error("Missing OTP. Verify OTP again.");
       return;
     }
-
     if (!pw || !cpw) {
       toast.error("Please fill in all fields");
       return;
@@ -53,7 +51,6 @@ export function SetNewPasswordPage({ residentAccountId, otpCode, identity, onPas
       toast.error("Passwords do not match");
       return;
     }
-
     if (!/^[A-Za-z0-9]{8,}$/.test(pw)) {
       toast.error("Password must be at least 8 characters and contain letters/numbers only");
       return;
@@ -61,13 +58,11 @@ export function SetNewPasswordPage({ residentAccountId, otpCode, identity, onPas
 
     try {
       setIsLoading(true);
-
       await api.post("/auth/reset-password", {
         residentAccountId,
         otpCode,
         newPassword: pw,
       });
-
       toast.success("Password reset successfully!");
       onPasswordReset();
     } catch (err: any) {
@@ -79,99 +74,158 @@ export function SetNewPasswordPage({ residentAccountId, otpCode, identity, onPas
   };
 
   return (
-    <div className="h-screen w-screen bg-white flex flex-col md:flex-row overflow-hidden">
-      <div className="flex-1 relative flex flex-col items-center justify-center p-4 md:p-8">
-        <div className="mb-4 md:mb-0 md:absolute md:top-[195px] md:left-[127px] w-[100px] h-[100px] md:w-[203px] md:h-[203px]">
-          <img src={imgImage2} alt="Barangay Logo" className="w-full h-full object-cover" />
-        </div>
+    <div
+      className="min-h-screen w-screen flex flex-col md:flex-row"
+      style={{
+        background: "linear-gradient(135deg, #dde9f7 0%, #eaf1fb 40%, #f0f5fc 70%, #e2ecf8 100%)",
+      }}
+    >
+      {/* Left Panel — Branding (50%) */}
+      <div className="w-full md:w-1/2 flex items-center justify-center p-6 md:p-10">
+        <div
+          className="w-full max-w-[480px] bg-white rounded-2xl shadow-sm p-8 sm:p-10 flex flex-col items-center relative overflow-hidden"
+          style={{ border: "1px solid rgba(41,87,161,0.08)" }}
+        >
+          {/* Decorative circles */}
+          <div
+            className="absolute top-[-40px] right-[-40px] w-[150px] h-[150px] rounded-full"
+            style={{ background: "rgba(41,87,161,0.06)" }}
+          />
+          <div
+            className="absolute bottom-[-30px] left-[-30px] w-[100px] h-[100px] rounded-full"
+            style={{ background: "rgba(41,87,161,0.04)" }}
+          />
 
-        <div className="flex flex-col items-center mt-2 md:mt-[-50px]">
-          <p className="text-[#2957a1] text-[18px] md:text-[40px] font-semibold text-center">WELCOME TO</p>
-          <p className="text-[#2957a1] text-[32px] md:text-[64px] font-extrabold text-center leading-tight mt-1">
+          <img
+            src={imgImage2}
+            alt="Barangay Logo"
+            className="w-[100px] h-[100px] sm:w-[120px] sm:h-[120px] object-contain mb-5 relative z-10"
+          />
+
+          <div className="flex items-center gap-3 mb-1 relative z-10">
+            <div className="h-px w-10 bg-[#2957a1] opacity-40" />
+            <p className="text-[#2957a1] text-[12px] sm:text-[13px] font-semibold tracking-widest uppercase">
+              Welcome to
+            </p>
+            <div className="h-px w-10 bg-[#2957a1] opacity-40" />
+          </div>
+
+          <p className="text-[#1e3f7a] text-[32px] sm:text-[40px] font-extrabold tracking-tight leading-tight relative z-10 text-center">
             BARANGAY 160
           </p>
-          <div className="w-[280px] md:w-[489px] h-[2px] bg-[#2957a1] mt-2 md:mt-4" />
-          <p className="text-[#6287c2] text-[12px] md:text-[15px] font-bold text-center mt-2 md:mt-3">
-            Zone 14, District 2 Tondo, Manila
-          </p>
-        </div>
 
-        <div className="absolute bottom-0 left-[-24px] w-[600px] md:w-[969px] h-[250px] md:h-[397px] opacity-80">
-          <img src={imgImage1} alt="City Background" className="w-full h-full object-cover" />
+          <div
+            className="mt-4 px-4 py-2 rounded-full flex items-center gap-1.5 relative z-10"
+            style={{ background: "rgba(41,87,161,0.08)" }}
+          >
+            <MapPin className="w-3.5 h-3.5 text-[#2957a1]" />
+            <p className="text-[#2957a1] text-[12px] font-semibold">Zone 14, District 2 Tondo, Manila</p>
+          </div>
         </div>
       </div>
 
-      <div className="w-full md:w-[421px] bg-[#2957a1] flex items-center justify-center relative p-4 md:p-0">
-        <div className="w-full max-w-[367px] bg-white rounded-[15px] p-6 md:p-8 relative">
-          <h1 className="text-[#2957a1] text-[22px] md:text-[24px] font-bold mb-2">Set New Password</h1>
+      {/* Divider — vertical on desktop, horizontal on mobile */}
+      <div
+        className="hidden md:block w-px self-stretch my-10"
+        style={{ background: "rgba(41,87,161,0.12)" }}
+      />
+      <div
+        className="block md:hidden h-px mx-6"
+        style={{ background: "rgba(41,87,161,0.12)" }}
+      />
 
-          <p className="text-sm text-[rgba(0,0,0,0.61)] mb-6 leading-relaxed">
-            We found your Gmail: <span className="font-bold">{identity.email}</span>
+      {/* Right Panel — Form (50%) */}
+      <div className="w-full md:w-1/2 flex items-center justify-center p-6 md:p-10">
+        <div
+          className="w-full max-w-[480px] bg-white rounded-2xl shadow-md p-8 sm:p-10"
+          style={{ border: "1px solid rgba(41,87,161,0.08)" }}
+        >
+          <h1 className="text-[#1e3f7a] text-[24px] sm:text-[28px] font-bold text-center mb-2">
+            Set New Password
+          </h1>
+
+          <p className="text-center text-[13px] text-gray-500 mb-7 leading-relaxed">
+            We found your Gmail:{" "}
+            <span className="font-semibold text-[#2957a1]">{identity.email}</span>
             <br />
-            Are you <span className="font-bold">{identity.firstName || "this user"}</span> with the username{" "}
-            <span className="font-bold">{identity.username}</span>?
+            Are you{" "}
+            <span className="font-semibold text-gray-700">{identity.firstName || "this user"}</span>{" "}
+            with the username{" "}
+            <span className="font-semibold text-gray-700">{identity.username}</span>?
           </p>
 
-          <form onSubmit={handleResetPassword} className="space-y-5 md:space-y-6">
-            <div className="space-y-2">
-              <label className="text-[rgba(0,0,0,0.64)] text-[11px] font-semibold">Enter new password</label>
-              <label className="text-[#2957a1] text-[15px] md:text-[16px] font-semibold block">New Password</label>
+          <form onSubmit={handleResetPassword} className="space-y-5">
+            {/* New Password */}
+            <div className="space-y-1.5">
+              <label className="text-[#1e3f7a] text-[14px] font-semibold block">New Password</label>
               <div className="relative">
                 <Input
                   type={showNewPassword ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full h-[48px] md:h-[51px] bg-white border-[#2957a1] rounded-[5px] text-[#2957a1] text-[14px] md:text-[16px] px-4 pr-12"
+                  className="w-full h-[48px] border-[#2957a1] rounded-lg text-[#1e3f7a] text-[14px] px-4 pr-11 focus:ring-2 focus:ring-[#2957a1]/20"
                   placeholder="Enter new password"
                   disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#2957a1] transition-colors"
                 >
                   {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[rgba(0,0,0,0.64)] text-[11px] font-semibold">Enter confirm new password</label>
-              <label className="text-[#2957a1] text-[15px] md:text-[16px] font-semibold block">Confirm Password</label>
+            {/* Confirm Password */}
+            <div className="space-y-1.5">
+              <label className="text-[#1e3f7a] text-[14px] font-semibold block">Confirm Password</label>
               <div className="relative">
                 <Input
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full h-[48px] md:h-[51px] bg-white border-[#2957a1] rounded-[5px] text-[#2957a1] text-[14px] md:text-[16px] px-4 pr-12"
+                  className="w-full h-[48px] border-[#2957a1] rounded-lg text-[#1e3f7a] text-[14px] px-4 pr-11 focus:ring-2 focus:ring-[#2957a1]/20"
                   placeholder="Confirm new password"
                   disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#2957a1] transition-colors"
                 >
                   {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
+            {/* Password match indicator */}
             {confirmPassword && (
-              <div className="space-y-2 text-xs">
-                <div className={`flex items-center gap-2 ${passwordsMatch ? "text-green-600" : "text-red-600"}`}>
-                  {passwordsMatch ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
-                  <span>Passwords match</span>
-                </div>
+              <div
+                className={`flex items-center gap-2 text-xs font-medium ${
+                  passwordsMatch ? "text-green-600" : "text-red-500"
+                }`}
+              >
+                {passwordsMatch ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                <span>Passwords {passwordsMatch ? "match" : "do not match"}</span>
               </div>
             )}
 
+            {/* Submit button */}
             <Button
               type="submit"
               disabled={isLoading || (confirmPassword.length > 0 && !passwordsMatch)}
-              className="w-full h-[43px] bg-[#2957a1] hover:bg-[#1e3f7a] text-white text-[16px] md:text-[18px] font-semibold rounded-md border border-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-[48px] rounded-full text-white text-[16px] font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all mt-2"
+              style={{
+                background:
+                  isLoading || (confirmPassword.length > 0 && !passwordsMatch)
+                    ? "#9ca3af"
+                    : "linear-gradient(90deg, #22c55e 0%, #16a34a 100%)",
+                border: "none",
+                boxShadow: "0 4px 14px rgba(34,197,94,0.35)",
+              }}
             >
-              {isLoading ? "Resetting Password..." : "Reset Password"}
+              {isLoading ? "Resetting..." : "Reset Password"}
             </Button>
           </form>
         </div>

@@ -238,8 +238,7 @@ export function TransactionHistory() {
     <div className="p-6 space-y-6 bg-gray-50 min-h-full">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <History className="w-7 h-7" />
-          Transaction History
+          Activity Logs
         </h1>
         <p className="text-gray-600 mt-1">
           View all system activities and actions performed

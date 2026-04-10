@@ -184,63 +184,45 @@ export function AnnouncementDetail({
   return (
     <>
       <div className="pt-[93px] min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
-        <div className="max-w-[900px] mx-auto px-6 py-8">
+        <div className="max-w-[900px] mx-auto px-3 sm:px-6 py-4 sm:py-8">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-[#2957a1] text-[16px] font-semibold hover:text-[#1e4380] transition-colors mb-6"
+            className="flex items-center gap-2 text-[#2957a1] text-[14px] sm:text-[16px] font-semibold hover:text-[#1e4380] transition-colors mb-4 sm:mb-6"
           >
             <ArrowLeft className="w-5 h-5" />
             Back to Announcements
           </button>
 
           <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <div className="w-14 h-14 bg-[#2957a1] rounded-full flex items-center justify-center">
-                    <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <div className="p-4 sm:p-6 border-b border-gray-200">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                  <div className="w-10 h-10 sm:w-14 sm:h-14 shrink-0 bg-[#2957a1] rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" />
                     </svg>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-[18px] font-bold text-gray-900">Barangay 160</h3>
-                    <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-gray-600">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Calendar className="w-4 h-4" />
-                        <span>{displayDate}</span>
-                        <span className="text-gray-400">•</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {normalizedCategories
-                          .filter((cat) => cat !== "Announcement")
-                          .map((cat, index) => (
-                            <span
-                              key={index}
-                              className="px-3 py-1 rounded-full bg-blue-50 border border-[#2957a1]/30 text-[11px] font-semibold text-[#2957a1]"
-                            >
-                              {cat}
-                            </span>
-                          ))}
-                      </div>
+                    <h3 className="text-[15px] sm:text-[18px] font-bold text-gray-900">Barangay 160</h3>
+                    <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-gray-600 mt-0.5 flex-wrap">
+                      <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                      <span>{displayDate}</span>
+                      <span className="text-gray-400">•</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {normalizedCategories
-                    .filter((cat) => cat !== "Announcement")
-                    .map((cat, index) => (
-                      <span
-                        key={index}
-                        className="px-3 py-1 rounded-full bg-blue-50 border border-[#2957a1]/30 text-[11px] font-semibold text-[#2957a1]"
-                      >
-                        {cat}
-                      </span>
-                    ))}
-                </div>
+                {(() => {
+                  const firstCat = normalizedCategories.find((cat) => cat !== "Announcement");
+                  return firstCat ? (
+                    <span className="shrink-0 px-3 py-1 rounded-full bg-blue-50 border border-[#2957a1]/30 text-[11px] font-semibold text-[#2957a1] whitespace-nowrap">
+                      {firstCat}
+                    </span>
+                  ) : null;
+                })()}
               </div>
 
-              <h1 className="text-[28px] font-bold text-[#2957a1] leading-tight">{title}</h1>
+              <h1 className="text-[20px] sm:text-[28px] font-bold text-[#2957a1] leading-tight">{title}</h1>
             </div>
 
             {displayImages.length > 0 && (
@@ -419,9 +401,9 @@ export function AnnouncementDetail({
               </div>
             )}
 
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <div className="mb-6">
-                <p className="text-[16px] text-gray-800 leading-relaxed whitespace-pre-wrap">
+                <p className="text-[14px] sm:text-[16px] text-gray-800 leading-relaxed whitespace-pre-wrap">
                   {body}
                 </p>
               </div>

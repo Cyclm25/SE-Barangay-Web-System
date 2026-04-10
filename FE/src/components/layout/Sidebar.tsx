@@ -30,7 +30,7 @@ const navigation = [
   { id: 'officials',     label: 'Barangay Officials', icon: User,            roles: ['admin', 'superadmin'] },
   { id: 'requests',      label: 'Online Requests',    icon: FileText,        roles: ['admin', 'official', 'sk_kagawad'] },
   { id: 'announcements', label: 'Announcements',      icon: Megaphone,       roles: ['admin', 'official', 'sk_kagawad'] },
-  { id: 'transactions',  label: 'Transaction History',icon: History,         roles: ['admin', 'superadmin'] },
+  { id: 'transactions',  label: 'Activity Logs',       icon: History,         roles: ['admin', 'superadmin'] },
 ];
 
 export function Sidebar({
