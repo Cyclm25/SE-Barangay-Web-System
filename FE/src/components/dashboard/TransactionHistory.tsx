@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { History, Search, User, Shield, Calendar, FileCheck, ShieldAlert, UserX } from "lucide-react";
+import { History, Search, User, Shield, Calendar, FileCheck, ShieldAlert, UserX, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 interface Transaction {
   id: string;
@@ -77,6 +77,8 @@ export function TransactionHistory() {
   const [residentNames, setResidentNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     let alive = true;
@@ -166,6 +168,17 @@ export function TransactionHistory() {
     });
   }, [transactions, searchTerm, residentNames, dateFilter, customFrom, customTo]);
 
+  // Reset to page 1 whenever filters change
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, dateFilter, customFrom, customTo]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / pageSize));
+  const paginatedTransactions = filteredTransactions.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+  const rangeStart = filteredTransactions.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredTransactions.length);
+
   const computedStats = useMemo(() => {
     const total = transactions.length;
 
@@ -235,7 +248,7 @@ export function TransactionHistory() {
   }, [transactions]);
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-full">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 bg-gray-50 min-h-full">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           Activity Logs
@@ -246,17 +259,17 @@ export function TransactionHistory() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Transactions</p>
-                <p className="text-2xl font-semibold text-gray-900">
+                <p className="text-lg sm:text-2xl font-semibold text-gray-900">
                   {loading ? "…" : computedStats.total}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                 <History className="w-6 h-6 text-blue-600" />
               </div>
             </div>
@@ -268,11 +281,11 @@ export function TransactionHistory() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Admin Actions</p>
-                <p className="text-2xl font-semibold text-gray-900">
+                <p className="text-lg sm:text-2xl font-semibold text-gray-900">
                   {loading ? "…" : computedStats.adminActions}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                 <Shield className="w-6 h-6 text-purple-600" />
               </div>
             </div>
@@ -284,11 +297,11 @@ export function TransactionHistory() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Resident Actions</p>
-                <p className="text-2xl font-semibold text-gray-900">
+                <p className="text-lg sm:text-2xl font-semibold text-gray-900">
                   {loading ? "…" : computedStats.residentActions}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center">
                 <User className="w-6 h-6 text-green-600" />
               </div>
             </div>
@@ -300,13 +313,13 @@ export function TransactionHistory() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
               <History className="w-5 h-5" />
               All Transactions
             </CardTitle>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Date Filter Buttons */}
               <div className="flex items-center gap-1">
                 {(['all', '1', '7', '30'] as const).map((val) => (
@@ -359,9 +372,9 @@ export function TransactionHistory() {
               )}
 
               {/* Search */}
-              <div className="flex items-center gap-2">
-                <Label className="text-sm">Search:</Label>
-                <div className="relative w-64">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Label className="text-sm shrink-0">Search:</Label>
+                <div className="relative flex-1 sm:w-64">
                   <Input
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -383,89 +396,55 @@ export function TransactionHistory() {
             </div>
           )}
 
-          <div className="overflow-x-auto">
+          {/* ── DESKTOP TABLE (hidden on mobile) ── */}
+          <div className="hidden sm:block overflow-x-auto">
             <Table>
               <TableHeader className="bg-[#2957a1]">
                 <TableRow className="hover:bg-[#2957a1] border-b-0">
-                  <TableHead className="text-white font-bold text-xs">
-                    TIMESTAMP
-                  </TableHead>
-                  <TableHead className="text-white font-bold text-xs">
-                    ACCOUNT
-                  </TableHead>
-                  <TableHead className="text-white font-bold text-xs">
-                    TYPE
-                  </TableHead>
-                  <TableHead className="text-white font-bold text-xs">
-                    ACTION
-                  </TableHead>
-                  <TableHead className="text-white font-bold text-xs">
-                    DETAILS
-                  </TableHead>
-                  <TableHead className="text-white font-bold text-xs">
-                    MODULE
-                  </TableHead>
+                  <TableHead className="text-white font-bold text-xs">TIMESTAMP</TableHead>
+                  <TableHead className="text-white font-bold text-xs">ACCOUNT</TableHead>
+                  <TableHead className="text-white font-bold text-xs">TYPE</TableHead>
+                  <TableHead className="text-white font-bold text-xs">ACTION</TableHead>
+                  <TableHead className="text-white font-bold text-xs">DETAILS</TableHead>
+                  <TableHead className="text-white font-bold text-xs">MODULE</TableHead>
                 </TableRow>
               </TableHeader>
-
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-md py-6 text-gray-500">
+                    <TableCell colSpan={6} className="text-md py-6 text-gray-500 text-center">
                       Loading transactions…
                     </TableCell>
                   </TableRow>
+                ) : paginatedTransactions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                      No transactions found
+                    </TableCell>
+                  </TableRow>
                 ) : (
-                  filteredTransactions.map((transaction, index) => {
-                    const isAdmin =
-                      transaction.accountType?.toLowerCase() === "admin";
-
+                  paginatedTransactions.map((transaction, index) => {
+                    const isAdmin = transaction.accountType?.toLowerCase() === "admin";
                     return (
-                      <TableRow
-                        key={transaction.id}
-                        className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
-                          }`}
-                      >
-                        <TableCell className="text-lg py-3 font-mono">
+                      <TableRow key={transaction.id} className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"}`}>
+                        <TableCell className="text-xs py-3 font-mono">
                           <div className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3 text-gray-400" />
+                            <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
                             {formatTimestamp(transaction.timestamp)}
                           </div>
                         </TableCell>
-
-                        <TableCell className="text-md py-3 font-medium">
-                          {transaction.account}
-                        </TableCell>
-
-                        <TableCell className="text-md py-3">
+                        <TableCell className="text-xs py-3 font-medium">{transaction.account}</TableCell>
+                        <TableCell className="text-xs py-3">
                           {isAdmin ? (
-                            <span className="flex items-center gap-1 text-purple-700">
-                              <Shield className="w-3 h-3" />
-                              Admin
-                            </span>
+                            <span className="flex items-center gap-1 text-purple-700"><Shield className="w-3 h-3" />Admin</span>
                           ) : (
-                            <span className="flex items-center gap-1 text-green-700">
-                              <User className="w-3 h-3" />
-                              Resident
-                            </span>
+                            <span className="flex items-center gap-1 text-green-700"><User className="w-3 h-3" />Resident</span>
                           )}
                         </TableCell>
-
-                        <TableCell className="text-md py-3 font-semibold text-[#2957a1]">
-                          {transaction.action}
-                        </TableCell>
-
-                        <TableCell className="text-md py-3 text-gray-700">
-                          {formatTransactionDetails(transaction.details, residentNames)}
-                        </TableCell>
-
-                        <TableCell className="text-md py-3">
-                          <span
-                            className={`px-2 py-1 rounded-full text-[10px] font-semibold ${isAdmin
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-green-100 text-green-700"
-                              }`}
-                          >
+                        <TableCell className="text-xs py-3 font-semibold text-[#2957a1]">{transaction.action}</TableCell>
+                        <TableCell className="text-xs py-3 text-gray-700">{formatTransactionDetails(transaction.details, residentNames)}</TableCell>
+                        <TableCell className="text-xs py-3">
+                          <span className={`px-2 py-1 rounded-full text-[10px] font-semibold ${isAdmin ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
                             {transaction.module}
                           </span>
                         </TableCell>
@@ -475,14 +454,73 @@ export function TransactionHistory() {
                 )}
               </TableBody>
             </Table>
+          </div>
 
-            {!loading && filteredTransactions.length === 0 && (
+          {/* ── MOBILE CARDS (visible only on mobile) ── */}
+          <div className="sm:hidden space-y-3">
+            {loading ? (
+              <p className="text-center text-sm text-gray-500 py-6">Loading transactions…</p>
+            ) : paginatedTransactions.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                <History className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                <p>No transactions found</p>
+                <History className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                <p className="text-sm">No transactions found</p>
               </div>
+            ) : (
+              paginatedTransactions.map((transaction) => {
+                const isAdmin = transaction.accountType?.toLowerCase() === "admin";
+                return (
+                  <div key={transaction.id} className="rounded-lg border bg-white p-3 shadow-sm space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-semibold text-sm text-[#2957a1]">{transaction.account}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${isAdmin ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
+                        {isAdmin ? "Admin" : "Resident"}
+                      </span>
+                    </div>
+                    <p className="text-xs font-medium text-gray-800">{transaction.action}</p>
+                    <p className="text-xs text-gray-600 break-words">{formatTransactionDetails(transaction.details, residentNames)}</p>
+                    <div className="flex items-center justify-between text-[10px] text-gray-400 pt-1 border-t">
+                      <span className="font-mono">{formatTimestamp(transaction.timestamp)}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${isAdmin ? "bg-blue-50 text-blue-600" : "bg-green-50 text-green-600"}`}>{transaction.module}</span>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
+
+          {/* ── PAGINATION FOOTER ── */}
+          {!loading && filteredTransactions.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t mt-2">
+              {/* Page size + status */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 shrink-0">Rows per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                    className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[#2957a1]"
+                  >
+                    {[5, 10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+                <span className="text-xs text-gray-500">{rangeStart}–{rangeEnd} of {filteredTransactions.length}</span>
+              </div>
+              {/* Page nav */}
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="First page"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Previous page"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+                  const page = start + i;
+                  return page <= totalPages ? (
+                    <button key={page} onClick={() => setCurrentPage(page)} className={`w-7 h-7 rounded border text-xs font-semibold transition-colors ${page === currentPage ? "bg-[#2957a1] text-white border-[#2957a1]" : "border-gray-300 hover:bg-gray-100"}`}>{page}</button>
+                  ) : null;
+                })}
+                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Next page"><ChevronRight className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Last page"><ChevronsRight className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div >

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '../ui/utils';
 import { Button } from '../ui/button';
 import {
@@ -8,7 +8,9 @@ import {
   FileText,
   Megaphone,
   History,
-  LogOut
+  LogOut,
+  X,
+  Menu
 } from 'lucide-react';
 import imgImage3 from "../../assets/barangaylogo.png";
 import { formatId } from '../../utils/formatId';
@@ -22,6 +24,8 @@ interface SidebarProps {
   adminId: string;
   position?: string;
   userRole?: 'admin' | 'official' | 'superadmin' | 'sk_kagawad';
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 const navigation = [
@@ -40,25 +44,51 @@ export function Sidebar({
   adminName,
   adminId,
   position,
-  userRole = 'admin'
+  userRole = 'admin',
+  isMobileOpen = false,
+  onMobileClose,
 }: SidebarProps) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
   const displayRoleLabel =
     userRole === 'superadmin'
       ? 'Super Administrator'
       : position?.trim() || (userRole === 'sk_kagawad' ? 'SK Kagawad' : 'Barangay Official');
 
-  // Filters navigation based on the userRole string passed from App.tsx
   const filteredNavigation = navigation.filter(item => item.roles.includes(userRole));
 
   const handleLogoutClick = () => {
     setShowLogoutConfirm(true);
   };
 
-  return (
+  const handleTabChange = (tab: string) => {
+    onTabChange(tab);
+    onMobileClose?.();
+  };
+
+  // Lock body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (isMobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isMobileOpen]);
+
+  const sidebarContent = (
     <div className="w-[250px] bg-[#2957a1] text-white flex flex-col h-full">
       {/* Logo and Brand */}
-      <div className="p-4 flex flex-col items-center pt-6">
+      <div className="p-4 flex flex-col items-center pt-6 relative">
+        {/* Close button - only on mobile */}
+        <button
+          className="absolute top-3 right-3 lg:hidden text-white/70 hover:text-white p-1 rounded"
+          onClick={onMobileClose}
+          aria-label="Close menu"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
         <div className="relative mb-3">
           <div className="w-[60px] h-[60px] bg-white rounded-full flex items-center justify-center">
             <img src={imgImage3} alt="Barangay Logo" className="w-[50px] h-[50px] object-cover" />
@@ -84,7 +114,7 @@ export function Sidebar({
                     "w-full justify-start gap-2 h-10 text-white hover:bg-white/10 transition-all text-[14px] rounded-none",
                     isActive && "font-semibold border-t border-b border-white bg-transparent"
                   )}
-                  onClick={() => onTabChange(item.id)}
+                  onClick={() => handleTabChange(item.id)}
                 >
                   <Icon className="w-4 h-4" />
                   <span>{item.label}</span>
@@ -110,7 +140,7 @@ export function Sidebar({
         </div>
         <Button
           variant="ghost"
-          className="w-full justify-start gap-2 h-10 text-white hover:bg-red/10 text-[14px], "
+          className="w-full justify-start gap-2 h-10 text-white hover:bg-red/10 text-[14px]"
           onClick={handleLogoutClick}
         >
           <LogOut className="w-4 h-4" />
@@ -126,8 +156,72 @@ export function Sidebar({
         message="Are you sure you want to logout this account?"
         confirmText="Logout"
         cancelText="Cancel"
-        type="danger" 
+        type="danger"
       />
     </div>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar - always visible on lg+ */}
+      <div className="hidden lg:flex h-full">
+        {sidebarContent}
+      </div>
+
+      {/* Mobile overlay + drawer */}
+      {isMobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={onMobileClose}
+          />
+          {/* Drawer */}
+          <div className="relative z-10 flex h-full animate-in slide-in-from-left duration-300">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* MobileHeader – place this in the top-level layout (e.g. App.tsx)   */
+/* Renders only on mobile; shows logo, welcome text, and hamburger btn */
+/* ------------------------------------------------------------------ */
+interface MobileHeaderProps {
+  adminName: string;
+  onMenuOpen: () => void;
+}
+
+export function MobileHeader({ adminName, onMenuOpen }: MobileHeaderProps) {
+  return (
+    <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+      <div className="flex items-center gap-2">
+        <img
+          src="/src/assets/barangaylogo.png"
+          alt="Barangay Logo"
+          className="w-7 h-7 object-cover"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+        <div>
+          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider leading-none">BARANGAY 160</p>
+          <p className="text-[13px] font-bold text-[#2957a1] leading-tight">Welcome, {adminName.split(' ')[0]}!</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+          <User className="w-4 h-4 text-[#2957a1]" />
+        </div>
+        <button
+          onClick={onMenuOpen}
+          className="p-1.5 rounded-md text-gray-600 hover:bg-gray-100 transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      </div>
+    </header>
   );
 }

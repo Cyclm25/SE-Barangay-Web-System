@@ -1128,9 +1128,9 @@ export function AnnouncementManagement() {
 
   return (
     <>
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text text-gray-900 flex items-center gap-2">
               Announcements

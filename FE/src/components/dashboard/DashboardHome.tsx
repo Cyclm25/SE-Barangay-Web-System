@@ -446,7 +446,7 @@ export function DashboardHome({
   const statText = (n: number) => (loadingStats ? '—' : String(n));
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-full">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 bg-gray-50 min-h-full">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
@@ -459,11 +459,11 @@ export function DashboardHome({
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
 
         {/* Total Registered Residents */}
         <Card className="border-[#2957a1] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardContent className="flex h-full min-h-[190px] flex-col p-4">
+          <CardContent className="flex h-full min-h-[140px] sm:min-h-[190px] flex-col p-3 sm:p-4">
             <p className="text-md font-bold text-gray-700 mb-2">Total Registered Residents</p>
 
             <p className="text-[20px] font-semibold text-[#2957a1]">
@@ -482,7 +482,7 @@ export function DashboardHome({
 
         {/* New Residents */}
         <Card className="border-[#51c55f] bg-gradient-to-br from-green-50 to-white border-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardContent className="flex h-full min-h-[190px] flex-col p-4">
+          <CardContent className="flex h-full min-h-[140px] sm:min-h-[190px] flex-col p-3 sm:p-4">
             <div className="flex justify-between items-start mb-2">
               <p className="text-md font-bold text-gray-700 mb-2">New Residents</p>
               <UserPlus className="w-4 h-4 text-green-600" />
@@ -509,7 +509,7 @@ export function DashboardHome({
         {/* Total Barangay Officials */}
         {userRole === 'admin' && (
         <Card className="border-[#ffa62e] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardContent className="flex h-full min-h-[190px] flex-col p-4">
+          <CardContent className="flex h-full min-h-[140px] sm:min-h-[190px] flex-col p-3 sm:p-4">
             <div className="flex justify-between items-start mb-2">
               <p className="text-md font-bold text-gray-700">Total Barangay Officials</p>
               <Users className="w-4 h-4 text-orange-500" />
@@ -532,7 +532,7 @@ export function DashboardHome({
 
         {/* Total Pending Requests */}
         <Card className="border-[#f4b400] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardContent className="flex h-full min-h-[190px] flex-col p-4">
+          <CardContent className="flex h-full min-h-[140px] sm:min-h-[190px] flex-col p-3 sm:p-4">
             <p className="text-md font-bold text-gray-700 mb-2">Total Pending Requests</p>
 
             <p className="text-[20px] font-semibold text-[#2957a1]">
@@ -551,7 +551,7 @@ export function DashboardHome({
 
         {/* Total Documents to Pickup */}
         <Card className="border-[#2957a1] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-          <CardContent className="flex h-full min-h-[190px] flex-col p-4">
+          <CardContent className="flex h-full min-h-[140px] sm:min-h-[190px] flex-col p-3 sm:p-4">
             <p className="text-md font-bold text-gray-700 mb-2">Total Documents to Pickup</p>
 
             <p className="text-[20px] font-semibold text-[#2957a1]">
@@ -582,7 +582,7 @@ export function DashboardHome({
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={residentData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="category" tick={{ fontSize: 14, fill: "#000000" }} />
+                    <XAxis dataKey="category" tick={{ fontSize: 10, fill: "#000000" }} />
                     <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                     <Tooltip cursor={{ fill: 'transparent' }} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
@@ -602,7 +602,7 @@ export function DashboardHome({
         </Card>
 
         {/* Growth Trend + Voters Distribution */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           <Card className="border-[#4ade80] bg-white">
             <CardHeader>
               <CardTitle className="text-md font-bold text-center text-base flex items-center justify-center gap-2">
@@ -713,7 +713,7 @@ export function DashboardHome({
               {activities.map((activity, index) => (
                 <div
                   key={index}
-                  className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex flex-col xs:flex-row xs:items-start gap-2 xs:gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <div className="mt-1">
                     {activity.action.toLowerCase().includes('resident') ? (
@@ -727,7 +727,7 @@ export function DashboardHome({
                     {activity.name && <p className="text-md text-gray-600">{activity.name}</p>}
                   </div>
                   {activity.time && (
-                    <span className="text-md text-gray-500 whitespace-nowrap">
+                    <span className="text-xs text-gray-500 whitespace-nowrap xs:ml-auto">
                       {activity.time}
                     </span>
                   )}

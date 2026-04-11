@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sidebar } from './components/layout/Sidebar';
+import { Sidebar, MobileHeader } from './components/layout/Sidebar';
 import { DashboardHome } from './components/dashboard/DashboardHome';
 import { ResidentRecords } from './components/dashboard/ResidentRecords';
 import { BarangayOfficials } from './components/dashboard/BarangayOfficials';
@@ -81,6 +81,9 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [resetState, setResetState] = useState<ResetState | null>(null);
 
+  // Mobile sidebar open/close state
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
   // SHARED STATE: Filter and cutoff date management
   const [residentFilter, setResidentFilter] = useState<'all' | 'new'>('all');
   const [requestFilter, setRequestFilter] = useState<'all' | 'pending' | 'pickup'>('all');
@@ -94,6 +97,11 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('admin_active_tab', activeTab);
+  }, [activeTab]);
+
+  // Close mobile sidebar whenever the active tab changes
+  useEffect(() => {
+    setIsMobileSidebarOpen(false);
   }, [activeTab]);
 
   // Persistence logic to keep user logged in on refresh
@@ -150,6 +158,7 @@ export default function App() {
     setAuthView('login');
     setActiveTab('dashboard');
     setUser(null);
+    setIsMobileSidebarOpen(false);
     localStorage.removeItem('app_user');
     localStorage.removeItem('position');
     toast.success('Logged out successfully.');
@@ -297,7 +306,8 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen flex bg-gray-50">
+    <div className="h-screen flex flex-col lg:flex-row bg-gray-50 overflow-hidden">
+      {/* Sidebar — hidden on mobile, always visible on lg+ */}
       <Sidebar
         activeTab={activeTab}
         onTabChange={(tab) => {
@@ -312,9 +322,33 @@ export default function App() {
         adminName={user.name}
         adminId={user.id}
         position={user.position}
-        userRole={user.role === 'admin' ? 'admin' : user.role === 'sk_kagawad' ? 'sk_kagawad' : user.role === 'official' ? 'official' : 'admin'}
+        userRole={
+          user.role === 'admin'
+            ? 'admin'
+            : user.role === 'sk_kagawad'
+            ? 'sk_kagawad'
+            : user.role === 'official'
+            ? 'official'
+            : 'admin'
+        }
+        isMobileOpen={isMobileSidebarOpen}
+        onMobileClose={() => setIsMobileSidebarOpen(false)}
       />
-      <div className="flex-1 overflow-auto">{renderMainContent()}</div>
+
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Mobile top bar — only visible below lg breakpoint */}
+        <MobileHeader
+          adminName={user.name}
+          onMenuOpen={() => setIsMobileSidebarOpen(true)}
+        />
+
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto">
+          {renderMainContent()}
+        </main>
+      </div>
+
       <Toaster position="top-right" />
     </div>
   );

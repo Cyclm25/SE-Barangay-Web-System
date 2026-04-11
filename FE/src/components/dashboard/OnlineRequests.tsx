@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { FileText, Clock, CheckCircle, XCircle, Eye, Search, AlertCircle, Mail, Calendar } from 'lucide-react';
+import { FileText, Clock, CheckCircle, XCircle, Eye, Search, AlertCircle, Mail, Calendar, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 type RequestStatus = 'Pending' | 'Processing' | 'Ready for Pickup' | 'Completed' | 'Rejected';
@@ -141,6 +141,8 @@ export function OnlineRequests({
     kind: 'process' | 'ready' | 'complete';
     isOtherDocuments: boolean;
   }>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const API_BASE = "http://localhost:5001";
 
@@ -301,6 +303,9 @@ export function OnlineRequests({
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
+
+  // Reset to page 1 when tab, filter or search changes
+  useEffect(() => { setCurrentPage(1); }, [activeTab, statusFilter, searchTerm]);
 
   const handleStatusChange = async (id: string, newStatus: RequestStatus) => {
     try {
@@ -505,126 +510,178 @@ export function OnlineRequests({
     req.purpose.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const renderRequestTable = (requestList: Request[], isOtherDocuments = false) => (
-    <Table>
-      <TableHeader className="bg-[#2957a1]">
-        <TableRow className="hover:bg-[#2957a1]">
-          <TableHead className="text-white font-bold">Request No.</TableHead>
-          <TableHead className="text-white font-bold">Resident</TableHead>
-          <TableHead className="text-white font-bold">Document Type</TableHead>
-          {!isOtherDocuments && <TableHead className="text-white font-bold">Purpose</TableHead>}
-          <TableHead className="text-white font-bold">Date Requested</TableHead>
-          <TableHead className="text-white font-bold">Status</TableHead>
-          <TableHead className="text-white font-bold">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {requestList.map((request) => (
-          <TableRow key={request.id} className="hover:bg-gray-50">
-            <TableCell className="font-medium">{request.requestNo}</TableCell>
-            <TableCell>
-              <div className="flex flex-col">
-                <span>{request.residentName}</span>
-                <span className="text-xs text-gray-500">{request.residentId}</span>
-              </div>
-            </TableCell>
-            <TableCell>{request.documentType}</TableCell>
-            {!isOtherDocuments && <TableCell>{request.purpose}</TableCell>}
-            <TableCell>{new Date(request.dateRequested).toLocaleDateString()}</TableCell>
-            <TableCell>
-              <Badge className={getStatusColor(request.status)}>
-                <span className="flex items-center gap-1">
-                  {getStatusIcon(request.status)}
-                  {request.status}
-                </span>
-              </Badge>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-2 text-gray-400 hover:text-gray-600">
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors"
-                    onClick={() => setViewingRequest(request)}
-                  >
-                    <Eye className="w-6 h-6" />
-                    <span>View Info</span>
-                  </Button>
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / pageSize));
+  const paginatedRequests = filteredRequests.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredRequests.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredRequests.length);
 
-                  {request.status === 'Rejected' && (
-                    <Button
-                      size="sm"
-                      className="flex items-center gap-2 bg-white text-red-600 border border-red-200 hover:bg-red-50"
-                      onClick={() => setViewingDenialReason(request.rejectionReason ?? 'No reason provided')}
-                    >
-                      <XCircle className="w-4 h-4" />
-                      <span>View Reason</span>
-                    </Button>
-                  )}
+  const renderRequestTable = (requestList: Request[], isOtherDocuments = false) => {
+    const totalPgs = Math.max(1, Math.ceil(requestList.length / pageSize));
+    const paginated = requestList.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const rStart = requestList.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    const rEnd = Math.min(currentPage * pageSize, requestList.length);
+
+    return (
+    <div className="space-y-3">
+      {/* ── DESKTOP TABLE (hidden on mobile) ── */}
+      <div className="hidden sm:block overflow-x-auto">
+        <Table>
+          <TableHeader className="bg-[#2957a1]">
+            <TableRow className="hover:bg-[#2957a1]">
+              <TableHead className="text-white font-bold text-xs">Request No.</TableHead>
+              <TableHead className="text-white font-bold text-xs">Resident</TableHead>
+              <TableHead className="text-white font-bold text-xs">Document Type</TableHead>
+              {!isOtherDocuments && <TableHead className="text-white font-bold text-xs">Purpose</TableHead>}
+              <TableHead className="text-white font-bold text-xs">Date Requested</TableHead>
+              <TableHead className="text-white font-bold text-xs">Status</TableHead>
+              <TableHead className="text-white font-bold text-xs">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {paginated.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={isOtherDocuments ? 6 : 7} className="text-center text-gray-500 py-8">
+                  {isLoading ? "Loading..." : "No requests found"}
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginated.map((request) => (
+                <TableRow key={request.id} className="hover:bg-gray-50">
+                  <TableCell className="font-medium text-xs">{request.requestNo}</TableCell>
+                  <TableCell className="text-xs">
+                    <div className="flex flex-col">
+                      <span>{request.residentName}</span>
+                      <span className="text-[10px] text-gray-500">{request.residentId}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-xs">{request.documentType}</TableCell>
+                  {!isOtherDocuments && <TableCell className="text-xs">{request.purpose}</TableCell>}
+                  <TableCell className="text-xs">{new Date(request.dateRequested).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <Badge className={getStatusColor(request.status)}>
+                      <span className="flex items-center gap-1 text-xs">{getStatusIcon(request.status)}{request.status}</span>
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" className="flex items-center gap-1.5 bg-gray-100 text-black hover:bg-gray-300 text-xs" onClick={() => setViewingRequest(request)}>
+                        <Eye className="w-3.5 h-3.5" /><span>View</span>
+                      </Button>
+                      {request.status === 'Rejected' && (
+                        <Button size="sm" className="flex items-center gap-1.5 bg-white text-red-600 border border-red-200 hover:bg-red-50 text-xs" onClick={() => setViewingDenialReason(request.rejectionReason ?? 'No reason provided')}>
+                          <XCircle className="w-3.5 h-3.5" /><span>Reason</span>
+                        </Button>
+                      )}
+                      {request.status === 'Pending' && !isReadOnly && (
+                        <>
+                          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'process', isOtherDocuments })}>Process</Button>
+                          <Button size="sm" variant="destructive" className="text-xs" onClick={() => setDenyingRequest(request)}>Deny</Button>
+                        </>
+                      )}
+                      {request.status === 'Processing' && !isReadOnly && (
+                        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready</Button>
+                      )}
+                      {request.status === 'Ready for Pickup' && !isReadOnly && (
+                        <Button size="sm" className="bg-gray-600 hover:bg-gray-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'complete', isOtherDocuments })}>Complete</Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* ── MOBILE CARDS (visible only on mobile) ── */}
+      <div className="sm:hidden space-y-3">
+        {paginated.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <FileText className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+            <p className="text-sm">{isLoading ? "Loading..." : "No requests found"}</p>
+          </div>
+        ) : (
+          paginated.map((request) => (
+            <div key={request.id} className="rounded-lg border bg-white p-3 shadow-sm space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-sm text-[#2957a1]">{request.requestNo}</p>
+                  <p className="text-xs text-gray-700 font-medium">{request.residentName}</p>
+                  <p className="text-[10px] text-gray-400">{request.residentId}</p>
                 </div>
-
+                <Badge className={`${getStatusColor(request.status)} shrink-0 text-[10px]`}>
+                  <span className="flex items-center gap-1">{getStatusIcon(request.status)}{request.status}</span>
+                </Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-600">
+                <span className="col-span-2"><span className="font-medium text-gray-500">Doc:</span> {request.documentType}</span>
+                {!isOtherDocuments && <span className="col-span-2 truncate"><span className="font-medium text-gray-500">Purpose:</span> {request.purpose}</span>}
+                <span><span className="font-medium text-gray-500">Date:</span> {new Date(request.dateRequested).toLocaleDateString()}</span>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1 border-t">
+                <Button size="sm" className="flex-1 flex items-center justify-center gap-1.5 bg-gray-100 text-black hover:bg-gray-200 text-xs h-8" onClick={() => setViewingRequest(request)}>
+                  <Eye className="w-3.5 h-3.5" />View Info
+                </Button>
+                {request.status === 'Rejected' && (
+                  <Button size="sm" className="flex-1 bg-white text-red-600 border border-red-200 hover:bg-red-50 text-xs h-8" onClick={() => setViewingDenialReason(request.rejectionReason ?? 'No reason provided')}>
+                    <XCircle className="w-3.5 h-3.5 mr-1" />Reason
+                  </Button>
+                )}
                 {request.status === 'Pending' && !isReadOnly && (
                   <>
-                    {isOtherDocuments ? (
-                      <Button
-                        size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                        onClick={() => setConfirmAction({ request, kind: 'process', isOtherDocuments: true })}
-                      >
-                        Process
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                        onClick={() => setConfirmAction({ request, kind: 'process', isOtherDocuments: false })}
-                      >
-                        Process
-                      </Button>
-                    )}
-                    <Button size="sm" variant="destructive" onClick={() => setDenyingRequest(request)}>
-                      Deny
-                    </Button>
+                    <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-8" onClick={() => setConfirmAction({ request, kind: 'process', isOtherDocuments })}>Process</Button>
+                    <Button size="sm" variant="destructive" className="flex-1 text-xs h-8" onClick={() => setDenyingRequest(request)}>Deny</Button>
                   </>
                 )}
-
                 {request.status === 'Processing' && !isReadOnly && (
-                  <Button
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}
-                  >
-                    Ready
-                  </Button>
+                  <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs h-8" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready for Pickup</Button>
                 )}
-
                 {request.status === 'Ready for Pickup' && !isReadOnly && (
-                  <Button
-                    size="sm"
-                    className="bg-gray-600 hover:bg-gray-700 text-white"
-                    onClick={() => setConfirmAction({ request, kind: 'complete', isOtherDocuments })}
-                  >
-                    Complete
-                  </Button>
+                  <Button size="sm" className="flex-1 bg-gray-600 hover:bg-gray-700 text-white text-xs h-8" onClick={() => setConfirmAction({ request, kind: 'complete', isOtherDocuments })}>Complete</Button>
                 )}
               </div>
-            </TableCell>
-          </TableRow>
-        ))}
-
-        {requestList.length === 0 && (
-          <TableRow>
-            <TableCell colSpan={isOtherDocuments ? 6 : 7} className="text-center text-gray-500 py-8">
-              {isLoading ? "Loading..." : "No requests found"}
-            </TableCell>
-          </TableRow>
+            </div>
+          ))
         )}
-      </TableBody>
-    </Table>
-  );
+      </div>
+
+      {/* ── PAGINATION FOOTER ── */}
+      {requestList.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 border-t">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 shrink-0">Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[#2957a1]"
+              >
+                {[5, 10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <span className="text-xs text-gray-500">{rStart}–{rEnd} of {requestList.length}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="First page"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Previous page"><ChevronLeft className="w-3.5 h-3.5" /></button>
+            {Array.from({ length: Math.min(5, totalPgs) }, (_, i) => {
+              const start = Math.max(1, Math.min(currentPage - 2, totalPgs - 4));
+              const page = start + i;
+              return page <= totalPgs ? (
+                <button key={page} onClick={() => setCurrentPage(page)} className={`w-7 h-7 rounded border text-xs font-semibold transition-colors ${page === currentPage ? "bg-[#2957a1] text-white border-[#2957a1]" : "border-gray-300 hover:bg-gray-100"}`}>{page}</button>
+              ) : null;
+            })}
+            <button onClick={() => setCurrentPage((p) => Math.min(totalPgs, p + 1))} disabled={currentPage === totalPgs} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Next page"><ChevronRight className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setCurrentPage(totalPgs)} disabled={currentPage === totalPgs} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Last page"><ChevronsRight className="w-3.5 h-3.5" /></button>
+          </div>
+        </div>
+      )}
+    </div>
+    );
+  };
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-full">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 bg-gray-50 min-h-full">
       <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
         <AlertDialogContent className="max-w-[420px]">
           <AlertDialogHeader>
@@ -682,20 +739,20 @@ export function OnlineRequests({
       </AlertDialog>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Online Requests</h1>
           <p className="text-gray-600 mt-1">Manage document requests from residents</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button variant="outline" onClick={() => loadInbox(false)} disabled={isLoading}>
             Refresh
           </Button>
 
-          <div className="flex items-center gap-2">
-            <Label className="text-sm">Search:</Label>
-            <div className="relative w-80">
+          <div className="flex items-center gap-2 flex-1 sm:flex-none">
+            <Label className="text-sm shrink-0">Search:</Label>
+            <div className="relative flex-1 sm:w-80">
               <Input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -709,7 +766,7 @@ export function OnlineRequests({
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <Card
           className={`border-yellow-400 transition-all ${statusFilter === 'Pending' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => {

@@ -38,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X, FileText } from "lucide-react";
+import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X, FileText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { toast } from "sonner";
 import { formatId } from "../../utils/formatId";
 import OcrScanner from "../../OcrScanner";
@@ -674,6 +674,8 @@ export function ResidentRecords({
   const [emailAlreadyExists, setEmailAlreadyExists] = useState(false);
   const [isCheckingContactNumber, setIsCheckingContactNumber] = useState(false);
   const [contactNumberAlreadyExists, setContactNumberAlreadyExists] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const [formData, setFormData] = useState(initialFormData);
 
@@ -716,6 +718,9 @@ export function ResidentRecords({
     setShowSettingsDialog(false);
     toast.success("Settings updated");
   };
+
+  // Reset to page 1 when search/sort/filter changes
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, sortBy, sortDirection, activeFilter]);
 
   const hasUnsavedResidentForm =
     JSON.stringify(formData) !== JSON.stringify(initialFormData) ||
@@ -1266,6 +1271,11 @@ export function ResidentRecords({
       return sortDirection === "asc" ? comparison : -comparison;
     });
 
+  const totalPages = Math.max(1, Math.ceil(filteredResidents.length / pageSize));
+  const paginatedResidents = filteredResidents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredResidents.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredResidents.length);
+
   const handleOcrData = (extractedText: string) => {
     const text = extractedText.toUpperCase();
     const lines = getMeaningfulOcrLines(text);
@@ -1356,8 +1366,8 @@ export function ResidentRecords({
 
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-full">
-      <div className="flex items-center justify-between">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 bg-gray-50 min-h-full">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">
@@ -1383,9 +1393,7 @@ export function ResidentRecords({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-
-          {/* Generate List Button */}
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             onClick={handleGenerateList}
@@ -2108,7 +2116,7 @@ export function ResidentRecords({
       {/* TABLE */}
       <Card className="border border-gray-300 shadow-sm">
         <CardContent className="p-4">
-          <div className="p-4 flex justify-between items-center gap-4 border-b bg-gray-50 -m-4 mb-4">
+          <div className="p-3 sm:p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 border-b bg-gray-50 -m-4 mb-4">
             <div className="flex items-center gap-2">
               <Label className="font-semibold text-sm">Sort by:</Label>
               <Select value={sortMenuValue} onValueChange={(v) => handleSortMenuChange(v as SortMenuValue)}>
@@ -2131,7 +2139,7 @@ export function ResidentRecords({
 
             <div className="flex items-center gap-2">
               <Label className="font-semibold text-sm">Search:</Label>
-              <div className="relative w-48">
+              <div className="relative w-full sm:w-48">
                 <Input
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -2143,137 +2151,68 @@ export function ResidentRecords({
             </div>
           </div>
 
+          <div className="overflow-x-auto -mx-4 px-4">
+
+          {/* ── DESKTOP TABLE (hidden on mobile) ── */}
+          <div className="hidden sm:block">
           <Table>
             <TableHeader className="bg-[#2957a1]">
               <TableRow className="hover:bg-[#2957a1] border-b-0">
-                <TableHead className="text-white font-bold text-xs h-10">
-                  RESIDENT NO / USERNAME
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  FIRST NAME
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  MIDDLE NAME
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  LAST NAME
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  RESIDENT TYPE
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  GENDER
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  VOTER STATUS
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  STATUS
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  ACTION
-                </TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">RESIDENT NO / USERNAME</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">FIRST NAME</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">MIDDLE NAME</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">LAST NAME</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">RESIDENT TYPE</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">GENDER</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">VOTER STATUS</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">STATUS</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">ACTION</TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
-              {filteredResidents.length === 0 ? (
+              {paginatedResidents.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="py-14 text-center">
                     <div className="text-sm font-semibold text-gray-700">
-                      {residents.length === 0
-                        ? "No resident records available."
-                        : "No matching resident records found."}
+                      {residents.length === 0 ? "No resident records available." : "No matching resident records found."}
                     </div>
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredResidents.map((resident, index) => (
-                  <TableRow
-                    key={resident.residentNo}
-                    className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
-                      }`}
-                  >
-                    <TableCell className="font-medium text-xs py-3">
-                      {String(resident.residentNo).replace(/-/g, "")}
-                    </TableCell>
+                paginatedResidents.map((resident, index) => (
+                  <TableRow key={resident.residentNo} className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"}`}>
+                    <TableCell className="font-medium text-xs py-3">{String(resident.residentNo).replace(/-/g, "")}</TableCell>
+                    <TableCell className="text-xs py-3">{resident.firstName}</TableCell>
+                    <TableCell className="text-xs py-3">{resident.middleName}</TableCell>
+                    <TableCell className="text-xs py-3">{resident.lastName}</TableCell>
+                    <TableCell className="text-xs py-3 uppercase">{resident.residentType}</TableCell>
+                    <TableCell className="text-xs py-3 uppercase">{resident.gender}</TableCell>
+                    <TableCell className="text-xs py-3 uppercase">{resident.voterStatus}</TableCell>
                     <TableCell className="text-xs py-3">
-                      {resident.firstName}
-                    </TableCell>
-                    <TableCell className="text-xs py-3">
-                      {resident.middleName}
-                    </TableCell>
-                    <TableCell className="text-xs py-3">
-                      {resident.lastName}
-                    </TableCell>
-                    <TableCell className="text-xs py-3 uppercase">
-                      {resident.residentType}
-                    </TableCell>
-                    <TableCell className="text-xs py-3 uppercase">
-                      {resident.gender}
-                    </TableCell>
-                    <TableCell className="text-xs py-3 uppercase">
-                      {resident.voterStatus}
-                    </TableCell>
-                    <TableCell className="text-xs py-3">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${resident.status === "Active"
-                          ? "bg-green-100 text-green-700 border border-green-300"
-                          : "bg-red-100 text-red-700 border border-red-300"
-                          }`}
-                      >
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${resident.status === "Active" ? "bg-green-100 text-green-700 border border-green-300" : "bg-red-100 text-red-700 border border-red-300"}`}>
                         {resident.status}
                       </span>
                     </TableCell>
-
                     <TableCell className="py-3">
                       <div className="flex items-center gap-5">
-                        <Button
-                          size="sm"
-                          className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors"
-                          onClick={() => {
-                            setViewingResident(resident);
-                            setIsResidentDetailsOpen(true);
-                          }}
-                        >
-                          <Eye className="w-6 h-6" />
-                          <span>View Info</span>
+                        <Button size="sm" className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors" onClick={() => { setViewingResident(resident); setIsResidentDetailsOpen(true); }}>
+                          <Eye className="w-6 h-6" /><span>View Info</span>
                         </Button>
-
                         {resident.status === "Active" ? (
                           !isSkKagawad && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  className="bg-red-500 hover:bg-red-600 text-white text-[10px] h-7 px-2"
-                                >
-                                  DEACTIVATE
-                                </Button>
+                                <Button size="sm" className="bg-red-500 hover:bg-red-600 text-white text-[10px] h-7 px-2">DEACTIVATE</Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent className="sm:max-w-xl p-8">
                                 <AlertDialogHeader>
-                                  <AlertDialogTitle className="text-2xl font-bold">
-                                    Deactivate this account?
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you certain you want to deactivate the account of{" "}
-                                    <span className="font-semibold">
-                                      {resident.firstName} {resident.lastName}
-                                    </span>
-                                    ? This will set the account to inactive.
-                                  </AlertDialogDescription>
+                                  <AlertDialogTitle className="text-2xl font-bold">Deactivate this account?</AlertDialogTitle>
+                                  <AlertDialogDescription>Are you certain you want to deactivate the account of <span className="font-semibold">{resident.firstName} {resident.lastName}</span>? This will set the account to inactive.</AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() =>
-                                      handleInactivate(resident.residentNo)
-                                    }
-                                    className="bg-orange-600"
-                                  >
-                                    Deactivate
-                                  </AlertDialogAction>
+                                  <AlertDialogAction onClick={() => handleInactivate(resident.residentNo)} className="bg-orange-600">Deactivate</AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
@@ -2282,36 +2221,16 @@ export function ResidentRecords({
                           !isSkKagawad && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  className="bg-green-500 hover:bg-green-600 text-white text-[10px] h-7 px-2"
-                                >
-                                  REACTIVATE
-                                </Button>
+                                <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white text-[10px] h-7 px-2">REACTIVATE</Button>
                               </AlertDialogTrigger>
-
                               <AlertDialogContent className="sm:max-w-xl p-8">
                                 <AlertDialogHeader>
-                                  <AlertDialogTitle className="text-2xl font-bold">
-                                    Reactivate Account?
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you certain you want to activate the account of{" "}
-                                    <span className="font-semibold">
-                                      {resident.firstName} {resident.lastName}
-                                    </span>
-                                    ? This will set the account to active.
-                                  </AlertDialogDescription>
+                                  <AlertDialogTitle className="text-2xl font-bold">Reactivate Account?</AlertDialogTitle>
+                                  <AlertDialogDescription>Are you certain you want to activate the account of <span className="font-semibold">{resident.firstName} {resident.lastName}</span>? This will set the account to active.</AlertDialogDescription>
                                 </AlertDialogHeader>
-
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleReactivate(resident.residentNo)}
-                                    className="bg-green-600"
-                                  >
-                                    Reactivate
-                                  </AlertDialogAction>
+                                  <AlertDialogAction onClick={() => handleReactivate(resident.residentNo)} className="bg-green-600">Reactivate</AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
@@ -2324,6 +2243,107 @@ export function ResidentRecords({
               )}
             </TableBody>
           </Table>
+          </div>
+
+          {/* ── MOBILE CARDS (visible only on mobile) ── */}
+          <div className="sm:hidden space-y-3 py-1">
+            {paginatedResidents.length === 0 ? (
+              <div className="text-center py-10 text-gray-500">
+                <User className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                <p className="text-sm font-medium">{residents.length === 0 ? "No resident records available." : "No matching records found."}</p>
+              </div>
+            ) : (
+              paginatedResidents.map((resident) => (
+                <div key={resident.residentNo} className="rounded-lg border bg-white p-3 shadow-sm space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-sm text-gray-900">{resident.firstName} {resident.middleName ? resident.middleName + " " : ""}{resident.lastName}</p>
+                      <p className="text-[10px] text-gray-400 font-mono">{String(resident.residentNo).replace(/-/g, "")}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${resident.status === "Active" ? "bg-green-100 text-green-700 border border-green-300" : "bg-red-100 text-red-700 border border-red-300"}`}>{resident.status}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-600">
+                    <span><span className="font-medium text-gray-500">Type:</span> {resident.residentType}</span>
+                    <span><span className="font-medium text-gray-500">Gender:</span> {resident.gender}</span>
+                    <span className="col-span-2"><span className="font-medium text-gray-500">Voter:</span> {resident.voterStatus}</span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 border-t">
+                    <Button size="sm" className="flex-1 flex items-center justify-center gap-1.5 bg-gray-100 text-black hover:bg-gray-200 text-xs h-8" onClick={() => { setViewingResident(resident); setIsResidentDetailsOpen(true); }}>
+                      <Eye className="w-3.5 h-3.5" />View Info
+                    </Button>
+                    {!isSkKagawad && resident.status === "Active" && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" className="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs h-8">Deactivate</Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="w-[95vw] max-w-md">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Deactivate this account?</AlertDialogTitle>
+                            <AlertDialogDescription>This will set <span className="font-semibold">{resident.firstName} {resident.lastName}</span>'s account to inactive.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleInactivate(resident.residentNo)} className="bg-orange-600">Deactivate</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                    {!isSkKagawad && resident.status !== "Active" && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" className="flex-1 bg-green-500 hover:bg-green-600 text-white text-xs h-8">Reactivate</Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="w-[95vw] max-w-md">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Reactivate Account?</AlertDialogTitle>
+                            <AlertDialogDescription>This will set <span className="font-semibold">{resident.firstName} {resident.lastName}</span>'s account to active.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleReactivate(resident.residentNo)} className="bg-green-600">Reactivate</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          </div>
+
+          {/* ── PAGINATION FOOTER ── */}
+          {filteredResidents.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t mt-2">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 shrink-0">Rows per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                    className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[#2957a1]"
+                  >
+                    {[5, 10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+                <span className="text-xs text-gray-500">{rangeStart}–{rangeEnd} of {filteredResidents.length}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="First page"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Previous page"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+                  const page = start + i;
+                  return page <= totalPages ? (
+                    <button key={page} onClick={() => setCurrentPage(page)} className={`w-7 h-7 rounded border text-xs font-semibold transition-colors ${page === currentPage ? "bg-[#2957a1] text-white border-[#2957a1]" : "border-gray-300 hover:bg-gray-100"}`}>{page}</button>
+                  ) : null;
+                })}
+                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Next page"><ChevronRight className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Last page"><ChevronsRight className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

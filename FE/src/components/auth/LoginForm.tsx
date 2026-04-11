@@ -23,27 +23,27 @@ export function LoginForm({ onLogin, error, isLoading }: LoginFormProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto w-12 h-12 bg-primary rounded-full flex items-center justify-center mb-4">
-            <span className="text-white font-bold">EP</span>
+        <CardHeader className="text-center pb-4">
+          <div className="mx-auto w-10 h-10 sm:w-12 sm:h-12 bg-primary rounded-full flex items-center justify-center mb-3">
+            <span className="text-white font-bold text-sm sm:text-base">EP</span>
           </div>
-          <CardTitle>EduPortal</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-lg sm:text-xl">EduPortal</CardTitle>
+          <CardDescription className="text-sm">
             Sign in to your teacher account
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 sm:px-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription className="text-sm">{error}</AlertDescription>
               </Alert>
             )}
-            
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
               <Input
                 id="email"
                 type="email"
@@ -52,11 +52,12 @@ export function LoginForm({ onLogin, error, isLoading }: LoginFormProps) {
                 placeholder="teacher@school.edu.ng"
                 required
                 disabled={isLoading}
+                className="h-10 sm:h-11 text-sm"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-sm font-medium">Password</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -66,6 +67,7 @@ export function LoginForm({ onLogin, error, isLoading }: LoginFormProps) {
                   placeholder="Enter your password"
                   required
                   disabled={isLoading}
+                  className="h-10 sm:h-11 text-sm pr-10"
                 />
                 <Button
                   type="button"
@@ -84,9 +86,9 @@ export function LoginForm({ onLogin, error, isLoading }: LoginFormProps) {
               </div>
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full" 
+            <Button
+              type="submit"
+              className="w-full h-10 sm:h-11 text-sm font-semibold mt-2"
               disabled={isLoading}
             >
               {isLoading ? 'Signing in...' : 'Sign In'}
