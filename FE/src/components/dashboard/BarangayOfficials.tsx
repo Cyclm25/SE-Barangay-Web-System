@@ -30,7 +30,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
-import { User, Lock, Eye, EyeOff } from "lucide-react";
+import { User, Lock, Eye, EyeOff, Calendar } from "lucide-react";
 import { ProfileImageUpload } from "../ui/ProfileImageUpload";
 import { OfficialForgotPasswordPage } from "./OfficialForgotPasswordPage";
 import { toast } from "sonner";
@@ -63,6 +63,13 @@ interface OfficialEditForm {
   status: boolean;
   profileimage: string;
 }
+
+const dataPrivacyHighlights = [
+  "The information provided is true and correct to the best of your knowledge.",
+  "The collected data will only be used for legitimate barangay management and record-keeping purposes.",
+  "Authorized barangay personnel may access and process the information in accordance with applicable data privacy laws.",
+  "Reasonable security measures will be applied to protect personal information from unauthorized access or disclosure.",
+];
 
 function toStatusText(statusBool: boolean): StatusText {
   return statusBool ? "Active" : "Inactive";
@@ -199,16 +206,18 @@ export function BarangayOfficials() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [resetPasswordOfficial, setResetPasswordOfficial] = useState<Official | null>(null);
   const [confirmResetOfficial, setConfirmResetOfficial] = useState<Official | null>(null);
-  const [confirmEditOfficial, setConfirmEditOfficial] = useState<Official | null>(null);
   const [viewingOfficial, setViewingOfficial] = useState<Official | null>(null);
   const [editingOfficial, setEditingOfficial] = useState<OfficialEditForm | null>(null);
   const [showDiscardEditDialog, setShowDiscardEditDialog] = useState(false);
+  const [showConfirmSaveEditDialog, setShowConfirmSaveEditDialog] = useState(false);
   const [profileImagePreview, setProfileImagePreview] = useState<string>("");
   const [showDiscardOfficialDialog, setShowDiscardOfficialDialog] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
+  const [nameWarning, setNameWarning] = useState("");
 
   // STEP 2 + STEP 3 dialog states
   const [showDataPrivacyDialog, setShowDataPrivacyDialog] = useState(false);
+  const [officialPrivacyAccepted, setOfficialPrivacyAccepted] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
 
   // password fields
@@ -232,9 +241,11 @@ export function BarangayOfficials() {
 
     setProfileImagePreview("");
     setSaveAttempted(false);
+    setNameWarning("");
 
     setShowDataPrivacyDialog(false);
     setShowPasswordDialog(false);
+    setOfficialPrivacyAccepted(false);
     setPassword("");
     setConfirmPassword("");
     setShowPassword(false);
@@ -321,6 +332,8 @@ export function BarangayOfficials() {
   }, [officials, searchTerm]);
 
   const gmailRegex = /^[a-z0-9](\.?[a-z0-9]){5,29}@gmail\.com$/i;
+  const hasInvalidNameCharacters =
+    formData.name.trim().length > 0 && /[^A-Z\s]/i.test(formData.name);
   const emailInvalidFormat =
     formData.email.trim().length > 0 && !gmailRegex.test(formData.email.trim());
   const emailValidFormat =
@@ -337,6 +350,10 @@ export function BarangayOfficials() {
 
     if (!formData.name.trim()) {
       toast.error("Full Name is required");
+      return;
+    }
+    if (hasInvalidNameCharacters) {
+      toast.error("Full Name must contain letters and spaces only");
       return;
     }
     if (!formData.email.trim()) {
@@ -361,11 +378,16 @@ export function BarangayOfficials() {
 
   const handleCancelDataPrivacy = () => {
     setShowDataPrivacyDialog(false);
+    setOfficialPrivacyAccepted(false);
     setShowDiscardOfficialDialog(false);
     setIsDialogOpen(true);
   };
 
   const handleConfirmPrivacy = () => {
+    if (!officialPrivacyAccepted) {
+      toast.error("Please confirm the data privacy agreement before continuing.");
+      return;
+    }
     setShowDataPrivacyDialog(false);
     setShowPasswordDialog(true);
   };
@@ -432,10 +454,6 @@ export function BarangayOfficials() {
       const created = (res.data?.official || res.data) as Official;
       console.log("Created official:", created);
 
-      if (!created || (!created.barangayadminid && !created.BarangayAdminID)) {
-        throw new Error("Invalid response from server");
-      }
-
       // Normalize keys (backend may return PascalCase or lowercase)
       const normalized = normalizeOfficialRecord(created, {
         barangayadminid: "",
@@ -448,6 +466,11 @@ export function BarangayOfficials() {
         termend: normalizeDateInputValue(formData.termEnd) || undefined,
         profileimage: formData.profileImage || undefined,
       });
+
+      if (!normalized.barangayadminid) {
+        throw new Error("Invalid response from server");
+      }
+
       setOfficials((prev) => [normalized, ...prev]);
 
       setShowPasswordDialog(false);
@@ -457,7 +480,7 @@ export function BarangayOfficials() {
       resetForm();
 
       toast.success("Barangay official successfully added!", {
-        description: `${created.adminname} has been registered as ${created.position ?? "Official"
+        description: `${normalized.adminname} has been registered as ${normalized.position ?? "Official"
           }.`,
       });
     } catch (err: any) {
@@ -485,7 +508,8 @@ export function BarangayOfficials() {
       const res = await api.patch(`/api/officials/${id}/status`, {
         status: nextStatus,
       });
-      const updated = res.data as Official;
+      const currentOfficial = officials.find((o) => o.barangayadminid === id);
+      const updated = normalizeOfficialRecord(res.data, currentOfficial);
 
       setOfficials((prev) =>
         prev.map((o) => (o.barangayadminid === id ? updated : o))
@@ -530,7 +554,26 @@ export function BarangayOfficials() {
   );
 
   const handleCancelEdit = () => {
+    if (!hasUnsavedEditChanges) {
+      setViewingOfficial(null);
+      setEditingOfficial(null);
+      setShowDiscardEditDialog(false);
+      return;
+    }
     setShowDiscardEditDialog(true);
+  };
+
+  const handleStartSaveOfficialEdit = () => {
+    if (!viewingOfficial || !editingOfficial) return;
+    const hasChanges =
+      JSON.stringify(editingOfficial) !==
+      JSON.stringify(buildOfficialEditForm(viewingOfficial));
+    if (!hasChanges) {
+      setViewingOfficial(null);
+      setEditingOfficial(null);
+      return;
+    }
+    setShowConfirmSaveEditDialog(true);
   };
 
   const handleConfirmDiscardEdit = () => {
@@ -594,8 +637,9 @@ export function BarangayOfficials() {
           official.barangayadminid === normalized.barangayadminid ? normalized : official
         )
       );
-      setViewingOfficial(normalized);
-      setEditingOfficial(buildOfficialEditForm(normalized));
+      setShowConfirmSaveEditDialog(false);
+      setViewingOfficial(null);
+      setEditingOfficial(null);
       toast.success("Official information updated.");
     } catch (err: any) {
       const errorMessage =
@@ -620,9 +664,9 @@ export function BarangayOfficials() {
   }
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-full">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 bg-gray-50 min-h-full">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
             Barangay Officials ({officials.length})
@@ -632,12 +676,12 @@ export function BarangayOfficials() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search name / position / ID…"
-            className="w-64"
+            className="w-full sm:w-64"
           />
 
           <Dialog
@@ -653,11 +697,11 @@ export function BarangayOfficials() {
               </Button>
             </DialogTrigger>
 
-            <DialogContent
-              className="w-[95vw] max-w-2xl"
-              onInteractOutside={(event) => {
-                event.preventDefault();
-                handleOfficialDialogOpenChange(false);
+        <DialogContent
+          className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(event) => {
+            event.preventDefault();
+            handleOfficialDialogOpenChange(false);
               }}
               onEscapeKeyDown={(event) => {
                 event.preventDefault();
@@ -668,7 +712,7 @@ export function BarangayOfficials() {
                 <DialogTitle>Add New Official</DialogTitle>
               </DialogHeader>
               <DialogDescription className="px-0 pt-2">
-                Add a new barangay official to the system.
+                Provide the official's details to register their account and maintain their records in the barangay system.
               </DialogDescription>
 
               <div className="space-y-4 py-4">
@@ -690,14 +734,38 @@ export function BarangayOfficials() {
                     <Input
                       id="name"
                       value={formData.name}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const rawValue = e.target.value;
+                        const hasInvalidCharacters = /[^a-zA-Z\s]/.test(rawValue);
+                        const sanitizedValue = toUppercaseInput(
+                          rawValue.replace(/[^a-zA-Z\s]/g, "")
+                        );
+
                         setFormData({
                           ...formData,
-                          name: toUppercaseInput(e.target.value),
-                        })
-                      }
+                          name: sanitizedValue,
+                        });
+                        setNameWarning(
+                          hasInvalidCharacters
+                            ? "Full Name must contain letters only. Numbers and special characters are not allowed."
+                            : ""
+                        );
+                      }}
                       placeholder="Enter full name"
+                      className={
+                        (saveAttempted && !formData.name.trim()) || nameWarning
+                          ? "border-red-500 ring-red-500"
+                          : ""
+                      }
                     />
+                    {nameWarning && (
+                      <p className="text-xs text-red-500 mt-1">{nameWarning}</p>
+                    )}
+                    {saveAttempted && !formData.name.trim() && !nameWarning && (
+                      <p className="text-xs text-red-500 mt-1">
+                        Full Name is required.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -716,6 +784,7 @@ export function BarangayOfficials() {
                           Barangay Captain
                         </SelectItem>
                         <SelectItem value="Kagawad">Kagawad</SelectItem>
+                        <SelectItem value="SK Kagawad">SK Kagawad</SelectItem>
                         <SelectItem value="SK Chairman">SK Chairman</SelectItem>
                         <SelectItem value="Secretary">Secretary</SelectItem>
                         <SelectItem value="Treasurer">Treasurer</SelectItem>
@@ -799,26 +868,56 @@ export function BarangayOfficials() {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="termStart">Term Start</Label>
-                    <Input
-                      id="termStart"
-                      type="date"
-                      value={formData.termStart}
-                      onChange={(e) =>
-                        setFormData({ ...formData, termStart: e.target.value })
-                      }
-                    />
+                    <div className="relative">
+                      <Input
+                        id="termStart"
+                        type="date"
+                        className="pr-11 [&::-webkit-calendar-picker-indicator]:opacity-0"
+                        value={formData.termStart}
+                        onChange={(e) =>
+                          setFormData({ ...formData, termStart: e.target.value })
+                        }
+                      />
+                      <button
+                        type="button"
+                        aria-label="Open term start calendar"
+                        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-gray-600 hover:text-black"
+                        onClick={() => {
+                          const input = document.getElementById("termStart") as HTMLInputElement | null;
+                          input?.showPicker?.();
+                          input?.focus();
+                        }}
+                      >
+                        <Calendar className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="termEnd">Term End</Label>
-                    <Input
-                      id="termEnd"
-                      type="date"
-                      value={formData.termEnd}
-                      onChange={(e) =>
-                        setFormData({ ...formData, termEnd: e.target.value })
-                      }
-                    />
+                    <div className="relative">
+                      <Input
+                        id="termEnd"
+                        type="date"
+                        className="pr-11 [&::-webkit-calendar-picker-indicator]:opacity-0"
+                        value={formData.termEnd}
+                        onChange={(e) =>
+                          setFormData({ ...formData, termEnd: e.target.value })
+                        }
+                      />
+                      <button
+                        type="button"
+                        aria-label="Open term end calendar"
+                        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-gray-600 hover:text-black"
+                        onClick={() => {
+                          const input = document.getElementById("termEnd") as HTMLInputElement | null;
+                          input?.showPicker?.();
+                          input?.focus();
+                        }}
+                      >
+                        <Calendar className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -892,9 +991,14 @@ export function BarangayOfficials() {
       {/* STEP 2: DATA PRIVACY DIALOG */}
       <AlertDialog
         open={showDataPrivacyDialog}
-        onOpenChange={setShowDataPrivacyDialog}
+        onOpenChange={(open) => {
+          setShowDataPrivacyDialog(open);
+          if (!open) {
+            setOfficialPrivacyAccepted(false);
+          }
+        }}
       >
-        <AlertDialogContent className="max-w-[400px]">
+        <AlertDialogContent className="max-w-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Data Privacy Agreement</AlertDialogTitle>
             <AlertDialogDescription>
@@ -902,6 +1006,48 @@ export function BarangayOfficials() {
               management and record-keeping purposes?
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-2 text-sm leading-7 text-gray-700">
+            <p>
+              By accessing and using the Tondocs Barangay Management Web Application, you agree to the
+              collection, use, and processing of your personal information in accordance with applicable
+              data privacy laws and regulations.
+            </p>
+            <p>
+              The system collects personal data such as your name, address, contact information, and
+              other relevant details solely for the purpose of processing barangay service requests,
+              maintaining resident records, and improving service delivery.
+            </p>
+            <p>
+              All personal information provided will be treated with strict confidentiality and will only
+              be accessed by authorized barangay personnel. The system implements appropriate security
+              measures to protect your data from unauthorized access, disclosure, alteration, or destruction.
+            </p>
+            <p>
+              Your information will not be shared with third parties without your consent, unless
+              required by law or necessary for official government functions.
+            </p>
+            <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="font-semibold text-[#2957a1]">By continuing to use this system, you confirm that:</p>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-gray-700">
+                {dataPrivacyHighlights.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            <p>If you do not agree with this policy, please discontinue use of the system.</p>
+            <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <input
+                type="checkbox"
+                checked={officialPrivacyAccepted}
+                onChange={(event) => setOfficialPrivacyAccepted(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-300"
+              />
+              <span className="text-sm font-medium text-gray-800">
+                I have read and understood the Data Privacy Agreement, and I consent to the collection
+                and processing of this official’s information for legitimate barangay operations.
+              </span>
+            </label>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel
               onClick={handleCancelDataPrivacy}
@@ -912,7 +1058,7 @@ export function BarangayOfficials() {
             <AlertDialogAction
               onClick={handleConfirmPrivacy}
               className="bg-[#2957a1]"
-              disabled={loading}
+              disabled={loading || !officialPrivacyAccepted}
             >
               Agree and Continue
             </AlertDialogAction>
@@ -955,7 +1101,7 @@ export function BarangayOfficials() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#2957a1]"
+                  className="absolute inset-y-0 right-3 flex items-center justify-center text-gray-400 hover:text-[#2957a1]"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -1014,22 +1160,31 @@ export function BarangayOfficials() {
         open={!!viewingOfficial}
         onOpenChange={(open) => {
           if (!open) {
+            if (showConfirmSaveEditDialog) {
+              return;
+            }
             handleCancelEdit();
             return;
           }
         }}
       >
         <DialogContent
-          className="w-[95vw] max-w-[1100px] max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden"
+          className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto overflow-x-hidden"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
           }}
           onInteractOutside={(event) => {
             event.preventDefault();
+            if (showConfirmSaveEditDialog) {
+              return;
+            }
             handleCancelEdit();
           }}
           onEscapeKeyDown={(event) => {
             event.preventDefault();
+            if (showConfirmSaveEditDialog) {
+              return;
+            }
             handleCancelEdit();
           }}
         >
@@ -1066,12 +1221,12 @@ export function BarangayOfficials() {
                     </span>
                     <span
                       className={`rounded-full px-3 py-1 text-sm font-medium ${
-                        editingOfficial.status
+                        viewingOfficial.status
                           ? "bg-green-100 text-green-700"
                           : "bg-gray-200 text-gray-700"
                       }`}
                     >
-                      {formatStatusLabel(editingOfficial.status)}
+                      {formatStatusLabel(viewingOfficial.status)}
                     </span>
                   </div>
                 </div>
@@ -1216,7 +1371,7 @@ export function BarangayOfficials() {
             </div>
           )}
 
-          <DialogFooter className="-mx-6 -mb-6 mt-4 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
+          <DialogFooter className="-mx-6 -mb-6 mt-100 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
             <Button
               variant="outline"
               onClick={handleCancelEdit}
@@ -1225,7 +1380,7 @@ export function BarangayOfficials() {
             </Button>
             <Button
               className="bg-[#2957a1] hover:bg-[#1e3f7a]"
-              onClick={handleSaveOfficialEdit}
+              onClick={handleStartSaveOfficialEdit}
               disabled={loading}
             >
               Save Changes
@@ -1233,6 +1388,32 @@ export function BarangayOfficials() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={showConfirmSaveEditDialog}
+        onOpenChange={setShowConfirmSaveEditDialog}
+      >
+        <AlertDialogContent className="max-w-[420px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save official changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {viewingOfficial
+                ? `Are you sure you want to save the changes for ${viewingOfficial.adminname}?`
+                : "Are you sure you want to save these official changes?"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleSaveOfficialEdit()}
+              className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+              disabled={loading}
+            >
+              Confirm Save
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={showDiscardEditDialog}
@@ -1289,38 +1470,6 @@ export function BarangayOfficials() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog
-        open={!!confirmEditOfficial}
-        onOpenChange={(open) => {
-          if (!open) setConfirmEditOfficial(null);
-        }}
-      >
-        <AlertDialogContent className="max-w-[420px]">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Edit official information?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmEditOfficial
-                ? `Are you sure you want to edit the information of ${confirmEditOfficial.adminname}?`
-                : "Are you sure you want to edit this official's information?"}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-[#2957a1] hover:bg-[#1e3f7a]"
-              onClick={() => {
-                if (confirmEditOfficial) {
-                  openEditOfficial(confirmEditOfficial);
-                }
-                setConfirmEditOfficial(null);
-              }}
-            >
-              Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       {/* Officials Grid */}
       {loading ? (
         <Card>
@@ -1336,7 +1485,7 @@ export function BarangayOfficials() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredOfficials.map((official) => {
             const statusText = toStatusText(official.status);
 
@@ -1368,7 +1517,7 @@ export function BarangayOfficials() {
                         variant="ghost"
                         size="sm"
                         className="h-8 px-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                        onClick={() => setConfirmEditOfficial(official)}
+                        onClick={() => openEditOfficial(official)}
                         disabled={isReadOnly}
                       >
                         Edit Info
@@ -1376,7 +1525,7 @@ export function BarangayOfficials() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 px-3 text-[#2957a1] hover:text-[#1e3f7a] hover:bg-blue-50"
+                        className="h-8 px-3 text-sm font-medium text-[#2957a1] hover:text-[#1e3f7a] hover:bg-blue-50"
                         onClick={() => handleForgotPassword(official)}
                         disabled={isReadOnly}
                       >
@@ -1420,13 +1569,13 @@ export function BarangayOfficials() {
                                 className="bg-orange-600 hover:bg-orange-700"
                                 disabled={loading}
                               >
-                                Inactivate
+                                Deactivate
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
                       ) : (
-                        // ✅ ADDED CONFIRMATION FOR REACTIVATE
+                        // ADDED CONFIRMATION FOR REACTIVATE
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
@@ -1479,9 +1628,9 @@ export function BarangayOfficials() {
                       {official.adminname}
                     </h3>
                     <p className="text-sm font-semibold text-[#2957a1]">
-                      {official.position ?? "—"}
+                      {official.position ?? "-"}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="font - semibold text-sm text-gray-500">
                       Username: {official.barangayadminid}
                     </p>
                     {(official.termstart || official.termend) && (
@@ -1501,7 +1650,7 @@ export function BarangayOfficials() {
 
                     <div className="pt-2 space-y-1">
                       {official.email ? (
-                        <p className="text-xs text-gray-600">📧 {official.email}</p>
+                        <p className="text-sm text-gray-600">📧 {official.email}</p>
                       ) : null}
                     </div>
 

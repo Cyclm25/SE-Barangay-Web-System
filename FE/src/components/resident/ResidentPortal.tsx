@@ -17,7 +17,19 @@ interface ResidentPortalProps {
 }
 
 export function ResidentPortal({ residentName, onLogout }: ResidentPortalProps) {
-  const [currentPage, setCurrentPage] = useState<Page>('home');
+  const storedResidentPage =
+    typeof window !== 'undefined'
+      ? localStorage.getItem('resident_portal_page')
+      : null;
+  const [currentPage, setCurrentPage] = useState<Page>(
+    storedResidentPage === 'services' ||
+      storedResidentPage === 'track' ||
+      storedResidentPage === 'about' ||
+      storedResidentPage === 'profile' ||
+      storedResidentPage === 'track-request'
+      ? storedResidentPage
+      : 'home'
+  );
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   const [isProfileSidebarOpen, setIsProfileSidebarOpen] = useState(false);
   const [profileImage, setProfileImage] = useState<string | undefined>(undefined);
@@ -38,6 +50,12 @@ export function ResidentPortal({ residentName, onLogout }: ResidentPortalProps) 
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const pageToPersist =
+      currentPage === 'announcement-detail' ? 'home' : currentPage;
+    localStorage.setItem('resident_portal_page', pageToPersist);
+  }, [currentPage]);
 
   const handleNavigate = (page: 'home' | 'services' | 'track' | 'about') => {
     setCurrentPage(page);

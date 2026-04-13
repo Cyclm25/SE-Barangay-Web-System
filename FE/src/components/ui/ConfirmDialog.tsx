@@ -10,6 +10,7 @@ interface ConfirmDialogProps {
   cancelText?: string;
   type?: 'info' | 'warning' | 'danger';
   children?: React.ReactNode;
+  closeOnConfirm?: boolean;
 }
 
 export function ConfirmDialog({
@@ -21,7 +22,8 @@ export function ConfirmDialog({
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   type = 'info',
-  children
+  children,
+  closeOnConfirm = true
 }: ConfirmDialogProps) {
   if (!isOpen) return null;
 
@@ -46,6 +48,7 @@ export function ConfirmDialog({
         {/* Header */}
         <div className={`bg-gradient-to-r ${typeColors[type].bg} p-6 rounded-t-2xl relative`}>
           <button
+            type="button"
             onClick={onClose}
             className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
           >
@@ -63,15 +66,19 @@ export function ConfirmDialog({
         {/* Actions */}
         <div className="flex gap-3 px-6 pb-6">
           <button
+            type="button"
             onClick={onClose}
             className="flex-1 px-6 py-3 rounded-xl text-[15px] font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-all"
           >
             {cancelText}
           </button>
           <button
+            type="button"
             onClick={() => {
               onConfirm();
-              onClose();
+              if (closeOnConfirm) {
+                onClose();
+              }
             }}
             className={`flex-1 px-6 py-3 rounded-xl text-[15px] font-bold text-white ${typeColors[type].button} transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5`}
           >

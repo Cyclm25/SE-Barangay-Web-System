@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { api } from "../../utils/api";
+import imgBarangayLogo from "../../assets/barangaylogo.png";
 
 export interface Announcement {
   id: string;
@@ -35,8 +36,7 @@ type DBAnnouncement = {
   ExpirationDate?: string | null;
 };
 
-const PLACEHOLDER_IMAGE =
-  "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1200&q=80";
+const PLACEHOLDER_IMAGE = imgBarangayLogo;
 
 const POLL_INTERVAL_MS = 60 * 1000;
 
@@ -48,7 +48,11 @@ const POLL_INTERVAL_MS = 60 * 1000;
  * Filter button labels:   "Students" | "Senior Citizen" | "Health" | "Events"
  */
 function normalizeCategory(raw: string): string {
-  const c = raw.toLowerCase().trim();
+  const cleaned = raw
+    .replace(/[\{\}\[\]\\"]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const c = cleaned.toLowerCase().trim();
   if (!c || c === "all") return "";
   if (c === "students" || c === "student") return "Students";
   if (
@@ -61,7 +65,41 @@ function normalizeCategory(raw: string): string {
   if (c === "events" || c === "event") return "Events";
   if (c === "health") return "Health";
   if (c === "pwd") return "PWD";
-  return raw.trim();
+  return cleaned;
+}
+
+function parseCategoryValues(
+  category: string[] | string | null | undefined
+): string[] {
+  if (!category) return [];
+  if (Array.isArray(category)) return category.flatMap((item) => parseCategoryValues(item));
+
+  const raw = String(category).trim();
+  if (!raw) return [];
+
+  if (raw.startsWith("[") && raw.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.flatMap((item) => parseCategoryValues(item));
+      }
+    } catch {
+      // Fall through to string parsing below.
+    }
+  }
+
+  if (raw.startsWith("{") && raw.endsWith("}")) {
+    return raw
+      .slice(1, -1)
+      .split(",")
+      .map((item) => item.replace(/[\{\}\[\]\\"]/g, " ").replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+  }
+
+  return raw
+    .split(",")
+    .map((item) => item.replace(/[\{\}\[\]\\"]/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
 }
 
 /**
@@ -71,8 +109,7 @@ function normalizeCategory(raw: string): string {
 function categoryArrayToTags(
   category: string[] | string | null | undefined
 ): string[] {
-  if (!category) return [];
-  const arr = Array.isArray(category) ? category : [String(category)];
+  const arr = parseCategoryValues(category);
   return arr.map(normalizeCategory).filter((t) => t.length > 0);
 }
 
@@ -183,7 +220,14 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
           {tags.map((tag) => (
             <button
               key={tag}
-              onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+              onClick={() => {
+                if (selectedTag === tag) {
+                  void fetchResidentAnnouncements();
+                  return;
+                }
+
+                setSelectedTag(tag);
+              }}
               className={`px-4 md:px-5 py-2 rounded-full border-2 font-semibold text-[11px] transition-all ${
                 selectedTag === tag
                   ? "bg-[#2957a1] text-white border-[#2957a1] shadow-md"
@@ -216,7 +260,11 @@ export function ResidentHome({ onAnnouncementClick }: ResidentHomeProps) {
                 <div className="relative bg-gray-200 overflow-hidden h-[180px] md:h-[220px]">
                   <ImageWithFallback
                     src={announcement.image}
-                    alt={announcement.title}
+                    alt={
+                      announcement.image === PLACEHOLDER_IMAGE
+                        ? "Barangay Logo"
+                        : announcement.title
+                    }
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                   <div className="absolute top-2 md:top-3 right-2 md:right-3 bg-white/95 backdrop-blur-sm px-2 md:px-3 py-1 rounded-full shadow-md">

@@ -1,41 +1,53 @@
 const router = require("express").Router();
 const pool = require("../db");
+const verifyToken = require("../middleware/verifyToken");
+const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
+
+async function generateNextAnnouncementId(db = pool) {
+  const result = await db.query(
+    `
+    SELECT "AnnouncementID"
+    FROM announcement
+    ORDER BY "AnnouncementID" DESC
+    LIMIT 1
+    `
+  );
+
+  const lastId = Number(result.rows[0]?.AnnouncementID);
+  return Number.isFinite(lastId) ? lastId + 1 : 1;
+}
 
 async function publishScheduledAnnouncements() {
-  const now = new Date().toISOString();
   const result = await pool.query(
     `
     UPDATE announcement
     SET "Status" = 'Active',
         "IsScheduled" = false,
-        "PublishedDate" = NOW(),
+        "PublishedDate" = TIMEZONE('Asia/Manila', NOW()),
         "IsPublished" = true
     WHERE "IsScheduled" = true
       AND "Status" = 'Drafts'
       AND "ScheduledPublishDate" IS NOT NULL
-      AND "ScheduledPublishDate" <= $1
+      AND "ScheduledPublishDate" <= TIMEZONE('Asia/Manila', NOW())
     RETURNING *
-    `,
-    [now]
+    `
   );
   return result;
 }
 
 async function archiveExpiredAnnouncements() {
-  const now = new Date().toISOString();
   const result = await pool.query(
     `
     UPDATE announcement
     SET "Status" = 'Archived'
     WHERE "ExpirationDate" IS NOT NULL
-      AND "ExpirationDate" <= $1
+      AND "ExpirationDate" <= TIMEZONE('Asia/Manila', NOW())
       AND "Status" = 'Active'
       AND "IsPublished" = true
       AND "PublishedDate" IS NOT NULL
-      AND "PublishedDate" <= NOW() - INTERVAL '5 minutes'
+      AND "PublishedDate" <= TIMEZONE('Asia/Manila', NOW()) - INTERVAL '5 minutes'
     RETURNING "AnnouncementID", "Title", "ExpirationDate"
-    `,
-    [now]
+    `
   );
   return result;
 }
@@ -149,7 +161,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", verifyToken, requireNonSkWriteAccess, async (req, res) => {
   try {
     const {
       title, body, postedByRole, postedById, status, targetAudience,
@@ -173,25 +185,36 @@ router.post("/", async (req, res) => {
       categories = ["All"];
     }
 
+    const nextAnnouncementId = await generateNextAnnouncementId(pool);
+
     const queryText = `
       INSERT INTO announcement (
-        "Title", "Body", "PostedByRole", "PostedByID", "Category",
+        "AnnouncementID", "Title", "Body", "PostedByRole", "PostedByID", "Category",
         "Status", "CreatedAt", "IsScheduled", "ScheduledPublishDate",
         "PublishedDate", "ExpirationDate", "Images", "IsPublished"
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6,
-        NOW(), $7, $8,
-        CASE WHEN $9 = true THEN NOW() ELSE NULL END,
-        $10, $11, $9
+        $1, $2, $3, $4, $5, $6, $7,
+        NOW(), $8, $9,
+        CASE WHEN $10 = true THEN NOW() ELSE NULL END,
+        $11, $12, $10
       )
       RETURNING *
     `;
 
     const values = [
-      title, body, postedByRole || "Admin", postedById || "SYSTEM", categories,
-      dbStatus, finalIsScheduled, scheduledPublishDate || null, finalIsPublished,
-      expirationDate || null, images || [],
+      nextAnnouncementId,
+      title,
+      body,
+      postedByRole || "Admin",
+      postedById || "SYSTEM",
+      categories,
+      dbStatus,
+      finalIsScheduled,
+      scheduledPublishDate || null,
+      finalIsPublished,
+      expirationDate || null,
+      images || [],
     ];
 
     const result = await pool.query(queryText, values);
@@ -203,7 +226,7 @@ router.post("/", async (req, res) => {
 });
 
 // THE FIX: Added Explicit Logging to track the 404 issue
-router.put("/:id", async (req, res) => {
+router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
   console.log(`\n[Announcements] ---> Attempting to EDIT Announcement ID: ${req.params.id}`);
   try {
     const { id } = req.params;
@@ -261,7 +284,7 @@ router.put("/:id", async (req, res) => {
       return res.status(404).json({ error: "Announcement not found in database" });
     }
     
-    console.log(`[Announcements] ✅ SUCCESS: Updated Announcement ID: ${id}`);
+    console.log(`[Announcements] SUCCESS: Updated Announcement ID: ${id}`);
     res.json(result.rows[0]);
   } catch (err) {
     console.error("[Announcements] ❌ Update Error:", err.message);
@@ -269,7 +292,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-router.patch("/:id/archive", async (req, res) => {
+router.patch("/:id/archive", verifyToken, requireNonSkWriteAccess, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(

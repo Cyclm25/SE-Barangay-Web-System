@@ -10,7 +10,7 @@ async function testQuery() {
     
     const result = await pool.query('SELECT * FROM announcement ORDER BY "CreatedAt" DESC');
     
-    console.log('✅ Query successful!');
+    console.log('Query successful!');
     console.log(`📊 Found ${result.rows.length} announcements:\n`);
     
     result.rows.forEach((ann, i) => {

@@ -14,7 +14,7 @@ async function createFreshAnnouncements() {
 
     // Delete old test announcements
     await client.query('DELETE FROM announcement WHERE "Title" LIKE $1', ['Test%']);
-    console.log('✅ Deleted old test announcements\n');
+    console.log('Deleted old test announcements\n');
 
     console.log('📝 Creating fresh test announcements...\n');
 
@@ -33,7 +33,7 @@ async function createFreshAnnouncements() {
         "Active",
       ]
     );
-    console.log(`✅ Created: "${result1.rows[0].Title}" (ID: ${result1.rows[0].AnnouncementID}, Status: ${result1.rows[0].Status})`);
+    console.log(`Created: "${result1.rows[0].Title}" (ID: ${result1.rows[0].AnnouncementID}, Status: ${result1.rows[0].Status})`);
 
     // Test 2: Active announcement with future expiration
     const futureDate = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
@@ -52,7 +52,7 @@ async function createFreshAnnouncements() {
         futureDate.toISOString(),
       ]
     );
-    console.log(`✅ Created: "${result2.rows[0].Title}" (expires in 30 mins)`);
+    console.log(`Created: "${result2.rows[0].Title}" (expires in 30 mins)`);
 
     // Test 3: Draft announcement
     const result3 = await client.query(
@@ -69,7 +69,7 @@ async function createFreshAnnouncements() {
         "Drafts",
       ]
     );
-    console.log(`✅ Created: "${result3.rows[0].Title}" (Status: ${result3.rows[0].Status})`);
+    console.log(`Created: "${result3.rows[0].Title}" (Status: ${result3.rows[0].Status})`);
 
     // Test 4: Scheduled announcement (future)
     const scheduledDate = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
@@ -89,7 +89,7 @@ async function createFreshAnnouncements() {
         scheduledDate.toISOString(),
       ]
     );
-    console.log(`✅ Created: "${result4.rows[0].Title}" (scheduled for ${scheduledDate.toLocaleTimeString()})`);
+    console.log(`Created: "${result4.rows[0].Title}" (scheduled for ${scheduledDate.toLocaleTimeString()})`);
 
     console.log('\n✅ All test announcements created successfully!');
     console.log('\n📍 What to expect:');
@@ -108,7 +108,7 @@ async function createFreshAnnouncements() {
 
 createFreshAnnouncements()
   .then(() => {
-    console.log('✅ Done!\n');
+    console.log('Done!\n');
     process.exit(0);
   })
   .catch((err) => {

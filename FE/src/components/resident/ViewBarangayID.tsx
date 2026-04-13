@@ -1,6 +1,7 @@
 import { Download, X } from "lucide-react";
 import imgBarangayLogo from "../../assets/barangaylogo.png";
 import { useEffect, useState } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 interface ViewBarangayIDProps {
   onClose: () => void;
@@ -251,13 +252,27 @@ export function ViewBarangayID({ onClose, profileData }: ViewBarangayIDProps) {
 
             {/* Actions */}
             <div className="mt-8 flex justify-center gap-4">
-              <button className="flex items-center gap-2 bg-[#2957a1] hover:bg-[#1e4380] text-white px-6 py-3 rounded-lg font-semibold transition-colors shadow-md">
-                <Download className="w-5 h-5" />
-                Download ID
-              </button>
-              <button className="flex items-center gap-2 border-2 border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors">
-                Share ID
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="flex items-center gap-2 bg-[#2957a1] hover:bg-[#1e4380] text-white px-6 py-3 rounded-lg font-semibold transition-colors shadow-md">
+                    <Download className="w-5 h-5" />
+                    Download ID
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Upcoming feature
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="flex items-center gap-2 border-2 border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors">
+                    Share ID
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Upcoming feature
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>

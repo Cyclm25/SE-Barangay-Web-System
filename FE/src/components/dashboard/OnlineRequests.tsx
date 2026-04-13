@@ -1,5 +1,5 @@
 // OnlineRequests.tsx
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -8,25 +8,29 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { FileText, Clock, CheckCircle, XCircle, Eye, Search, AlertCircle, Mail } from 'lucide-react';
+import { FileText, Clock, CheckCircle, XCircle, Eye, Search, AlertCircle, Mail, Calendar, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 type RequestStatus = 'Pending' | 'Processing' | 'Ready for Pickup' | 'Completed' | 'Rejected';
 
 interface Request {
-  id: string;                 // NotificationID
-  requestNo: string;          // RequestID formatted
-  residentName: string;       // now full name (from JOIN resident)
-  residentId: string;         // ResidentID
-  documentType: string;       // RequestType
-  purpose: string;            // RequestPurpose
-  dateRequested: string;      // RequestDate
-  dateCompleted?: string;     // not in DB yet
-  status: RequestStatus;      // RequestStatus
-  contactNumber: string;      // from resident table (JOIN)
-  email?: string;             // from resident table (JOIN)
-  rejectionReason?: string;   // UI only
+  id: string;                 
+  requestNo: string;         
+  residentName: string;       
+  residentId: string;         
+  documentType: string;       
+  purpose: string;           
+  dateRequested: string;      
+  dateCompleted?: string;     
+  status: RequestStatus;      
+  contactNumber: string;      
+  email?: string;             
+  rejectionReason?: string;  
+  appointmentDate?: string | null;
+  appointmentTime?: string | null;
+  appointmentSetByAdmin?: string | null;
 }
 
 interface InboxRow {
@@ -43,7 +47,35 @@ interface InboxRow {
   ContactNumber?: string;
   Email?: string;
   RejectionReason?: string;
+  AppointmentDate?: string | null;
+  AppointmentTime?: string | null;
+  AppointmentSetByAdmin?: string | null;
 }
+
+const formatAppointmentTime = (value?: string | null) => {
+  if (!value) return '';
+
+  const [hourText, minuteText] = value.split(':');
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (Number.isNaN(hour) || Number.isNaN(minute)) {
+    return value;
+  }
+
+  return new Date(2000, 0, 1, hour, minute).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
+const formatWordDate = (value?: string | null) => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+};
 
 interface OnlineRequestsProps {
   initialFilter?: string;
@@ -94,6 +126,23 @@ export function OnlineRequests({
     requirements: '',
     additionalNotes: ''
   });
+  const [appointmentAttempted, setAppointmentAttempted] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [tpHour, setTpHour] = useState('08');
+  const [tpMinute, setTpMinute] = useState('00');
+  const [tpPeriod, setTpPeriod] = useState<'AM' | 'PM'>('AM');
+  const timePickerRef = useRef<HTMLDivElement | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const datePickerRef = useRef<HTMLDivElement | null>(null);
+  const [calViewYear, setCalViewYear] = useState(new Date().getFullYear());
+  const [calViewMonth, setCalViewMonth] = useState(new Date().getMonth());
+  const [confirmAction, setConfirmAction] = useState<null | {
+    request: Request;
+    kind: 'process' | 'ready' | 'complete';
+    isOtherDocuments: boolean;
+  }>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const API_BASE = "http://localhost:5001";
 
@@ -133,11 +182,14 @@ export function OnlineRequests({
       contactNumber: row.ContactNumber || 'N/A',
       email: row.Email || 'N/A',
       rejectionReason: (row as any).RejectionReason || (row as any).rejectionReason || undefined,
+      appointmentDate: row.AppointmentDate ?? null,
+      appointmentTime: row.AppointmentTime ?? null,
+      appointmentSetByAdmin: row.AppointmentSetByAdmin ?? null,
     };
   };
 
   /**
-   * ✅ loadInbox(silent?)
+   * loadInbox(silent?)
    * - silent=false: shows toast errors
    * - silent=true: used by polling (prevents toast spam)
    */
@@ -194,6 +246,17 @@ export function OnlineRequests({
 
 
   useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (timePickerRef.current && !timePickerRef.current.contains(e.target as Node))
+        setShowTimePicker(false);
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node))
+        setShowDatePicker(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  useEffect(() => {
     loadInbox(false);
 
     const interval = setInterval(() => {
@@ -240,6 +303,9 @@ export function OnlineRequests({
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
+
+  // Reset to page 1 when tab, filter or search changes
+  useEffect(() => { setCurrentPage(1); }, [activeTab, statusFilter, searchTerm]);
 
   const handleStatusChange = async (id: string, newStatus: RequestStatus) => {
     try {
@@ -316,22 +382,58 @@ export function OnlineRequests({
     }
   };
 
-  const handleSendAppointment = () => {
+  const handleSendAppointment = async () => {
     if (!appointmentRequest) return;
+    setAppointmentAttempted(true);
 
     if (!appointmentDetails.date || !appointmentDetails.time || !appointmentDetails.requirements.trim()) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    setRequests(prev =>
-      prev.map(req => (req.id === appointmentRequest.id ? { ...req, status: 'Processing' } : req))
-    );
+    try {
+      const rawUser = localStorage.getItem("app_user");
+      const currentUser = rawUser ? JSON.parse(rawUser) : null;
+      const setByAdmin = String(currentUser?.name || currentUser?.id || "Barangay Admin").trim();
 
-    toast.success(`Appointment scheduled! (UI only)`, { duration: 4000 });
+      setRequests(prev =>
+        prev.map(req => (req.id === appointmentRequest.id ? { ...req, status: 'Processing' } : req))
+      );
 
-    setAppointmentRequest(null);
-    setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' });
+      const res = await fetch(`${API_BASE}/requests/${appointmentRequest.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "Processing",
+          appointmentDate: appointmentDetails.date,
+          appointmentTime: appointmentDetails.time,
+          requirements: appointmentDetails.requirements.trim(),
+          additionalNotes: appointmentDetails.additionalNotes.trim(),
+          setByAdmin,
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || "Failed to send appointment");
+        await loadInbox(false);
+        return;
+      }
+
+      await loadInbox(false);
+      setActiveTab(certificateDocTypes.includes(appointmentRequest.documentType) ? 'certificates' : 'other');
+      setStatusFilter('Processing');
+      onFilterChange?.('processing');
+
+      toast.success("Appointment sent successfully.", { duration: 4000 });
+      setAppointmentRequest(null);
+      setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' });
+      setAppointmentAttempted(false);
+    } catch {
+      toast.error("Server error while sending appointment.");
+      await loadInbox(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -342,6 +444,22 @@ export function OnlineRequests({
       case 'Completed': return 'bg-gray-100 text-gray-800';
       case 'Rejected': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getTabCountColor = () => {
+    switch (statusFilter) {
+      case 'Pending':
+        return 'bg-red-600 text-white';
+      case 'Processing':
+        return 'bg-blue-600 text-white';
+      case 'Ready for Pickup':
+        return 'bg-green-600 text-white';
+      case 'Completed':
+      case 'Rejected':
+        return 'bg-gray-500 text-white';
+      default:
+        return 'bg-red-600 text-white';
     }
   };
 
@@ -392,141 +510,249 @@ export function OnlineRequests({
     req.purpose.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const renderRequestTable = (requestList: Request[], isOtherDocuments = false) => (
-    <Table>
-      <TableHeader className="bg-[#2957a1]">
-        <TableRow className="hover:bg-[#2957a1]">
-          <TableHead className="text-white font-bold">Request No.</TableHead>
-          <TableHead className="text-white font-bold">Resident</TableHead>
-          <TableHead className="text-white font-bold">Document Type</TableHead>
-          {!isOtherDocuments && <TableHead className="text-white font-bold">Purpose</TableHead>}
-          <TableHead className="text-white font-bold">Date Requested</TableHead>
-          <TableHead className="text-white font-bold">Status</TableHead>
-          <TableHead className="text-white font-bold">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {requestList.map((request) => (
-          <TableRow key={request.id} className="hover:bg-gray-50">
-            <TableCell className="font-medium">{request.requestNo}</TableCell>
-            <TableCell>
-              <div className="flex flex-col">
-                <span>{request.residentName}</span>
-                <span className="text-xs text-gray-500">{request.residentId}</span>
-              </div>
-            </TableCell>
-            <TableCell>{request.documentType}</TableCell>
-            {!isOtherDocuments && <TableCell>{request.purpose}</TableCell>}
-            <TableCell>{new Date(request.dateRequested).toLocaleDateString()}</TableCell>
-            <TableCell>
-              <Badge className={getStatusColor(request.status)}>
-                <span className="flex items-center gap-1">
-                  {getStatusIcon(request.status)}
-                  {request.status}
-                </span>
-              </Badge>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-2 text-gray-400 hover:text-gray-600">
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors"
-                    onClick={() => setViewingRequest(request)}
-                  >
-                    <Eye className="w-6 h-6" />
-                    <span>View Info</span>
-                  </Button>
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / pageSize));
+  const paginatedRequests = filteredRequests.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredRequests.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredRequests.length);
 
-                  {request.status === 'Rejected' && (
-                    <Button
-                      size="sm"
-                      className="flex items-center gap-2 bg-white text-red-600 border border-red-200 hover:bg-red-50"
-                      onClick={() => setViewingDenialReason(request.rejectionReason ?? 'No reason provided')}
-                    >
-                      <XCircle className="w-4 h-4" />
-                      <span>View Reason</span>
-                    </Button>
-                  )}
+  const renderRequestTable = (requestList: Request[], isOtherDocuments = false) => {
+    const totalPgs = Math.max(1, Math.ceil(requestList.length / pageSize));
+    const paginated = requestList.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const rStart = requestList.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    const rEnd = Math.min(currentPage * pageSize, requestList.length);
+
+    return (
+    <div className="space-y-3">
+      {/* ── DESKTOP TABLE (hidden on mobile) ── */}
+      <div className="hidden sm:block overflow-x-auto">
+        <Table>
+          <TableHeader className="bg-[#2957a1]">
+            <TableRow className="hover:bg-[#2957a1]">
+              <TableHead className="text-white font-bold text-xs">Request No.</TableHead>
+              <TableHead className="text-white font-bold text-xs">Resident</TableHead>
+              <TableHead className="text-white font-bold text-xs">Document Type</TableHead>
+              {!isOtherDocuments && <TableHead className="text-white font-bold text-xs">Purpose</TableHead>}
+              <TableHead className="text-white font-bold text-xs">Date Requested</TableHead>
+              <TableHead className="text-white font-bold text-xs">Status</TableHead>
+              <TableHead className="text-white font-bold text-xs">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {paginated.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={isOtherDocuments ? 6 : 7} className="text-center text-gray-500 py-8">
+                  {isLoading ? "Loading..." : "No requests found"}
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginated.map((request) => (
+                <TableRow key={request.id} className="hover:bg-gray-50">
+                  <TableCell className="font-medium text-xs">{request.requestNo}</TableCell>
+                  <TableCell className="text-xs">
+                    <div className="flex flex-col">
+                      <span>{request.residentName}</span>
+                      <span className="text-[10px] text-gray-500">{request.residentId}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-xs">{request.documentType}</TableCell>
+                  {!isOtherDocuments && <TableCell className="text-xs">{request.purpose}</TableCell>}
+                  <TableCell className="text-xs">{new Date(request.dateRequested).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <Badge className={getStatusColor(request.status)}>
+                      <span className="flex items-center gap-1 text-xs">{getStatusIcon(request.status)}{request.status}</span>
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" className="flex items-center gap-1.5 bg-gray-100 text-black hover:bg-gray-300 text-xs" onClick={() => setViewingRequest(request)}>
+                        <Eye className="w-3.5 h-3.5" /><span>View</span>
+                      </Button>
+                      {request.status === 'Rejected' && (
+                        <Button size="sm" className="flex items-center gap-1.5 bg-white text-red-600 border border-red-200 hover:bg-red-50 text-xs" onClick={() => setViewingDenialReason(request.rejectionReason ?? 'No reason provided')}>
+                          <XCircle className="w-3.5 h-3.5" /><span>Reason</span>
+                        </Button>
+                      )}
+                      {request.status === 'Pending' && !isReadOnly && (
+                        <>
+                          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'process', isOtherDocuments })}>Process</Button>
+                          <Button size="sm" variant="destructive" className="text-xs" onClick={() => setDenyingRequest(request)}>Deny</Button>
+                        </>
+                      )}
+                      {request.status === 'Processing' && !isReadOnly && (
+                        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready</Button>
+                      )}
+                      {request.status === 'Ready for Pickup' && !isReadOnly && (
+                        <Button size="sm" className="bg-gray-600 hover:bg-gray-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'complete', isOtherDocuments })}>Complete</Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* ── MOBILE CARDS (visible only on mobile) ── */}
+      <div className="sm:hidden space-y-3">
+        {paginated.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <FileText className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+            <p className="text-sm">{isLoading ? "Loading..." : "No requests found"}</p>
+          </div>
+        ) : (
+          paginated.map((request) => (
+            <div key={request.id} className="rounded-lg border bg-white p-3 shadow-sm space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-sm text-[#2957a1]">{request.requestNo}</p>
+                  <p className="text-xs text-gray-700 font-medium">{request.residentName}</p>
+                  <p className="text-[10px] text-gray-400">{request.residentId}</p>
                 </div>
-
+                <Badge className={`${getStatusColor(request.status)} shrink-0 text-[10px]`}>
+                  <span className="flex items-center gap-1">{getStatusIcon(request.status)}{request.status}</span>
+                </Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-600">
+                <span className="col-span-2"><span className="font-medium text-gray-500">Doc:</span> {request.documentType}</span>
+                {!isOtherDocuments && <span className="col-span-2 truncate"><span className="font-medium text-gray-500">Purpose:</span> {request.purpose}</span>}
+                <span><span className="font-medium text-gray-500">Date:</span> {new Date(request.dateRequested).toLocaleDateString()}</span>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1 border-t">
+                <Button size="sm" className="flex-1 flex items-center justify-center gap-1.5 bg-gray-100 text-black hover:bg-gray-200 text-xs h-8" onClick={() => setViewingRequest(request)}>
+                  <Eye className="w-3.5 h-3.5" />View Info
+                </Button>
+                {request.status === 'Rejected' && (
+                  <Button size="sm" className="flex-1 bg-white text-red-600 border border-red-200 hover:bg-red-50 text-xs h-8" onClick={() => setViewingDenialReason(request.rejectionReason ?? 'No reason provided')}>
+                    <XCircle className="w-3.5 h-3.5 mr-1" />Reason
+                  </Button>
+                )}
                 {request.status === 'Pending' && !isReadOnly && (
                   <>
-                    {isOtherDocuments ? (
-                      <Button
-                        size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                        onClick={() => setAppointmentRequest(request)}
-                      >
-                        Process
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                        onClick={() => handleStatusChange(request.id, 'Processing')}
-                      >
-                        Process
-                      </Button>
-                    )}
-                    <Button size="sm" variant="destructive" onClick={() => setDenyingRequest(request)}>
-                      Deny
-                    </Button>
+                    <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-8" onClick={() => setConfirmAction({ request, kind: 'process', isOtherDocuments })}>Process</Button>
+                    <Button size="sm" variant="destructive" className="flex-1 text-xs h-8" onClick={() => setDenyingRequest(request)}>Deny</Button>
                   </>
                 )}
-
                 {request.status === 'Processing' && !isReadOnly && (
-                  <Button
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => handleStatusChange(request.id, 'Ready for Pickup')}
-                  >
-                    Ready
-                  </Button>
+                  <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs h-8" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready for Pickup</Button>
                 )}
-
                 {request.status === 'Ready for Pickup' && !isReadOnly && (
-                  <Button
-                    size="sm"
-                    className="bg-gray-600 hover:bg-gray-700 text-white"
-                    onClick={() => handleStatusChange(request.id, 'Completed')}
-                  >
-                    Complete
-                  </Button>
+                  <Button size="sm" className="flex-1 bg-gray-600 hover:bg-gray-700 text-white text-xs h-8" onClick={() => setConfirmAction({ request, kind: 'complete', isOtherDocuments })}>Complete</Button>
                 )}
               </div>
-            </TableCell>
-          </TableRow>
-        ))}
-
-        {requestList.length === 0 && (
-          <TableRow>
-            <TableCell colSpan={isOtherDocuments ? 6 : 7} className="text-center text-gray-500 py-8">
-              {isLoading ? "Loading..." : "No requests found"}
-            </TableCell>
-          </TableRow>
+            </div>
+          ))
         )}
-      </TableBody>
-    </Table>
-  );
+      </div>
+
+      {/* ── PAGINATION FOOTER ── */}
+      {requestList.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 border-t">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 shrink-0">Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[#2957a1]"
+              >
+                {[5, 10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <span className="text-xs text-gray-500">{rStart}–{rEnd} of {requestList.length}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="First page"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Previous page"><ChevronLeft className="w-3.5 h-3.5" /></button>
+            {Array.from({ length: Math.min(5, totalPgs) }, (_, i) => {
+              const start = Math.max(1, Math.min(currentPage - 2, totalPgs - 4));
+              const page = start + i;
+              return page <= totalPgs ? (
+                <button key={page} onClick={() => setCurrentPage(page)} className={`w-7 h-7 rounded border text-xs font-semibold transition-colors ${page === currentPage ? "bg-[#2957a1] text-white border-[#2957a1]" : "border-gray-300 hover:bg-gray-100"}`}>{page}</button>
+              ) : null;
+            })}
+            <button onClick={() => setCurrentPage((p) => Math.min(totalPgs, p + 1))} disabled={currentPage === totalPgs} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Next page"><ChevronRight className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setCurrentPage(totalPgs)} disabled={currentPage === totalPgs} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Last page"><ChevronsRight className="w-3.5 h-3.5" /></button>
+          </div>
+        </div>
+      )}
+    </div>
+    );
+  };
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-full">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 bg-gray-50 min-h-full">
+      <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <AlertDialogContent className="max-w-[420px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmAction?.kind === 'process'
+                ? 'Process this request?'
+                : confirmAction?.kind === 'ready'
+                  ? 'Mark as Ready for Pickup?'
+                  : 'Mark as Completed?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction?.kind === 'process' ? (
+                confirmAction?.isOtherDocuments ? (
+                  <>This will open the appointment scheduler. Sending the appointment will move the request to Processing.</>
+                ) : (
+                  <>This will move the request from Pending to Processing.</>
+                )
+              ) : confirmAction?.kind === 'ready' ? (
+                <>This will move the request from Processing to Ready for Pickup.</>
+              ) : (
+                <>This will mark the request as Completed.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+              onClick={() => {
+                const action = confirmAction;
+                setConfirmAction(null);
+                if (!action) return;
+
+                if (action.kind === 'process') {
+                  if (action.isOtherDocuments) {
+                    setAppointmentRequest(action.request);
+                    return;
+                  }
+                  handleStatusChange(action.request.id, 'Processing');
+                  return;
+                }
+
+                if (action.kind === 'ready') {
+                  handleStatusChange(action.request.id, 'Ready for Pickup');
+                  return;
+                }
+
+                handleStatusChange(action.request.id, 'Completed');
+              }}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Online Requests</h1>
           <p className="text-gray-600 mt-1">Manage document requests from residents</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button variant="outline" onClick={() => loadInbox(false)} disabled={isLoading}>
             Refresh
           </Button>
 
-          <div className="flex items-center gap-2">
-            <Label className="text-sm">Search:</Label>
-            <div className="relative w-80">
+          <div className="flex items-center gap-2 flex-1 sm:flex-none">
+            <Label className="text-sm shrink-0">Search:</Label>
+            <div className="relative flex-1 sm:w-80">
               <Input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -540,9 +766,9 @@ export function OnlineRequests({
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <Card
-          className={`border-yellow-400 transition-all ${statusFilter === 'Pending' ? 'ring-2 ring-yellow-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          className={`border-yellow-400 transition-all ${statusFilter === 'Pending' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => {
             if (statusFilter !== 'Pending') {
               setStatusFilter('Pending');
@@ -564,7 +790,7 @@ export function OnlineRequests({
         </Card>
 
         <Card
-          className={`border-blue-400 transition-all ${statusFilter === 'Processing' ? 'ring-2 ring-blue-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          className={`border-blue-400 transition-all ${statusFilter === 'Processing' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => {
             if (statusFilter !== 'Processing') {
               setStatusFilter('Processing');
@@ -586,7 +812,7 @@ export function OnlineRequests({
         </Card>
 
         <Card
-          className={`border-green-400 transition-all ${statusFilter === 'Ready for Pickup' ? 'ring-2 ring-green-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          className={`border-green-400 transition-all ${statusFilter === 'Ready for Pickup' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => {
             if (statusFilter !== 'Ready for Pickup') {
               setStatusFilter('Ready for Pickup');
@@ -608,7 +834,7 @@ export function OnlineRequests({
         </Card>
 
         <Card
-          className={`border-gray-400 transition-all ${statusFilter === 'Completed' ? 'ring-2 ring-gray-400 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          className={`border-gray-400 transition-all ${statusFilter === 'Completed' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => statusFilter !== 'Completed' && setStatusFilter('Completed')}
         >
           <CardContent className="p-4">
@@ -624,7 +850,7 @@ export function OnlineRequests({
           </CardContent>
         </Card>
         <Card
-          className={`border-2 border-red-500 transition-all ${statusFilter === 'Rejected' ? 'border-red-500 ring-2 ring-red-500 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
+          className={`border-2 border-red-500 transition-all ${statusFilter === 'Rejected' ? 'border-red-500 cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() =>
             statusFilter !== 'Rejected' && setStatusFilter('Rejected')
           }
@@ -654,7 +880,7 @@ export function OnlineRequests({
             <div className="flex items-center gap-2">
               <span>Certificates</span>
               {certificateCount > 0 && (
-                <span className="min-w-[26px] h-6 px-2 rounded-full bg-red-600 text-white text-sm font-semibold flex items-center justify-center">
+                <span className={`min-w-[26px] h-6 px-2 rounded-full text-sm font-semibold flex items-center justify-center ${getTabCountColor()}`}>
                   {certificateCount}
                 </span>
               )}
@@ -665,7 +891,7 @@ export function OnlineRequests({
             <div className="flex items-center gap-2">
               <span>Other Documents</span>
               {otherCount > 0 && (
-                <span className="min-w-[26px] h-6 px-2 rounded-full bg-red-600 text-white text-sm font-semibold flex items-center justify-center">
+                <span className={`min-w-[26px] h-6 px-2 rounded-full text-sm font-semibold flex items-center justify-center ${getTabCountColor()}`}>
                   {otherCount}
                 </span>
               )}
@@ -706,56 +932,154 @@ export function OnlineRequests({
 
       {/* View Request Dialog */}
       <Dialog open={!!viewingRequest} onOpenChange={(open) => !open && setViewingRequest(null)}>
-        <DialogContent>
+        <DialogContent className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto">
           {viewingRequest && (
             <>
-              <DialogHeader>
-                <DialogTitle>Request Details</DialogTitle>
-                <DialogDescription>View the details of the request</DialogDescription>
+              <DialogHeader className="-mx-6 -mt-6 border-b px-6 py-5 text-left">
+                <DialogTitle className="text-[18px] font-bold text-gray-900">Request Details</DialogTitle>
+                <DialogDescription className="text-[14px] text-gray-500">
+                  Review the submitted request information and current processing status.
+                </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-xs text-gray-500">Request Number</Label>
-                  <p className="font-semibold">{viewingRequest.requestNo}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Resident</Label>
-                  <p className="font-semibold">{viewingRequest.residentName}</p>
-                  <p className="text-xs text-gray-500">{viewingRequest.residentId}</p>
-                </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <Label className="text-xs text-gray-500">Contact Number</Label>
-                    <p className="font-semibold">{viewingRequest.contactNumber}</p>
+              <div className="space-y-6 pt-2">
+                <div className="flex flex-col gap-5 rounded-[28px] border border-gray-200 bg-white px-6 py-6 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-center gap-5">
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-[#2957a1] bg-[#2957a1]/10 shadow-sm">
+                      <FileText className="h-10 w-10 text-[#2957a1]" />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="inline-flex rounded-full bg-blue-50 px-4 py-1 text-sm font-semibold text-[#2957a1]">
+                          Request No: {viewingRequest.requestNo}
+                        </span>
+                        <Badge className={getStatusColor(viewingRequest.status)}>{viewingRequest.status}</Badge>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Document Type</p>
+                        <p className="mt-1 text-[30px] font-bold leading-tight text-gray-900 break-words">
+                          {viewingRequest.documentType}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Email</Label>
-                    <p className="font-semibold">{viewingRequest.email}</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:min-w-[360px]">
+                    <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Date Requested</p>
+                      <p className="mt-1 text-base font-semibold text-gray-900">
+                        {formatWordDate(viewingRequest.dateRequested)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Resident ID</p>
+                      <p className="mt-1 text-base font-semibold text-gray-900">{viewingRequest.residentId}</p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Document Type</Label>
-                  <p className="font-semibold">{viewingRequest.documentType}</p>
+
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.08fr_0.92fr]">
+                  <div className="rounded-[28px] border border-gray-200 bg-white p-6 shadow-sm">
+                    <h3 className="mb-4 text-[15px] font-bold text-[#2957a1]">Resident Information</h3>
+                    <div className="rounded-3xl bg-gray-50 p-5">
+                      <div className="mb-5">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Resident</Label>
+                        <p className="mt-2 text-[30px] font-bold leading-tight text-gray-900 break-words">
+                          {viewingRequest.residentName}
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-slate-500">{viewingRequest.residentId}</p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contact Number</Label>
+                          <p className="mt-2 text-lg font-semibold text-gray-900">{viewingRequest.contactNumber || 'Not provided'}</p>
+                        </div>
+                        <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Email</Label>
+                          <p className="mt-2 text-sm font-medium text-gray-900 break-all">
+                            {viewingRequest.email || 'Not provided'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[28px] border border-gray-200 bg-white p-6 shadow-sm">
+                    <h3 className="mb-4 text-[15px] font-bold text-[#2957a1]">Request Information</h3>
+                    <div className="rounded-3xl bg-gray-50 p-5 space-y-5">
+                      <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Purpose</Label>
+                        <p className="mt-2 text-lg font-semibold text-gray-900 break-words">
+                          {viewingRequest.purpose || 'No purpose provided'}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Request Type</Label>
+                          <p className="mt-2 text-lg font-semibold text-gray-900">{viewingRequest.documentType}</p>
+                        </div>
+                        <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Current Status</Label>
+                          <div className="mt-2">
+                            <Badge className={getStatusColor(viewingRequest.status)}>{viewingRequest.status}</Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Purpose</Label>
-                  <p>{viewingRequest.purpose}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Date Requested</Label>
-                  <p>{new Date(viewingRequest.dateRequested).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Status</Label>
-                  <Badge className={getStatusColor(viewingRequest.status)}>{viewingRequest.status}</Badge>
-                </div>
+
+                {activeTab === 'other' && viewingRequest.status === 'Processing' && (
+                  <div className="rounded-[28px] border border-blue-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4 flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-[#2957a1]" />
+                      <p className="text-[15px] font-bold text-[#2957a1]">Appointment Details</p>
+                    </div>
+                    <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <div className="rounded-2xl bg-white/80 px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Appointment Date</Label>
+                          <p className="mt-2 text-lg font-semibold text-gray-900">
+                            {viewingRequest.appointmentDate ? formatWordDate(viewingRequest.appointmentDate) : 'Not set'}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl bg-white/80 px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Appointment Time</Label>
+                          <p className="mt-2 text-lg font-semibold text-gray-900">
+                            {viewingRequest.appointmentTime ? formatAppointmentTime(viewingRequest.appointmentTime) : 'Not set'}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl bg-white/80 px-4 py-4 shadow-sm">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-blue-700">Set By</Label>
+                          <p className="mt-2 text-lg font-semibold text-gray-900">
+                            {viewingRequest.appointmentSetByAdmin || 'Barangay Admin'}
+                          </p>
+                        </div>
+                      </div>
+                      {!viewingRequest.appointmentDate && !viewingRequest.appointmentTime && (
+                        <p className="mt-4 text-sm font-medium text-blue-900/80">
+                          No appointment date and time have been recorded for this request yet.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {viewingRequest.rejectionReason && (
-                  <div>
-                    <Label className="text-xs text-gray-500">Rejection Reason</Label>
-                    <p className="text-red-600">{viewingRequest.rejectionReason}</p>
+                  <div className="rounded-[28px] border border-red-200 bg-white p-6 shadow-sm">
+                    <div className="rounded-3xl border border-red-100 bg-red-50 p-5">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-red-700" />
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-red-700">Rejection Reason</Label>
+                      </div>
+                      <p className="mt-3 text-base font-medium text-red-700">{viewingRequest.rejectionReason}</p>
+                    </div>
                   </div>
                 )}
               </div>
+              <DialogFooter className="-mx-6 -mb-6 mt-6 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
+                <Button variant="outline" onClick={() => setViewingRequest(null)}>
+                  Close
+                </Button>
+              </DialogFooter>
             </>
           )}
         </DialogContent>
@@ -833,94 +1157,306 @@ export function OnlineRequests({
           if (!open) {
             setAppointmentRequest(null);
             setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' });
+            setAppointmentAttempted(false);
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] sm:max-w-[680px] md:max-w-[800px]">
           {appointmentRequest && (
             <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-blue-600" />
+              {/* ── Header ── */}
+              <DialogHeader className="pb-2 border-b border-gray-100">
+                <DialogTitle className="flex items-center gap-2 text-[#2957a1] text-xl font-bold">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2957a1]/10">
+                    <Mail className="w-4 h-4 text-[#2957a1]" />
+                  </div>
                   Schedule Appointment
                 </DialogTitle>
-                <DialogDescription>
-                  Set appointment details for the resident (UI only).
+                <DialogDescription className="text-sm text-gray-500 mt-1">
+                  Set the appointment details for this request and move it to processing.
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 p-4 bg-gray-50 rounded-lg sm:grid-cols-2">
-                  <div>
-                    <Label className="text-xs text-gray-500">Request Number</Label>
-                    <p className="font-semibold">{appointmentRequest.requestNo}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Document Type</Label>
-                    <p className="font-semibold">{appointmentRequest.documentType}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Resident</Label>
-                    <p className="font-semibold">{appointmentRequest.residentName}</p>
-                    <p className="text-xs text-gray-500">{appointmentRequest.residentId}</p>
+              <div className="space-y-5 pt-1">
+                {/* ── Request info card ── */}
+                <div className="rounded-xl border border-[#2957a1]/15 bg-[#f4f7fc] p-4">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#2957a1]/60 mb-0.5">Request No.</p>
+                      <p className="text-sm font-bold text-gray-800">{appointmentRequest.requestNo}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#2957a1]/60 mb-0.5">Document Type</p>
+                      <p className="text-sm font-bold text-gray-800">{appointmentRequest.documentType}</p>
+                    </div>
+                    <div className="col-span-2 pt-1 border-t border-[#2957a1]/10">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#2957a1]/60 mb-0.5">Resident</p>
+                      <p className="text-sm font-bold text-gray-800">{appointmentRequest.residentName}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{appointmentRequest.residentId}</p>
+                    </div>
                   </div>
                 </div>
 
+                {/* ── Date & Time row ── */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <Label htmlFor="appointmentDate">Appointment Date *</Label>
-                    <Input
-                      id="appointmentDate"
-                      type="date"
-                      value={appointmentDetails.date}
-                      onChange={(e) => setAppointmentDetails({ ...appointmentDetails, date: e.target.value })}
-                      min={new Date().toISOString().split('T')[0]}
-                    />
+
+                  {/* ── Custom Date Picker ── */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                      Appointment Date <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="relative" ref={datePickerRef}>
+                      <button
+                        type="button"
+                        onClick={() => { setShowDatePicker((v) => !v); setShowTimePicker(false); }}
+                        className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-white transition-colors ${
+                          appointmentAttempted && !appointmentDetails.date
+                            ? 'border-red-400 ring-1 ring-red-400'
+                            : showDatePicker
+                            ? 'border-[#2957a1] ring-1 ring-[#2957a1]/40'
+                            : 'border-input hover:border-[#2957a1]/50'
+                        }`}
+                      >
+                        <span className={appointmentDetails.date ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+                          {appointmentDetails.date
+                            ? new Date(appointmentDetails.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            : 'Select date'}
+                        </span>
+                        <Calendar className="h-4 w-4 text-gray-400" />
+                      </button>
+
+                      {showDatePicker && (
+                        <div className="absolute left-0 z-50 mt-1.5 w-72 rounded-2xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+                          {/* Month nav */}
+                          <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (calViewMonth === 0) { setCalViewMonth(11); setCalViewYear(y => y - 1); }
+                                else setCalViewMonth(m => m - 1);
+                              }}
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors text-base"
+                            >‹</button>
+                            <span className="text-sm font-semibold text-gray-800">
+                              {new Date(calViewYear, calViewMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (calViewMonth === 11) { setCalViewMonth(0); setCalViewYear(y => y + 1); }
+                                else setCalViewMonth(m => m + 1);
+                              }}
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors text-base"
+                            >›</button>
+                          </div>
+                          {/* Day headers */}
+                          <div className="grid grid-cols-7 px-3 pb-1">
+                            {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+                              <p key={d} className="text-center text-[11px] font-medium text-gray-400 py-1">{d}</p>
+                            ))}
+                          </div>
+                          {/* Days */}
+                          <div className="px-3 pb-3">
+                            {(() => {
+                              const today = new Date(); today.setHours(0,0,0,0);
+                              const firstDay = new Date(calViewYear, calViewMonth, 1).getDay();
+                              const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
+                              const cells: React.ReactNode[] = [];
+                              for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} />);
+                              for (let d = 1; d <= daysInMonth; d++) {
+                                const dateObj = new Date(calViewYear, calViewMonth, d);
+                                const isPast = dateObj < today;
+                                const iso = `${calViewYear}-${String(calViewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                                const isSelected = appointmentDetails.date === iso;
+                                const isToday = dateObj.getTime() === today.getTime();
+                                cells.push(
+                                  <button
+                                    key={d}
+                                    type="button"
+                                    disabled={isPast}
+                                    onClick={() => { setAppointmentDetails({ ...appointmentDetails, date: iso }); setShowDatePicker(false); }}
+                                    className={`w-full aspect-square flex items-center justify-center rounded-full text-sm transition-colors
+                                      ${isPast ? 'text-gray-300 cursor-not-allowed' :
+                                        isSelected ? 'bg-[#2957a1] text-white font-semibold' :
+                                        isToday ? 'text-[#2957a1] font-semibold hover:bg-gray-100' :
+                                        'text-gray-700 hover:bg-gray-100'
+                                      }`}
+                                  >{d}</button>
+                                );
+                              }
+                              return <div className="grid grid-cols-7 gap-0.5">{cells}</div>;
+                            })()}
+                          </div>
+                          {/* Footer */}
+                          <div className="border-t border-gray-100 px-5 py-3 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => { setAppointmentDetails({ ...appointmentDetails, date: '' }); setShowDatePicker(false); }}
+                              className="text-sm text-gray-400 hover:text-gray-600 font-medium transition-colors"
+                            >Clear</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="appointmentTime">Appointment Time *</Label>
-                    <Input
-                      id="appointmentTime"
-                      type="time"
-                      value={appointmentDetails.time}
-                      onChange={(e) => setAppointmentDetails({ ...appointmentDetails, time: e.target.value })}
-                    />
+
+                  {/* ── Custom Time Picker ── */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                      Appointment Time <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="relative" ref={timePickerRef}>
+                      <button
+                        type="button"
+                        onClick={() => { setShowTimePicker((v) => !v); setShowDatePicker(false); }}
+                        className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-white transition-colors ${
+                          appointmentAttempted && !appointmentDetails.time
+                            ? 'border-red-400 ring-1 ring-red-400'
+                            : showTimePicker
+                            ? 'border-[#2957a1] ring-1 ring-[#2957a1]/40'
+                            : 'border-input hover:border-[#2957a1]/50'
+                        }`}
+                      >
+                        <span className={appointmentDetails.time ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+                          {appointmentDetails.time
+                            ? (() => {
+                                const [h, m] = appointmentDetails.time.split(':');
+                                const hNum = parseInt(h, 10);
+                                const period = hNum >= 12 ? 'PM' : 'AM';
+                                const h12 = hNum % 12 === 0 ? 12 : hNum % 12;
+                                return `${String(h12).padStart(2,'0')}:${m} ${period}`;
+                              })()
+                            : 'Select time'}
+                        </span>
+                        <Clock className="h-4 w-4 text-gray-400" />
+                      </button>
+
+                      {showTimePicker && (
+                        <div className="absolute left-0 right-0 z-50 mt-1.5 rounded-2xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+                          {/* Title */}
+                          <div className="px-5 pt-5 pb-4 border-b border-gray-100">
+                            <p className="text-sm font-semibold text-gray-800">Select Time</p>
+                          </div>
+                          {/* Controls */}
+                          <div className="flex items-center gap-2 px-5 py-4">
+                            {/* Hour select */}
+                            <div className="relative">
+                              <select
+                                value={tpHour}
+                                onChange={e => setTpHour(e.target.value)}
+                                className="appearance-none h-9 pl-3 pr-7 rounded-lg border border-gray-200 text-sm font-semibold text-gray-800 bg-white focus:outline-none focus:border-[#2957a1] focus:ring-1 focus:ring-[#2957a1]/30 cursor-pointer"
+                              >
+                                {['01','02','03','04','05','06','07','08','09','10','11','12'].map(h => (
+                                  <option key={h} value={h}>{h}</option>
+                                ))}
+                              </select>
+                              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400 text-xs">▾</span>
+                            </div>
+                            <span className="text-lg font-bold text-gray-500">:</span>
+                            {/* Minute select */}
+                            <div className="relative">
+                              <select
+                                value={tpMinute}
+                                onChange={e => setTpMinute(e.target.value)}
+                                className="appearance-none h-9 pl-3 pr-7 rounded-lg border border-gray-200 text-sm font-semibold text-gray-800 bg-white focus:outline-none focus:border-[#2957a1] focus:ring-1 focus:ring-[#2957a1]/30 cursor-pointer"
+                              >
+                                {['00','05','10','15','20','25','30','35','40','45','50','55'].map(m => (
+                                  <option key={m} value={m}>{m}</option>
+                                ))}
+                              </select>
+                              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400 text-xs">▾</span>
+                            </div>
+                            {/* AM/PM toggle */}
+                            <div className="ml-1 flex items-center gap-1">
+                              {(['AM','PM'] as const).map(p => (
+                                <button
+                                  key={p}
+                                  type="button"
+                                  onClick={() => setTpPeriod(p)}
+                                  className={`px-2.5 py-1 rounded-md text-sm font-semibold transition-colors ${
+                                    tpPeriod === p ? 'text-[#2957a1] font-bold' : 'text-gray-400 hover:text-gray-600'
+                                  }`}
+                                >{p}</button>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Footer */}
+                          <div className="border-t border-gray-100 px-5 py-3 flex items-center justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setShowTimePicker(false)}
+                              className="text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors"
+                            >Cancel</button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const hNum = parseInt(tpHour, 10);
+                                const h24 = tpPeriod === 'AM' ? (hNum === 12 ? 0 : hNum) : (hNum === 12 ? 12 : hNum + 12);
+                                setAppointmentDetails({ ...appointmentDetails, time: `${String(h24).padStart(2,'0')}:${tpMinute}` });
+                                setShowTimePicker(false);
+                              }}
+                              className="px-5 py-1.5 rounded-full bg-[#2957a1] text-sm font-semibold text-white hover:bg-[#1e4080] active:scale-[0.98] transition-all"
+                            >Apply</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="requirements">Required Documents to Bring *</Label>
+                {/* ── Required Documents ── */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="requirements" className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                    Required Documents to Bring <span className="text-red-500">*</span>
+                  </Label>
                   <Textarea
                     id="requirements"
                     value={appointmentDetails.requirements}
                     onChange={(e) => setAppointmentDetails({ ...appointmentDetails, requirements: e.target.value })}
                     placeholder="e.g., Valid ID, Proof of Residency, etc."
-                    rows={4}
-                    className="resize-none"
+                    rows={3}
+                    className={`resize-none text-sm ${appointmentAttempted && !appointmentDetails.requirements.trim() ? 'border-red-400 focus-visible:ring-red-400' : 'focus-visible:ring-[#2957a1]/40 focus-visible:border-[#2957a1]'}`}
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="additionalNotes">Additional Notes (Optional)</Label>
+                {/* ── Additional Notes ── */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="additionalNotes" className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                    Additional Notes <span className="text-gray-400 font-normal normal-case tracking-normal">(Optional)</span>
+                  </Label>
                   <Textarea
                     id="additionalNotes"
                     value={appointmentDetails.additionalNotes}
                     onChange={(e) => setAppointmentDetails({ ...appointmentDetails, additionalNotes: e.target.value })}
                     placeholder="Any additional instructions..."
-                    rows={3}
-                    className="resize-none"
+                    rows={2}
+                    className="resize-none text-sm focus-visible:ring-[#2957a1]/40 focus-visible:border-[#2957a1]"
                   />
                 </div>
               </div>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => { setAppointmentRequest(null); setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' }); }}>
-                  Cancel
-                </Button>
-                <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleSendAppointment}>
-                  <Mail className="w-4 h-4 mr-2" />
-                  Send Appointment
-                </Button>
+              {/* ── Footer ── */}
+              <DialogFooter className="pt-2 border-t border-gray-100 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-gray-400">
+                  Sending the appointment will move this request to the <span className="font-semibold text-gray-500">Processing</span> tab.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    className="text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
+                    onClick={() => {
+                      setAppointmentRequest(null);
+                      setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' });
+                      setAppointmentAttempted(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button className="bg-[#2957a1] hover:bg-[#1e4080] text-sm font-semibold" onClick={handleSendAppointment}>
+                    <Mail className="w-4 h-4 mr-2" />
+                    Send Appointment
+                  </Button>
+                </div>
               </DialogFooter>
             </>
           )}

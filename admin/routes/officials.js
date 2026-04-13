@@ -2,6 +2,65 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const bcrypt = require("bcrypt");
+const verifyToken = require("../middleware/verifyToken");
+const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
+
+const OFFICIAL_POSITIONS = new Set([
+    "Barangay Captain",
+    "Kagawad",
+    "SK Kagawad",
+    "SK Chairman",
+    "Secretary",
+    "Treasurer",
+]);
+
+function cleanString(value) {
+    return String(value ?? "").trim();
+}
+
+function normalizeDigits(value) {
+    return String(value ?? "").replace(/\D/g, "").trim();
+}
+
+function isValidGmail(value) {
+    return /^[a-z0-9](\.?[a-z0-9]){5,29}@gmail\.com$/i.test(cleanString(value).toLowerCase());
+}
+
+function isLettersAndSpaces(value) {
+    return /^[A-Za-z\s]+$/.test(cleanString(value));
+}
+
+function validateOfficialPayload({
+    adminName,
+    position,
+    email,
+    contactnumber,
+    requirePassword = false,
+    password,
+    termStart,
+    termEnd,
+}) {
+    if (!cleanString(adminName)) return "Full name is required.";
+    if (!isLettersAndSpaces(adminName)) return "Full name must contain letters and spaces only.";
+    if (cleanString(adminName).length > 50) return "Full name must not exceed 50 characters.";
+
+    if (!cleanString(position)) return "Position is required.";
+    if (!OFFICIAL_POSITIONS.has(cleanString(position))) return "Position is invalid.";
+
+    if (!cleanString(email)) return "Email is required.";
+    if (!isValidGmail(email)) return "Only valid Gmail addresses are allowed.";
+    if (cleanString(email).length > 60) return "Email must not exceed 60 characters.";
+
+    if (!/^\d{11}$/.test(contactnumber)) return "Contact number must be exactly 11 digits.";
+
+    if (requirePassword && !cleanString(password)) return "Password is required.";
+
+    if (termStart && termEnd && termEnd < termStart) {
+        return "Term end date cannot be earlier than term start date.";
+    }
+
+    return null;
+}
 
 function normalizeDateValue(value) {
     if (!value) return null;
@@ -28,6 +87,15 @@ function normalizeDateValue(value) {
     const month = String(parsed.getMonth() + 1).padStart(2, "0");
     const day = String(parsed.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
+}
+
+function buildNextPrefixedId(lastId, prefix) {
+    const currentYear = new Date().getFullYear();
+    const nextNumber = lastId
+        ? (parseInt(String(lastId).slice(-4), 10) || 0) + 1
+        : 1;
+
+    return `${prefix}${currentYear}${String(nextNumber).padStart(4, "0")}`;
 }
 
 // GET all officials
@@ -58,7 +126,7 @@ router.get("/", async (req, res) => {
 });
 
 // POST create official (with bcrypt + generated BarangayAdminID)
-router.post("/", async (req, res) => {
+router.post("/", verifyToken, requireNonSkWriteAccess, async (req, res) => {
     const client = await pool.connect();
     try {
         const adminName = req.body.adminName ?? req.body.adminname;
@@ -75,14 +143,18 @@ router.post("/", async (req, res) => {
             .replace(/\D/g, "")
             .trim();
 
-        if (!/^\d{11}$/.test(contactnumber)) {
-            return res.status(400).json({
-                message: "Contact number must be exactly 11 digits."
-            });
-        }
-
-        if (!adminName || !email || !password) {
-            return res.status(400).json({ message: "adminName, email and password are required" });
+        const validationError = validateOfficialPayload({
+            adminName,
+            position,
+            email,
+            contactnumber,
+            requirePassword: true,
+            password,
+            termStart,
+            termEnd,
+        });
+        if (validationError) {
+            return res.status(400).json({ message: validationError });
         }
 
         await client.query("BEGIN");
@@ -92,16 +164,12 @@ router.post("/", async (req, res) => {
         const last = await client.query(`
       SELECT "BarangayAdminID"
       FROM barangayadmin
-      ORDER BY "DateCreated" DESC
+      WHERE "BarangayAdminID" ~ '^AD[0-9]{8}$'
+      ORDER BY CAST(RIGHT("BarangayAdminID", 4) AS INTEGER) DESC
       LIMIT 1
     `);
 
-        let newId = "AD20260001";
-        if (last.rows.length > 0) {
-            const lastId = last.rows[0].BarangayAdminID;
-            const num = parseInt(String(lastId).slice(-4), 10) + 1;
-            newId = "AD2026" + String(num).padStart(4, "0");
-        }
+        const newId = buildNextPrefixedId(last.rows[0]?.BarangayAdminID, "AD");
 
         const adminResult = await client.query(
             `
@@ -156,7 +224,7 @@ router.post("/", async (req, res) => {
 });
 
 // PUT update official
-router.put("/:id", async (req, res) => {
+router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
     try {
         const { id } = req.params;
         const adminName = req.body.adminName ?? req.body.adminname;
@@ -179,10 +247,16 @@ router.put("/:id", async (req, res) => {
             .replace(/\D/g, "")
             .trim();
 
-        if (contactnumber && !/^\d{11}$/.test(contactnumber)) {
-            return res.status(400).json({
-                message: "Contact number must be exactly 11 digits."
-            });
+        const validationError = validateOfficialPayload({
+            adminName,
+            position,
+            email,
+            contactnumber,
+            termStart,
+            termEnd,
+        });
+        if (validationError) {
+            return res.status(400).json({ message: validationError });
         }
 
         const result = await pool.query(
@@ -234,7 +308,7 @@ router.put("/:id", async (req, res) => {
 });
 
 // PATCH toggle active/inactive (Status boolean)
-router.patch("/:id/status", async (req, res) => {
+router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
@@ -254,7 +328,19 @@ router.patch("/:id/status", async (req, res) => {
         );
 
         if (result.rowCount === 0) return res.status(404).json({ message: "Official not found" });
-        res.json(result.rows[0]);
+        const row = result.rows[0];
+        res.json({
+            barangayadminid: row.BarangayAdminID,
+            adminname: row.AdminName,
+            position: row.Position,
+            email: row.Email,
+            status: row.Status,
+            datecreated: row.DateCreated,
+            contactnumber: row.ContactNumber,
+            termstart: normalizeDateValue(row.TermStart),
+            termend: normalizeDateValue(row.TermEnd),
+            profileimage: row.ProfileImage,
+        });
     } catch (err) {
         console.error("PATCH /api/officials/:id/status error:", err);
         res.status(500).json({ message: "Server error" });

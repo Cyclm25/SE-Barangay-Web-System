@@ -148,13 +148,13 @@ The announcement will:
 
 ### ✨ Features
 
-- ✅ Set exact expiration date and time
-- ✅ Automatic archiving based on system time
-- ✅ Visual "⏰ Expired" badge on cards
-- ✅ Shows "Expires: MM/DD/YYYY" in metadata
-- ✅ Works with scheduled announcements
-- ✅ Display actual poster names
-- ✅ Supports all announcement features
+- Set exact expiration date and time
+- Automatic archiving based on system time
+- Visual "⏰ Expired" badge on cards
+- Shows "Expires: MM/DD/YYYY" in metadata
+- Works with scheduled announcements
+- Display actual poster names
+- Supports all announcement features
 
 ### 🛠️ Troubleshooting
 

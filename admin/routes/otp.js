@@ -153,7 +153,7 @@ router.post("/verify", async (req, res) => {
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    // ✅ OTP correct — (optional) keep it for reset step, or delete it now
+    // OTP correct — (optional) keep it for reset step, or delete it now
     // If your next page resets password, keep it; otherwise delete it.
     return res.json({ message: "OTP verified" });
   } catch (err) {

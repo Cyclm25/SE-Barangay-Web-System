@@ -38,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X, FileText } from "lucide-react";
+import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X, FileText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { toast } from "sonner";
 import { formatId } from "../../utils/formatId";
 import OcrScanner from "../../OcrScanner";
@@ -46,8 +46,10 @@ import { Calendar } from "../ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
+import dayjs from "dayjs";
 import { cn } from "../../utils/cn";
 import { ProfileImageUpload } from "../ui/ProfileImageUpload";
+import { api } from "../../utils/api";
 
 // Helper: Get default cutoff date (30 days ago)
 const getDefaultCutoffDate = () => {
@@ -78,7 +80,7 @@ interface Resident {
   gender: "Male" | "Female";
   civilStatus: string;
   residentType: string;
-  voterStatus: "Yes" | "No";
+  voterStatus: "Voter" | "Non-Voter";
   houseNo: string;
   streetAddress: string;
   city: string;
@@ -98,6 +100,13 @@ interface Resident {
   religion?: string | null;
 
 }
+
+const dataPrivacyHighlights = [
+  "The information provided is true and correct to the best of your knowledge.",
+  "The collected data will only be used for legitimate barangay management and record-keeping purposes.",
+  "Authorized barangay personnel may access and process the information in accordance with applicable data privacy laws.",
+  "Reasonable security measures will be applied to protect personal information from unauthorized access or disclosure.",
+];
 
 type ResidentRow = {
   ResidentID: string;
@@ -125,6 +134,7 @@ type ResidentRow = {
   status: ResidentStatus | null;
   dateRegistered?: string | null;
   Religion?: string | null;
+  religion?: string | null;
 };
 
 type SortMenuValue =
@@ -137,6 +147,25 @@ type SortMenuValue =
   | "field:status";
 
 const API_BASE = "http://localhost:5001";
+
+const normalizeVoterStatus = (value: unknown): "Voter" | "Non-Voter" => {
+  if (value === true) return "Voter";
+  if (value === false || value == null) return "Non-Voter";
+  if (typeof value === "number") return value === 1 ? "Voter" : "Non-Voter";
+
+  const normalized = String(value).trim().toLowerCase();
+  if (
+    normalized === "true" ||
+    normalized === "1" ||
+    normalized === "yes" ||
+    normalized === "voter" ||
+    normalized === "registered"
+  ) {
+    return "Voter";
+  }
+
+  return "Non-Voter";
+};
 
 function mapRowToResident(r: ResidentRow): Resident {
   return {
@@ -156,11 +185,11 @@ function mapRowToResident(r: ResidentRow): Resident {
     gender: (r.Gender as any) ?? "Male",
     civilStatus: r.CivilStatus ?? "",
     residentType: r.ResidentType ?? "",
-    voterStatus: r.VoterStatus === true ? "Yes" : "No",
+    voterStatus: normalizeVoterStatus(r.VoterStatus),
     houseNo: r.HouseNumber ?? "",
     streetAddress: r.StreetAddress ?? "",
-    city: "Manila City",
-    postalCode: "1013",
+    city: ((r as any).City ?? (r as any).city ?? "Manila City") as string,
+    postalCode: ((r as any).ZipCode ?? (r as any).zipcode ?? (r as any).PostalCode ?? "1013") as string,
     country: "Philippines",
     contactNumber: r.ContactNumber ?? "",
     email: r.Email ?? "",
@@ -173,7 +202,7 @@ function mapRowToResident(r: ResidentRow): Resident {
     emergencyContactAddress: r.ContactPersonAddress ?? "",
     status: (r.status ?? "Active") as ResidentStatus,
     dateRegistered: r.dateRegistered ?? new Date().toISOString().split("T")[0],
-    religion: (r as any).Religion ?? null,
+    religion: (r as any).Religion ?? (r as any).religion ?? null,
   };
 }
 
@@ -528,7 +557,6 @@ export function ResidentRecords({
     } catch { return false; }
   })();
 
-  const birthdayInputRef = useRef<HTMLInputElement | null>(null);
   const initialFormData = {
     profileImage: "",
     firstName: "",
@@ -540,7 +568,7 @@ export function ResidentRecords({
     civilStatus: "Single",
     religion: "",
     residentType: "",
-    voterStatus: "No" as "Yes" | "No",
+    voterStatus: "Non-Voter" as "Voter" | "Non-Voter",
     houseNo: "",
     streetAddress: "",
     city: "MANILA CITY",
@@ -562,7 +590,9 @@ export function ResidentRecords({
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [viewingResident, setViewingResident] = useState<Resident | null>(null);
   const [isResidentDetailsOpen, setIsResidentDetailsOpen] = useState(false);
+  const [editingResident, setEditingResident] = useState<Resident | null>(null);
   const [showDataPrivacyDialog, setShowDataPrivacyDialog] = useState(false);
+  const [residentPrivacyAccepted, setResidentPrivacyAccepted] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -644,6 +674,8 @@ export function ResidentRecords({
   const [emailAlreadyExists, setEmailAlreadyExists] = useState(false);
   const [isCheckingContactNumber, setIsCheckingContactNumber] = useState(false);
   const [contactNumberAlreadyExists, setContactNumberAlreadyExists] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const [formData, setFormData] = useState(initialFormData);
 
@@ -686,6 +718,9 @@ export function ResidentRecords({
     setShowSettingsDialog(false);
     toast.success("Settings updated");
   };
+
+  // Reset to page 1 when search/sort/filter changes
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, sortBy, sortDirection, activeFilter]);
 
   const hasUnsavedResidentForm =
     JSON.stringify(formData) !== JSON.stringify(initialFormData) ||
@@ -764,7 +799,9 @@ export function ResidentRecords({
 
     let cancelled = false;
     const localDuplicate = residents.some(
-      (resident) => resident.email?.trim().toLowerCase() === trimmedEmail
+      (resident) =>
+        resident.email?.trim().toLowerCase() === trimmedEmail &&
+        resident.residentNo !== editingResident?.residentNo
     );
 
     if (localDuplicate) {
@@ -800,7 +837,7 @@ export function ResidentRecords({
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [formData.email, residents]);
+  }, [editingResident?.residentNo, formData.email, residents]);
 
   useEffect(() => {
     const trimmedContactNumber = formData.contactNumber.trim();
@@ -813,7 +850,9 @@ export function ResidentRecords({
 
     let cancelled = false;
     const localDuplicate = residents.some(
-      (resident) => resident.contactNumber?.trim() === trimmedContactNumber
+      (resident) =>
+        resident.contactNumber?.trim() === trimmedContactNumber &&
+        resident.residentNo !== editingResident?.residentNo
     );
 
     if (localDuplicate) {
@@ -849,7 +888,7 @@ export function ResidentRecords({
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [formData.contactNumber, residents]);
+  }, [editingResident?.residentNo, formData.contactNumber, residents]);
 
   // Sync activeFilter with initialFilter prop changes
   useEffect(() => {
@@ -861,6 +900,8 @@ export function ResidentRecords({
     setProfileImagePreview("");
     setPassword("");
     setConfirmPassword("");
+    setEditingResident(null);
+    setResidentPrivacyAccepted(false);
     setSaveAttempted(false);
     setIsCheckingContactNumber(false);
     setContactNumberAlreadyExists(false);
@@ -942,7 +983,47 @@ export function ResidentRecords({
     setShowDataPrivacyDialog(true);
   };
 
+  const openResidentEdit = (resident: Resident) => {
+    setEditingResident(resident);
+    setFormData({
+      profileImage: resident.profileImage || "",
+      firstName: resident.firstName || "",
+      middleName: resident.middleName || "",
+      lastName: resident.lastName || "",
+      age: String(resident.age || ""),
+      birthday: resident.birthday || "",
+      gender: resident.gender || "Male",
+      civilStatus: resident.civilStatus || "Single",
+      religion: resident.religion || "",
+      residentType: resident.residentType || "",
+      voterStatus: resident.voterStatus || "Non-Voter",
+      houseNo: resident.houseNo || "",
+      streetAddress: resident.streetAddress || "",
+      city: resident.city || "MANILA CITY",
+      postalCode: resident.postalCode || "1013",
+      country: resident.country || "PHILIPPINES",
+      contactNumber: resident.contactNumber || "",
+      email: resident.email || "",
+      fatherName: resident.fatherName || "",
+      motherName: resident.motherName || "",
+      spouseName: resident.spouseName || "",
+      numberOfChildren: resident.numberOfChildren ? String(resident.numberOfChildren) : "",
+      emergencyContactName: resident.emergencyContactName || "",
+      emergencyContactNumber: resident.emergencyContactNumber || "",
+      emergencyContactAddress: resident.emergencyContactAddress || "",
+    });
+    setProfileImagePreview(resident.profileImage || "");
+    setSaveAttempted(false);
+    setEmailAlreadyExists(false);
+    setContactNumberAlreadyExists(false);
+    setIsAddDialogOpen(true);
+  };
+
   const handleConfirmPrivacy = () => {
+    if (!residentPrivacyAccepted) {
+      toast.error("Please confirm the data privacy agreement before continuing.");
+      return;
+    }
     setShowDataPrivacyDialog(false);
     setShowPasswordDialog(true);
   };
@@ -963,28 +1044,7 @@ export function ResidentRecords({
         Math.floor(Math.random() * 9999)
       ).padStart(4, "0")}`;
 
-      let token =
-        localStorage.getItem("token") ||
-        localStorage.getItem("authToken") ||
-        localStorage.getItem("jwt") ||
-        null;
-
-      if (token) {
-        token = token.replace(/^"|"$/g, '');
-      }
-
-      if (!token) {
-        toast.error("Missing login token. Please log in again.");
-        return;
-      }
-
-      const response = await fetch(`${API_BASE}/residents/register`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+      const response = await api.post("/residents/register", {
           residentNo: nextNo,
           profileImage: pendingResident.profileImage,
           firstName: pendingResident.firstName,
@@ -999,6 +1059,8 @@ export function ResidentRecords({
           voterStatus: pendingResident.voterStatus,
           houseNo: pendingResident.houseNo,
           streetAddress: pendingResident.streetAddress,
+          city: pendingResident.city,
+          zipCode: pendingResident.postalCode,
           contactNumber: pendingResident.contactNumber,
           email: pendingResident.email,
           fatherName: pendingResident.fatherName,
@@ -1009,12 +1071,10 @@ export function ResidentRecords({
           emergencyContactNumber: pendingResident.emergencyContactNumber,
           emergencyContactAddress: pendingResident.emergencyContactAddress,
           password,
-        }),
       });
+      const data = response.data;
 
-      const data = await response.json();
-
-      if (response.ok) {
+      if (response.status >= 200 && response.status < 300) {
         toast.success("Resident and Account successfully saved!");
         await loadResidents();
         setShowPasswordDialog(false);
@@ -1032,56 +1092,137 @@ export function ResidentRecords({
         }
         toast.error(data?.error || "Database failed to save record.");
       }
-    } catch (err) {
-      toast.error("Could not reach backend server.");
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      if (status === 409) {
+        const message = String(data?.error || "").toLowerCase();
+        if (message.includes("email")) {
+          setEmailAlreadyExists(true);
+        }
+        if (message.includes("contact")) {
+          setContactNumberAlreadyExists(true);
+        }
+      }
+      toast.error(data?.error || "Could not reach backend server.");
+      console.error(err);
+    }
+  };
+
+  const handleUpdateResident = async () => {
+    if (!editingResident) return;
+
+    setSaveAttempted(true);
+
+    if (
+      isBlank(formData.firstName) ||
+      isBlank(formData.lastName) ||
+      isBlank(formData.birthday) ||
+      invalidContact(formData.contactNumber) ||
+      contactNumberAlreadyExists ||
+      invalidEmail(formData.email) ||
+      emailAlreadyExists
+    ) {
+      toast.error("Please fill in all required fields correctly.");
+      return;
+    }
+
+    try {
+      const response = await api.put(`/residents/${editingResident.residentNo}`, {
+          profileImage: formData.profileImage,
+          firstName: formData.firstName,
+          middleName: formData.middleName,
+          lastName: formData.lastName,
+          age: formData.age,
+          birthday: formData.birthday,
+          gender: formData.gender,
+          civilStatus: formData.civilStatus,
+          religion: formData.religion,
+          residentType: formData.residentType || "Resident",
+          voterStatus: formData.voterStatus,
+          houseNo: formData.houseNo,
+          streetAddress: formData.streetAddress,
+          city: formData.city,
+          zipCode: formData.postalCode,
+          contactNumber: formData.contactNumber,
+          email: formData.email,
+          fatherName: formData.fatherName,
+          motherName: formData.motherName,
+          spouseName: formData.spouseName,
+          numberOfChildren: formData.numberOfChildren,
+          emergencyContactName: formData.emergencyContactName,
+          emergencyContactNumber: formData.emergencyContactNumber,
+          emergencyContactAddress: formData.emergencyContactAddress,
+      });
+      const data = response.data;
+
+      if (response.status < 200 || response.status >= 300) {
+        if (response.status === 409) {
+          const message = String(data?.error || "").toLowerCase();
+          if (message.includes("email")) setEmailAlreadyExists(true);
+          if (message.includes("contact")) setContactNumberAlreadyExists(true);
+        }
+        toast.error(data?.error || "Failed to update resident.");
+        return;
+      }
+
+      toast.success("Resident information updated successfully.");
+      setIsAddDialogOpen(false);
+      setIsResidentDetailsOpen(false);
+      setViewingResident(null);
+      setEditingResident(null);
+      resetForm();
+      await loadResidents();
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      if (status === 409) {
+        const message = String(data?.error || "").toLowerCase();
+        if (message.includes("email")) setEmailAlreadyExists(true);
+        if (message.includes("contact")) setContactNumberAlreadyExists(true);
+      }
+      toast.error(data?.error || "Could not reach backend server.");
       console.error(err);
     }
   };
 
   const handleCancelDataPrivacy = () => {
     setShowDataPrivacyDialog(false);
+    setResidentPrivacyAccepted(false);
     setShowDiscardResidentDialog(false);
     setIsAddDialogOpen(true);
   };
 
   const handleInactivate = async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE}/residents/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Inactive" }),
-      });
-      const data = await response.json();
+      const response = await api.patch(`/residents/${id}/status`, { status: "Inactive" });
+      const data = response.data;
 
-      if (response.ok) {
+      if (response.status >= 200 && response.status < 300) {
         await loadResidents();
         toast.success("Record updated to Inactive");
       } else {
         toast.error(data?.error || "Update failed.");
       }
-    } catch (err) {
-      toast.error("Update failed.");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Update failed.");
       console.error(err);
     }
   };
 
   const handleReactivate = async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE}/residents/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Active" }),
-      });
-      const data = await response.json();
+      const response = await api.patch(`/residents/${id}/status`, { status: "Active" });
+      const data = response.data;
 
-      if (response.ok) {
+      if (response.status >= 200 && response.status < 300) {
         await loadResidents();
         toast.success("Record reactivated");
       } else {
         toast.error(data?.error || "Reactivation failed.");
       }
-    } catch (err) {
-      toast.error("Reactivation failed.");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Reactivation failed.");
       console.error(err);
     }
   };
@@ -1129,6 +1270,11 @@ export function ResidentRecords({
 
       return sortDirection === "asc" ? comparison : -comparison;
     });
+
+  const totalPages = Math.max(1, Math.ceil(filteredResidents.length / pageSize));
+  const paginatedResidents = filteredResidents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rangeStart = filteredResidents.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredResidents.length);
 
   const handleOcrData = (extractedText: string) => {
     const text = extractedText.toUpperCase();
@@ -1220,8 +1366,8 @@ export function ResidentRecords({
 
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-full">
-      <div className="flex items-center justify-between">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 bg-gray-50 min-h-full">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">
@@ -1247,9 +1393,7 @@ export function ResidentRecords({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-
-          {/* Generate List Button */}
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             onClick={handleGenerateList}
@@ -1285,7 +1429,7 @@ export function ResidentRecords({
             </DialogTrigger>
 
             <DialogContent
-              className="w-[95vw] max-w-6xl max-h-[90vh] overflow-y-auto"
+              className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto"
               onInteractOutside={(event) => {
                 event.preventDefault();
                 handleAddDialogOpenChange(false);
@@ -1296,24 +1440,29 @@ export function ResidentRecords({
               }}
             >
               <DialogHeader className="-mx-6 -mt-6 border-b bg-gray-50 px-6 py-4 rounded-t-[inherit]">
-                <DialogTitle className="text-xl">Add New Resident</DialogTitle>
+                <DialogTitle className="text-xl">
+                  {editingResident ? "Edit Resident Information" : "Add New Resident"}
+                </DialogTitle>
                 <DialogDescription>
-                  Fill in the resident's information to register them in the
-                  system.
+                  {editingResident
+                    ? "Update the resident's information and save the changes to the system."
+                    : "Fill in the resident's information to register them in the system."}
                 </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-6 py-4">
-                <div className="flex flex-col items-center gap-3 mb-2">
-                  <OcrScanner onDataExtracted={handleOcrData} />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="border-[#2957a1] text-[#2957a1] hover:bg-blue-50"
-                    onClick={() => setShowScannerInfoDialog(true)}
-                  >
-                    WHAT'S CAMERA SCANNER?
-                  </Button>
+                <div className="flex flex-col items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <OcrScanner onDataExtracted={handleOcrData} />
+                    <button
+                      type="button"
+                      onClick={() => setShowScannerInfoDialog(true)}
+                      className="w-6 h-6 rounded-full border-2 border-[#2957a1] text-[#2957a1] text-xs font-bold flex items-center justify-center hover:bg-blue-50 transition-colors flex-shrink-0"
+                      title="What's Camera Scanner?"
+                    >
+                      ?
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1424,57 +1573,58 @@ export function ResidentRecords({
                 {/* PERSONAL INFO */}
                 <div className="space-y-4">
 
-                  {/* BIRTHDAY */}
-                  <div className="space-y-2">
-                    <Label>Birthday *</Label>
-
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Input
-                        ref={birthdayInputRef}
-                        type="date"
-                        value={formData.birthday}
-                        max={new Date().toISOString().split("T")[0]}
-                        onChange={(e) => {
-                          const ymd = e.target.value;
-                          setFormData({
-                            ...formData,
-                            birthday: ymd,
-                            age: calculateAge(ymd),
-                          });
-                        }}
-                        className={cn(
-                          "bg-gray-100",
-                          birthdayError && "border-red-500 ring-red-500"
-                        )}
-                      />
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          birthdayInputRef.current?.focus();
-                          birthdayInputRef.current?.showPicker?.();
-                        }}
-                        className={cn(
-                          "w-full justify-center bg-gray-100 hover:bg-gray-200 sm:w-auto sm:px-4",
-                          birthdayError && "border-red-500 ring-red-500"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        Show date picker
-                      </Button>
+                  {/* BIRTHDAY + AGE + GENDER on same row */}
+                  <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-end">
+                    <div className="space-y-2">
+                      <Label>Birthday *</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal bg-gray-100",
+                              !formData.birthday && "text-muted-foreground",
+                              birthdayError && "border-red-500 ring-red-500"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                            {formData.birthday
+                              ? format(new Date(formData.birthday + "T00:00:00"), "MM/dd/yyyy")
+                              : <span>Select date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={formData.birthday ? new Date(formData.birthday + "T00:00:00") : undefined}
+                            onSelect={(date) => {
+                              if (!date) return;
+                              const ymd = date.toISOString().split("T")[0];
+                              setFormData({ ...formData, birthday: ymd, age: calculateAge(ymd) });
+                            }}
+                            disabled={(date) => date > new Date()}
+                            initialFocus
+                            captionLayout="dropdown-buttons"
+                            fromYear={1900}
+                            toYear={new Date().getFullYear()}
+                            className="rounded-md"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      {birthdayError && (
+                        <p className="text-xs text-red-500 mt-1">Birthday is required.</p>
+                      )}
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     <div className="space-y-2">
                       <Label>Age</Label>
                       <Input
                         type="number"
                         value={formData.age}
                         readOnly
-                        placeholder="Auto-calculated"
-                        className="uppercase"
+                        placeholder="—"
+                        className="w-24 text-center bg-gray-100"
                       />
                     </div>
 
@@ -1495,7 +1645,10 @@ export function ResidentRecords({
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
 
+                  {/* CIVIL STATUS + RELIGION on same row with equal widths */}
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Civil Status</Label>
                       <Select
@@ -1516,10 +1669,6 @@ export function ResidentRecords({
                       </Select>
                     </div>
 
-                  </div>
-
-                  {/* Religion — full row so long names don't overflow */}
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Religion</Label>
                       <Select
@@ -1587,8 +1736,8 @@ export function ResidentRecords({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="uppercase">
-                          <SelectItem value="Yes" className="uppercase">VOTER</SelectItem>
-                          <SelectItem value="No" className="uppercase">NON-VOTER</SelectItem>
+                          <SelectItem value="Voter" className="uppercase">VOTER</SelectItem>
+                          <SelectItem value="Non-Voter" className="uppercase">NON-VOTER</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1714,7 +1863,7 @@ export function ResidentRecords({
 
                       {contactComplete && !contactTooLong && !isCheckingContactNumber && !contactNumberAlreadyExists && (
                         <p className="text-xs text-green-600 mt-1">
-                          Contact number complete (11 digits)âœ…
+                          Contact number complete (11 digits)
                         </p>
                       )}
 
@@ -1906,7 +2055,7 @@ export function ResidentRecords({
                         </p>
                       )}
                       {formData.emergencyContactNumber.length === 11 && (
-                        <p className="text-xs text-green-600 mt-1">Contact number complete (11 digits)✅</p>
+                        <p className="text-xs text-green-600 mt-1">Contact number complete (11 digits)</p>
                       )}
                     </div>
                   </div>
@@ -1933,15 +2082,30 @@ export function ResidentRecords({
               </div>
 
               <DialogFooter className="-mx-6 -mb-6 mt-6 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
-                <Button variant="outline" onClick={() => handleAddDialogOpenChange(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setEditingResident(null);
+                    handleAddDialogOpenChange(false);
+                  }}
+                >
                   Cancel
                 </Button>
-                <Button
-                  onClick={handleSaveResident}
-                  className="bg-[#2957a1] hover:bg-[#1e3f7a]"
-                >
-                  Save Resident
-                </Button>
+                {editingResident ? (
+                  <Button
+                    onClick={handleUpdateResident}
+                    className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+                  >
+                    Save Edit
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleSaveResident}
+                    className="bg-[#2957a1] hover:bg-[#1e3f7a]"
+                  >
+                    Save Resident
+                  </Button>
+                )}
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -1952,7 +2116,7 @@ export function ResidentRecords({
       {/* TABLE */}
       <Card className="border border-gray-300 shadow-sm">
         <CardContent className="p-4">
-          <div className="p-4 flex justify-between items-center gap-4 border-b bg-gray-50 -m-4 mb-4">
+          <div className="p-3 sm:p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 border-b bg-gray-50 -m-4 mb-4">
             <div className="flex items-center gap-2">
               <Label className="font-semibold text-sm">Sort by:</Label>
               <Select value={sortMenuValue} onValueChange={(v) => handleSortMenuChange(v as SortMenuValue)}>
@@ -1965,8 +2129,8 @@ export function ResidentRecords({
                   <SelectItem value="field:status">Status</SelectItem>
                   <SelectItem value="field:residentNo:asc">Resident No (Ascending)</SelectItem>
                   <SelectItem value="field:residentNo:desc">Resident No (Descending)</SelectItem>
-                  <SelectItem value="dir:asc">Alphabetical (A-Z)</SelectItem>
-                  <SelectItem value="dir:desc">Alphabetical (Z-A)</SelectItem>
+                  <SelectItem value="dir:asc">First Name (A-Z)</SelectItem>
+                  <SelectItem value="dir:desc">First Name (Z-A)</SelectItem>
                   <SelectItem value="field:lastName">Last Name</SelectItem>
                   <SelectItem value="field:residentType">Resident Type</SelectItem>
                 </SelectContent>
@@ -1975,7 +2139,7 @@ export function ResidentRecords({
 
             <div className="flex items-center gap-2">
               <Label className="font-semibold text-sm">Search:</Label>
-              <div className="relative w-48">
+              <div className="relative w-full sm:w-48">
                 <Input
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -1987,198 +2151,269 @@ export function ResidentRecords({
             </div>
           </div>
 
+          <div className="overflow-x-auto -mx-4 px-4">
+
+          {/* ── DESKTOP TABLE (hidden on mobile) ── */}
+          <div className="hidden sm:block">
           <Table>
             <TableHeader className="bg-[#2957a1]">
               <TableRow className="hover:bg-[#2957a1] border-b-0">
-                <TableHead className="text-white font-bold text-xs h-10">
-                  RESIDENT NO / USERNAME
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  FIRST NAME
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  MIDDLE NAME
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  LAST NAME
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  RESIDENT TYPE
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  GENDER
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  VOTER STATUS
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  STATUS
-                </TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">
-                  ACTION
-                </TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">RESIDENT NO / USERNAME</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">FIRST NAME</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">MIDDLE NAME</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">LAST NAME</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">RESIDENT TYPE</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">GENDER</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">VOTER STATUS</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">STATUS</TableHead>
+                <TableHead className="text-white font-bold text-xs h-10">ACTION</TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
-              {filteredResidents.map((resident, index) => (
-                <TableRow
-                  key={resident.residentNo}
-                  className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
-                    }`}
-                >
-                  <TableCell className="font-medium text-xs py-3">
-                    {String(resident.residentNo).replace(/-/g, "")}
-                  </TableCell>
-                  <TableCell className="text-xs py-3">
-                    {resident.firstName}
-                  </TableCell>
-                  <TableCell className="text-xs py-3">
-                    {resident.middleName}
-                  </TableCell>
-                  <TableCell className="text-xs py-3">
-                    {resident.lastName}
-                  </TableCell>
-                  <TableCell className="text-xs py-3">
-                    {resident.residentType}
-                  </TableCell>
-                  <TableCell className="text-xs py-3">
-                    {resident.gender}
-                  </TableCell>
-                  <TableCell className="text-xs py-3">
-                    {resident.voterStatus}
-                  </TableCell>
-                  <TableCell className="text-xs py-3">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${resident.status === "Active"
-                        ? "bg-green-100 text-green-700 border border-green-300"
-                        : "bg-red-100 text-red-700 border border-red-300"
-                        }`}
-                    >
-                      {resident.status}
-                    </span>
-                  </TableCell>
-
-                  <TableCell className="py-3">
-                    <div className="flex items-center gap-5">
-
-                      <Button
-                        size="sm"
-                        className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors"
-                        onClick={() => {
-                          setViewingResident(resident);
-                          setIsResidentDetailsOpen(true);
-                        }}
-                      >
-                        <Eye className="w-6 h-6" />
-                        <span>View Info</span>
-                      </Button>
-
-                      {resident.status === "Active" ? (
-                        !isSkKagawad && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              size="sm"
-                              className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] h-7 px-2"
-                            >
-                              DEACTIVATE
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="sm:max-w-xl p-8">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle className="text-2xl font-bold">
-                                Deactivate this account?
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you certain you want to deactivate the account of{" "}
-                                <span className="font-semibold">
-                                  {resident.firstName} {resident.lastName}
-                                </span>
-                                ? This will set the account to inactive.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() =>
-                                  handleInactivate(resident.residentNo)
-                                }
-                                className="bg-orange-600"
-                              >
-                                Deactivate
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                        )
-                      ) : (
-                        !isSkKagawad && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              size="sm"
-                              className="bg-green-500 hover:bg-green-600 text-white text-[10px] h-7 px-2"
-                            >
-                              REACTIVATE
-                            </Button>
-                          </AlertDialogTrigger>
-
-                          <AlertDialogContent className="sm:max-w-xl p-8">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle className="text-2xl font-bold">
-                                Reactivate Account?
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you certain you want to activate the account of{" "}
-                                <span className="font-semibold">
-                                  {resident.firstName} {resident.lastName}
-                                </span>
-                                ? This will set the account to active.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleReactivate(resident.residentNo)}
-                                className="bg-green-600"
-                              >
-                                Reactivate
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                        )
-                      )}
+              {paginatedResidents.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-14 text-center">
+                    <div className="text-sm font-semibold text-gray-700">
+                      {residents.length === 0 ? "No resident records available." : "No matching resident records found."}
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                paginatedResidents.map((resident, index) => (
+                  <TableRow key={resident.residentNo} className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"}`}>
+                    <TableCell className="font-medium text-xs py-3">{String(resident.residentNo).replace(/-/g, "")}</TableCell>
+                    <TableCell className="text-xs py-3">{resident.firstName}</TableCell>
+                    <TableCell className="text-xs py-3">{resident.middleName}</TableCell>
+                    <TableCell className="text-xs py-3">{resident.lastName}</TableCell>
+                    <TableCell className="text-xs py-3 uppercase">{resident.residentType}</TableCell>
+                    <TableCell className="text-xs py-3 uppercase">{resident.gender}</TableCell>
+                    <TableCell className="text-xs py-3 uppercase">{resident.voterStatus}</TableCell>
+                    <TableCell className="text-xs py-3">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${resident.status === "Active" ? "bg-green-100 text-green-700 border border-green-300" : "bg-red-100 text-red-700 border border-red-300"}`}>
+                        {resident.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-3">
+                      <div className="flex items-center gap-5">
+                        <Button size="sm" className="flex items-center gap-2 bg-gray-100 text-black hover:bg-gray-300 transition-colors" onClick={() => { setViewingResident(resident); setIsResidentDetailsOpen(true); }}>
+                          <Eye className="w-6 h-6" /><span>View Info</span>
+                        </Button>
+                        {resident.status === "Active" ? (
+                          !isSkKagawad && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="sm" className="bg-red-500 hover:bg-red-600 text-white text-[10px] h-7 px-2">DEACTIVATE</Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="sm:max-w-xl p-8">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="text-2xl font-bold">Deactivate this account?</AlertDialogTitle>
+                                  <AlertDialogDescription>Are you certain you want to deactivate the account of <span className="font-semibold">{resident.firstName} {resident.lastName}</span>? This will set the account to inactive.</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleInactivate(resident.residentNo)} className="bg-orange-600">Deactivate</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )
+                        ) : (
+                          !isSkKagawad && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white text-[10px] h-7 px-2">REACTIVATE</Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="sm:max-w-xl p-8">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="text-2xl font-bold">Reactivate Account?</AlertDialogTitle>
+                                  <AlertDialogDescription>Are you certain you want to activate the account of <span className="font-semibold">{resident.firstName} {resident.lastName}</span>? This will set the account to active.</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleReactivate(resident.residentNo)} className="bg-green-600">Reactivate</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
+          </div>
+
+          {/* ── MOBILE CARDS (visible only on mobile) ── */}
+          <div className="sm:hidden space-y-3 py-1">
+            {paginatedResidents.length === 0 ? (
+              <div className="text-center py-10 text-gray-500">
+                <User className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                <p className="text-sm font-medium">{residents.length === 0 ? "No resident records available." : "No matching records found."}</p>
+              </div>
+            ) : (
+              paginatedResidents.map((resident) => (
+                <div key={resident.residentNo} className="rounded-lg border bg-white p-3 shadow-sm space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-sm text-gray-900">{resident.firstName} {resident.middleName ? resident.middleName + " " : ""}{resident.lastName}</p>
+                      <p className="text-[10px] text-gray-400 font-mono">{String(resident.residentNo).replace(/-/g, "")}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${resident.status === "Active" ? "bg-green-100 text-green-700 border border-green-300" : "bg-red-100 text-red-700 border border-red-300"}`}>{resident.status}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-600">
+                    <span><span className="font-medium text-gray-500">Type:</span> {resident.residentType}</span>
+                    <span><span className="font-medium text-gray-500">Gender:</span> {resident.gender}</span>
+                    <span className="col-span-2"><span className="font-medium text-gray-500">Voter:</span> {resident.voterStatus}</span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 border-t">
+                    <Button size="sm" className="flex-1 flex items-center justify-center gap-1.5 bg-gray-100 text-black hover:bg-gray-200 text-xs h-8" onClick={() => { setViewingResident(resident); setIsResidentDetailsOpen(true); }}>
+                      <Eye className="w-3.5 h-3.5" />View Info
+                    </Button>
+                    {!isSkKagawad && resident.status === "Active" && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" className="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs h-8">Deactivate</Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="w-[95vw] max-w-md">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Deactivate this account?</AlertDialogTitle>
+                            <AlertDialogDescription>This will set <span className="font-semibold">{resident.firstName} {resident.lastName}</span>'s account to inactive.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleInactivate(resident.residentNo)} className="bg-orange-600">Deactivate</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                    {!isSkKagawad && resident.status !== "Active" && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" className="flex-1 bg-green-500 hover:bg-green-600 text-white text-xs h-8">Reactivate</Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="w-[95vw] max-w-md">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Reactivate Account?</AlertDialogTitle>
+                            <AlertDialogDescription>This will set <span className="font-semibold">{resident.firstName} {resident.lastName}</span>'s account to active.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleReactivate(resident.residentNo)} className="bg-green-600">Reactivate</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          </div>
+
+          {/* ── PAGINATION FOOTER ── */}
+          {filteredResidents.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t mt-2">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 shrink-0">Rows per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                    className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[#2957a1]"
+                  >
+                    {[5, 10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+                <span className="text-xs text-gray-500">{rangeStart}–{rangeEnd} of {filteredResidents.length}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="First page"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Previous page"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+                  const page = start + i;
+                  return page <= totalPages ? (
+                    <button key={page} onClick={() => setCurrentPage(page)} className={`w-7 h-7 rounded border text-xs font-semibold transition-colors ${page === currentPage ? "bg-[#2957a1] text-white border-[#2957a1]" : "border-gray-300 hover:bg-gray-100"}`}>{page}</button>
+                  ) : null;
+                })}
+                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Next page"><ChevronRight className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="Last page"><ChevronsRight className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* STEP 2: DATA PRIVACY DIALOG */}
       <AlertDialog
         open={showDataPrivacyDialog}
-        onOpenChange={setShowDataPrivacyDialog}
+        onOpenChange={(open) => {
+          setShowDataPrivacyDialog(open);
+          if (!open) {
+            setResidentPrivacyAccepted(false);
+          }
+        }}
       >
-        <AlertDialogContent className="max-w-[400px]">
+        <AlertDialogContent className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px]">
           <AlertDialogHeader>
-            <AlertDialogTitle>Data Privacy Agreement</AlertDialogTitle>
-            <AlertDialogDescription>
-              Agree to process information for management purposes?
+            <AlertDialogTitle className="text-2xl font-bold text-[#2957a1]">Data Privacy Agreement</AlertDialogTitle>
+            <AlertDialogDescription className="text-base text-gray-600 mt-1">
+              Please review and confirm the data privacy terms before creating this resident account.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancelDataPrivacy}>
+          <div className="max-h-[55vh] space-y-5 overflow-y-auto pr-2 text-base leading-8 text-gray-700">
+            <p>
+              By accessing and using the Tondocs Barangay Management Web Application, you agree to the
+              collection, use, and processing of your personal information in accordance with applicable
+              data privacy laws and regulations.
+            </p>
+            <p>
+              The system collects personal data such as your name, address, contact information, and
+              other relevant details solely for the purpose of processing barangay service requests,
+              maintaining resident records, and improving service delivery.
+            </p>
+            <p>
+              All personal information provided will be treated with strict confidentiality and will only
+              be accessed by authorized barangay personnel. The system implements appropriate security
+              measures to protect your data from unauthorized access, disclosure, alteration, or destruction.
+            </p>
+            <p>
+              Your information will not be shared with third parties without your consent, unless
+              required by law or necessary for official government functions.
+            </p>
+            <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-4">
+              <p className="text-base font-bold text-[#2957a1]">By continuing to use this system, you confirm that:</p>
+              <ul className="mt-3 list-disc space-y-3 pl-6 text-base text-gray-700">
+                {dataPrivacyHighlights.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            <p>If you do not agree with this policy, please discontinue use of the system.</p>
+            <label className="flex items-start gap-4 rounded-lg border border-gray-200 bg-gray-50 px-5 py-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={residentPrivacyAccepted}
+                onChange={(event) => setResidentPrivacyAccepted(event.target.checked)}
+                className="mt-1 h-5 w-5 rounded border-gray-300"
+              />
+              <span className="text-base font-medium text-gray-800">
+                I have read and understood the Data Privacy Agreement, and I consent to the collection
+                and processing of this resident’s information for legitimate barangay operations.
+              </span>
+            </label>
+          </div>
+          <AlertDialogFooter className="mt-2">
+            <AlertDialogCancel onClick={handleCancelDataPrivacy} className="text-base px-6 py-2">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmPrivacy}
-              className="bg-[#2957a1]"
+              className="bg-[#2957a1] text-base px-6 py-2"
+              disabled={!residentPrivacyAccepted}
             >
               Agree and Continue
             </AlertDialogAction>
@@ -2220,7 +2455,7 @@ export function ResidentRecords({
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#2957a1]"
+                  className="absolute inset-y-0 right-0 flex h-full items-center justify-center px-3 text-gray-400 transition-colors hover:text-[#2957a1]"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -2240,6 +2475,13 @@ export function ResidentRecords({
                   placeholder="Confirm password"
                   className="h-10 pr-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1]"
                 />
+                {/* <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 flex h-full items-center justify-center px-3 text-gray-400 transition-colors hover:text-[#2957a1]"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button> */}
               </div>
             </div>
 
@@ -2341,13 +2583,13 @@ export function ResidentRecords({
 
                       {viewingResident.residentType && (
                         <span className="text-xs px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold">
-                          Type: {viewingResident.residentType}
+                          Type: {String(viewingResident.residentType).toUpperCase()}
                         </span>
                       )}
 
                       {typeof viewingResident.voterStatus !== "undefined" && (
                         <span className="text-xs px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-100 font-semibold">
-                          Voter: {viewingResident.voterStatus ? "Registered" : "Not Registered"}
+                          Voter: {String(viewingResident.voterStatus).toUpperCase()}
                         </span>
                       )}
 
@@ -2545,13 +2787,13 @@ export function ResidentRecords({
 
                     {viewingResident.residentType && (
                       <span className="text-xs px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold">
-                        Type: {viewingResident.residentType}
+                        Type: {String(viewingResident.residentType).toUpperCase()}
                       </span>
                     )}
 
                     {typeof viewingResident.voterStatus !== "undefined" && (
                       <span className="text-xs px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-100 font-semibold">
-                        Voter: {viewingResident.voterStatus ? "Registered" : "Not Registered"}
+                        Voter: {String(viewingResident.voterStatus).toUpperCase()}
                       </span>
                     )}
 
@@ -2621,21 +2863,21 @@ export function ResidentRecords({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Father</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
-                        {viewingResident.fatherName || "â€”"}
+                        {viewingResident.fatherName || "Not provided"}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Mother</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
-                        {viewingResident.motherName || "â€”"}
+                        {viewingResident.motherName || "Not provided"}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Spouse</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words capitalize">
-                        {viewingResident.spouseName || "â€”"}
+                        {viewingResident.spouseName || "Not provided"}
                       </p>
                     </div>
                   </div>
@@ -2652,31 +2894,31 @@ export function ResidentRecords({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Contact No.</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words">
-                        {viewingResident.contactNumber || "â€”"}
+                        {viewingResident.contactNumber || "Not provided"}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Email</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-all">
-                        {viewingResident.email || "â€”"}
+                        {viewingResident.email || "Not provided"}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-start">
                       <p className="text-xs font-semibold text-gray-500 uppercase mt-1">Address</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words leading-relaxed uppercase">
-                        {`${viewingResident.houseNo || ""} ${viewingResident.streetAddress || ""} ${viewingResident.city || ""}`.trim() ||
-                          "â€”"}
+                        {`${viewingResident.houseNo || ""} ${viewingResident.streetAddress || ""} ${viewingResident.city || ""} ${viewingResident.postalCode || ""}`.trim() ||
+                          "Not provided"}
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
+                    {/* <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 items-center">
                       <p className="text-xs font-semibold text-gray-500 uppercase">Brgy Card</p>
                       <p className="text-sm font-medium text-gray-900 sm:col-span-2 break-words">
-                        {viewingResident.barangayCard || "â€”"}
+                        {viewingResident.barangayCard || ""}
                       </p>
-                    </div>
+                    </div> */}
                   </div>
                 </div>
               </div>
