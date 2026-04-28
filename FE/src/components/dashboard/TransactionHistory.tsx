@@ -264,8 +264,8 @@ export function TransactionHistory() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Transactions</p>
-                <p className="text-lg sm:text-2xl font-semibold text-gray-900">
+                <p className="text-base sm:text-lg font-bold text-gray-700">Total Transactions</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold text-gray-900">
                   {loading ? "…" : computedStats.total}
                 </p>
               </div>
@@ -280,8 +280,8 @@ export function TransactionHistory() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Admin Actions</p>
-                <p className="text-lg sm:text-2xl font-semibold text-gray-900">
+                <p className="text-base sm:text-lg font-bold text-gray-700">Admin Actions</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold text-gray-900">
                   {loading ? "…" : computedStats.adminActions}
                 </p>
               </div>
@@ -296,8 +296,8 @@ export function TransactionHistory() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Resident Actions</p>
-                <p className="text-lg sm:text-2xl font-semibold text-gray-900">
+                <p className="text-base sm:text-lg font-bold text-gray-700">Resident Actions</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold text-gray-900">
                   {loading ? "…" : computedStats.residentActions}
                 </p>
               </div>

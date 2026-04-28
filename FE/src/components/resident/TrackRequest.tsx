@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { FileText, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 import { api } from "../../utils/api";
 
 type DBRequest = {
   RequestID: number;
   ResidentID: string;
+  FirstName?: string | null;
+  LastName?: string | null;
   RequestDate: string;
   PickupDate?: string | null;
   CompletionDate?: string | null;
+  ReceiverName?: string | null;
   RequestType: string;
   RequestStatus: string;
   RequestPurpose: string;
@@ -23,6 +26,7 @@ type FilterStatus =
   | "All"
   | "Pending"
   | "Processing"
+  | "Processing Completion"
   | "Ready for Pickup"
   | "Completed"
   | "Denied";
@@ -31,6 +35,7 @@ const FILTER_TABS: FilterStatus[] = [
   "All",
   "Pending",
   "Processing",
+  "Processing Completion",
   "Ready for Pickup",
   "Completed",
   "Denied",
@@ -42,6 +47,23 @@ function formatRequestId(id: number) {
 
 function normalizeStatus(s: string) {
   return (s || "").trim().toLowerCase();
+}
+
+function canonicalStatus(statusRaw: string): "pending" | "processing" | "returned" | "ready" | "completed" | "denied" {
+  const s = normalizeStatus(statusRaw);
+  if (s.includes("return") || s.includes("incomplete")) return "returned";
+  if (s.includes("reject") || s.includes("denied")) return "denied";
+  if (s.includes("ready")) return "ready";
+  if (s.includes("complete") || s === "picked up" || s === "pickup") return "completed";
+  if (s.includes("process")) return "processing";
+  return "pending";
+}
+
+function getRequestedByName(request: DBRequest) {
+  const first = (request.FirstName || "").trim();
+  const last = (request.LastName || "").trim();
+  const full = `${first} ${last}`.trim();
+  return full || request.ResidentID;
 }
 
 function formatAppointmentTime(value?: string | null) {
@@ -58,20 +80,20 @@ function formatAppointmentTime(value?: string | null) {
 }
 
 function getStatusUI(statusRaw: string) {
-  const s = normalizeStatus(statusRaw);
-  if (s === "pickup" || s === "picked up") {
-    return { label: "Pickup", color: "bg-[#5ce36c]", icon: <CheckCircle className="w-5 h-5" /> };
-  }
-  if (s === "ready for pickup" || s === "ready") {
+  const c = canonicalStatus(statusRaw);
+  if (c === "ready") {
     return { label: "Ready for Pickup", color: "bg-[#5ce36c]", icon: <CheckCircle className="w-5 h-5" /> };
   }
-  if (s === "completed") {
+  if (c === "completed") {
     return { label: "Completed", color: "bg-[#5ce36c]", icon: <CheckCircle className="w-5 h-5" /> };
   }
-  if (s === "processing") {
+  if (c === "processing") {
     return { label: "Processing", color: "bg-[#2957a1]", icon: <Clock className="w-5 h-5" /> };
   }
-  if (s === "denied" || s === "rejected") {
+  if (c === "returned") {
+    return { label: "Processing Completion", color: "bg-[#f97316]", icon: <AlertCircle className="w-5 h-5" /> };
+  }
+  if (c === "denied") {
     return { label: "Denied", color: "bg-[#ea4d48]", icon: <XCircle className="w-5 h-5" /> };
   }
   return { label: "Pending", color: "bg-[#2957a1]", icon: <Clock className="w-5 h-5" /> };
@@ -79,13 +101,14 @@ function getStatusUI(statusRaw: string) {
 
 function matchesFilter(request: DBRequest, filter: FilterStatus): boolean {
   if (filter === "All") return true;
-  const s = normalizeStatus(request.RequestStatus);
+  const c = canonicalStatus(request.RequestStatus);
   switch (filter) {
-    case "Pending":          return s === "pending";
-    case "Processing":       return s === "processing";
-    case "Ready for Pickup": return s === "ready for pickup" || s === "ready";
-    case "Completed":        return s === "completed";
-    case "Denied":           return s === "denied" || s === "rejected";
+    case "Pending":          return c === "pending";
+    case "Processing":       return c === "processing";
+    case "Processing Completion": return c === "returned";
+    case "Ready for Pickup": return c === "ready";
+    case "Completed":        return c === "completed";
+    case "Denied":           return c === "denied";
     default:                 return true;
   }
 }
@@ -94,6 +117,21 @@ export function TrackRequest() {
   const [requests, setRequests] = useState<DBRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterStatus>("All");
+  const [residentDisplayName, setResidentDisplayName] = useState("");
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("app_user");
+      const user = raw ? JSON.parse(raw) : null;
+      const first = String(user?.firstName || user?.FirstName || "").trim();
+      const last = String(user?.lastName || user?.LastName || "").trim();
+      const explicitFull = `${first} ${last}`.trim();
+      const directName = String(user?.name || user?.fullName || "").trim();
+      setResidentDisplayName(explicitFull || directName);
+    } catch {
+      // no-op fallback
+    }
+  }, []);
 
   useEffect(() => {
     const fetchMyRequests = async () => {
@@ -161,6 +199,14 @@ export function TrackRequest() {
         {filteredRequests.map((request) => {
           const statusUI = getStatusUI(request.RequestStatus);
           const normalizedStatus = normalizeStatus(request.RequestStatus);
+          const isReturnedForCompletion =
+            normalizedStatus === "returned for completion" ||
+            normalizedStatus === "return for completion" ||
+            normalizedStatus === "returned" ||
+            normalizedStatus === "incomplete";
+          const isDenied =
+            normalizedStatus === "denied" ||
+            normalizedStatus === "rejected";
           const showPickedUpDate =
             !!request.PickupDate &&
             (normalizedStatus === "pickup" ||
@@ -194,9 +240,11 @@ export function TrackRequest() {
                   </div>
 
                   {/* Status Badge */}
-                  <div className={`${statusUI.color} text-white px-4 md:px-5 py-2 rounded-full flex items-center gap-2 shadow-md self-start`}>
-                    {statusUI.icon}
-                    <span className="text-[13px] md:text-[14px] font-semibold">{statusUI.label}</span>
+                  <div className="flex flex-col items-start gap-2 self-start md:items-end">
+                    <div className={`${statusUI.color} text-white px-4 md:px-5 py-2 rounded-full flex items-center gap-2 shadow-md self-start`}>
+                      {statusUI.icon}
+                      <span className="text-[13px] md:text-[14px] font-semibold">{statusUI.label}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -235,6 +283,8 @@ export function TrackRequest() {
                         <p className="text-[11px] text-gray-500">
                           {new Date(request.PickupDate!).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                         </p>
+                        <p className="mt-1 text-[11px] md:text-[12px] text-green-800 font-semibold">Received By</p>
+                        <p className="text-[13px] md:text-[14px] text-gray-900">{request.ReceiverName || "NOT SPECIFIED"}</p>
                       </div>
                     </div>
                   )}
@@ -278,7 +328,13 @@ export function TrackRequest() {
                     </svg>
                     <div>
                       <p className="text-[11px] md:text-[12px] text-gray-600 font-semibold">Requested By</p>
-                      <p className="text-[13px] md:text-[14px] text-gray-900">{request.ResidentID}</p>
+                      <p className="text-[13px] md:text-[14px] text-gray-900">
+                        {(() => {
+                          const strictName = getRequestedByName(request);
+                          if (strictName !== request.ResidentID) return strictName;
+                          return residentDisplayName || request.ResidentID;
+                        })()}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -291,6 +347,30 @@ export function TrackRequest() {
                       <div>
                         <p className="text-[12px] md:text-[13px] font-bold text-[#2957a1] mb-1">Purpose:</p>
                         <p className="text-[13px] md:text-[14px] text-gray-700 leading-relaxed">{request.RequestPurpose}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isDenied && request.RejectionReason && (
+                  <div className="mt-4 p-3 md:p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                    <div className="flex items-start gap-2 md:gap-3">
+                      <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-red-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-[12px] md:text-[13px] font-bold text-red-700 mb-1">Reason for denial:</p>
+                        <p className="text-[13px] md:text-[14px] text-gray-700 leading-relaxed">{request.RejectionReason}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isReturnedForCompletion && request.RejectionReason && (
+                  <div className="mt-4 p-3 md:p-4 bg-orange-50 border-l-4 border-orange-500 rounded-lg">
+                    <div className="flex items-start gap-2 md:gap-3">
+                      <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-orange-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-[12px] md:text-[13px] font-bold text-orange-700 mb-1">Reason of Return:</p>
+                        <p className="text-[13px] md:text-[14px] text-gray-700 leading-relaxed">{request.RejectionReason}</p>
                       </div>
                     </div>
                   </div>
@@ -332,7 +412,7 @@ export function TrackRequest() {
         })}
       </div>
     );
-  }, [loading, requests, filteredRequests, activeFilter]);
+  }, [loading, requests, filteredRequests, activeFilter, residentDisplayName]);
 
   return (
     <div className="pt-[73px] md:pt-[93px] min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">

@@ -1,4 +1,4 @@
-// OnlineRequests.tsx
+﻿// OnlineRequests.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { FileText, Clock, CheckCircle, XCircle, Eye, Search, AlertCircle, Mail, Calendar, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { toast } from 'sonner';
 
-type RequestStatus = 'Pending' | 'Processing' | 'Ready for Pickup' | 'Completed' | 'Rejected';
+type RequestStatus = 'Pending' | 'Processing' | 'Processing Completion' | 'Ready for Pickup' | 'Completed' | 'Rejected';
 
 interface Request {
   id: string;                 
@@ -31,6 +31,7 @@ interface Request {
   appointmentDate?: string | null;
   appointmentTime?: string | null;
   appointmentSetByAdmin?: string | null;
+  receiverName?: string | null;
 }
 
 interface InboxRow {
@@ -50,6 +51,7 @@ interface InboxRow {
   AppointmentDate?: string | null;
   AppointmentTime?: string | null;
   AppointmentSetByAdmin?: string | null;
+  ReceiverName?: string | null;
 }
 
 const formatAppointmentTime = (value?: string | null) => {
@@ -105,6 +107,7 @@ export function OnlineRequests({
   const [activeTab, setActiveTab] = useState<'certificates' | 'other'>(initialTab);
   const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>(
     initialFilter === 'pending' ? 'Pending' :
+    initialFilter === 'returned' ? 'Processing Completion' :
     initialFilter === 'pickup' ? 'Ready for Pickup' :
     'Pending'
   );
@@ -118,6 +121,8 @@ export function OnlineRequests({
   const [viewingRequest, setViewingRequest] = useState<Request | null>(null);
   const [denyingRequest, setDenyingRequest] = useState<Request | null>(null);
   const [denyReason, setDenyReason] = useState('');
+  const [returningRequest, setReturningRequest] = useState<Request | null>(null);
+  const [returnReason, setReturnReason] = useState('');
   const [viewingDenialReason, setViewingDenialReason] = useState<string | null>(null);
   const [appointmentRequest, setAppointmentRequest] = useState<Request | null>(null);
   const [appointmentDetails, setAppointmentDetails] = useState({
@@ -127,6 +132,7 @@ export function OnlineRequests({
     additionalNotes: ''
   });
   const [appointmentAttempted, setAppointmentAttempted] = useState(false);
+  const [confirmSendAppointmentOpen, setConfirmSendAppointmentOpen] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [tpHour, setTpHour] = useState('08');
   const [tpMinute, setTpMinute] = useState('00');
@@ -141,13 +147,14 @@ export function OnlineRequests({
     kind: 'process' | 'ready' | 'complete';
     isOtherDocuments: boolean;
   }>(null);
+  const [receiverName, setReceiverName] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
   const API_BASE = "http://localhost:5001";
 
   const isKnownStatus = (s: string): s is RequestStatus => {
-    return ['Pending', 'Processing', 'Ready for Pickup', 'Completed', 'Rejected'].includes(s);
+    return ['Pending', 'Processing', 'Processing Completion', 'Ready for Pickup', 'Completed', 'Rejected'].includes(s);
   };
 
   const buildResidentName = (row: InboxRow) => {
@@ -160,11 +167,57 @@ export function OnlineRequests({
 
     if (s === "pending") return "Pending";
     if (s === "processing") return "Processing";
+    if (s === "returned for completion") return "Processing Completion";
     if (s === "ready for pickup") return "Ready for Pickup";
     if (s === "completed") return "Completed";
     if (s === "rejected") return "Rejected";
 
     return "Pending"; // safe fallback
+  };
+
+  const handleReturnForCompletion = async () => {
+    if (!returningRequest || !returnReason.trim()) {
+      toast.error('Please provide the missing requirement reason');
+      return;
+    }
+    try {
+      const token = localStorage.getItem("token") || "";
+      setRequests(prev =>
+        prev.map(req =>
+          req.id === returningRequest.id
+            ? { ...req, status: 'Processing Completion', rejectionReason: returnReason.trim() }
+            : req
+        )
+      );
+
+      const res = await fetch(`${API_BASE}/requests/${returningRequest.id}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        // Backend expects the DB status label; UI maps this to "Processing Completion".
+        body: JSON.stringify({ status: 'Returned for Completion', reason: returnReason.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const message = String(data?.error || "").toLowerCase();
+        if (message.includes("invalid status")) {
+          toast.error("Unable to return request: status mapping mismatch between app and server.");
+        } else {
+          toast.error(data.error || "Failed to return request for completion");
+        }
+        await loadInbox(false);
+        return;
+      }
+      await loadInbox(false);
+      setReturningRequest(null);
+      setReturnReason('');
+      toast.success("Request returned for completion.");
+    } catch {
+      toast.error("Server error while returning request.");
+      await loadInbox(false);
+    }
   };
 
   const toUIRequest = (row: InboxRow): Request => {
@@ -185,6 +238,7 @@ export function OnlineRequests({
       appointmentDate: row.AppointmentDate ?? null,
       appointmentTime: row.AppointmentTime ?? null,
       appointmentSetByAdmin: row.AppointmentSetByAdmin ?? null,
+      receiverName: (row as any).ReceiverName ?? null,
     };
   };
 
@@ -208,10 +262,13 @@ export function OnlineRequests({
         return;
       }
 
-      // COUNT HERE (Pending only)
+      // COUNT HERE (active status filter, not hard-linked to Pending)
+      const mapped = (data as InboxRow[]).map(toUIRequest);
+      const filterStatus = statusFilter === 'all' ? undefined : statusFilter;
+
       const certificates = (data as any[]).filter(
         (r) =>
-          r.RequestStatus === "Pending" &&
+          (filterStatus ? normalizeStatus(r.RequestStatus) === filterStatus : true) &&
           (r.RequestType === "Barangay Clearance" ||
             r.RequestType === "Certificate of Indigency" ||
             r.RequestType === "Barangay ID")
@@ -226,13 +283,13 @@ export function OnlineRequests({
       ];
 
       const others = (data as any[]).filter(
-        (r) => r.RequestStatus === "Pending" && !certificateTypes.includes(r.RequestType)
+        (r) =>
+          (filterStatus ? normalizeStatus(r.RequestStatus) === filterStatus : true) &&
+          !certificateTypes.includes(r.RequestType)
       ).length;
 
       setCertificateCount(certificates);
       setOtherCount(others);
-
-      const mapped = (data as InboxRow[]).map(toUIRequest);
       setRequests(mapped);
     } catch (e) {
       if (!silent) toast.error("Could not connect to backend.");
@@ -293,6 +350,9 @@ export function OnlineRequests({
     if (initialFilter === 'pending') {
       setStatusFilter('Pending');
       setActiveTab('certificates');
+    } else if (initialFilter === 'returned') {
+      setStatusFilter('Processing Completion');
+      setActiveTab('other');
     } else if (initialFilter === 'pickup') {
       setStatusFilter('Ready for Pickup');
       setActiveTab('certificates');
@@ -307,7 +367,7 @@ export function OnlineRequests({
   // Reset to page 1 when tab, filter or search changes
   useEffect(() => { setCurrentPage(1); }, [activeTab, statusFilter, searchTerm]);
 
-  const handleStatusChange = async (id: string, newStatus: RequestStatus) => {
+  const handleStatusChange = async (id: string, newStatus: RequestStatus, receiver?: string) => {
     try {
       const token = localStorage.getItem("token") || "";
 
@@ -324,7 +384,7 @@ export function OnlineRequests({
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ status: newStatus, ...(newStatus === 'Completed' ? { receiver_name: receiver } : {}) })
       });
 
       const data = await res.json();
@@ -477,8 +537,9 @@ export function OnlineRequests({
     switch (status) {
       case 'Pending': return 'bg-yellow-100 text-yellow-800';
       case 'Processing': return 'bg-blue-100 text-blue-800';
+      case 'Processing Completion': return 'bg-orange-100 text-orange-800';
       case 'Ready for Pickup': return 'bg-green-100 text-green-800';
-      case 'Completed': return 'bg-gray-100 text-gray-800';
+      case 'Completed': return 'bg-emerald-100 text-emerald-900';
       case 'Rejected': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -493,8 +554,9 @@ export function OnlineRequests({
       case 'Ready for Pickup':
         return 'bg-green-600 text-white';
       case 'Completed':
+        return 'bg-emerald-800 text-white';
       case 'Rejected':
-        return 'bg-gray-500 text-white';
+        return 'bg-red-600 text-white';
       default:
         return 'bg-red-600 text-white';
     }
@@ -504,11 +566,17 @@ export function OnlineRequests({
     switch (status) {
       case 'Pending': return <Clock className="w-4 h-4" />;
       case 'Processing': return <FileText className="w-4 h-4" />;
+      case 'Processing Completion': return <AlertCircle className="w-4 h-4" />;
       case 'Ready for Pickup': return <CheckCircle className="w-4 h-4" />;
       case 'Completed': return <CheckCircle className="w-4 h-4" />;
       case 'Rejected': return <XCircle className="w-4 h-4" />;
       default: return <Clock className="w-4 h-4" />;
     }
+  };
+
+  const getStatusLabel = (status: string) => {
+    if (status === 'Rejected') return 'Denied';
+    return status;
   };
 
   const certificateDocTypes = useMemo(() => ([
@@ -524,6 +592,7 @@ export function OnlineRequests({
 
   const pendingRequests = requests.filter(r => r.status === 'Pending');
   const processingRequests = requests.filter(r => r.status === 'Processing');
+  const returnedRequests = requests.filter(r => r.status === 'Processing Completion');
   const readyRequests = requests.filter(r => r.status === 'Ready for Pickup');
   const completedRequests = requests.filter(r => r.status === 'Completed');
   const deniedRequests = requests.filter(r => r.status === 'Rejected');
@@ -596,7 +665,7 @@ export function OnlineRequests({
                   <TableCell className="text-xs">{new Date(request.dateRequested).toLocaleDateString()}</TableCell>
                   <TableCell>
                     <Badge className={getStatusColor(request.status)}>
-                      <span className="flex items-center gap-1 text-xs">{getStatusIcon(request.status)}{request.status}</span>
+                      <span className="flex items-center gap-1 text-xs">{getStatusIcon(request.status)}{getStatusLabel(request.status)}</span>
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -612,11 +681,19 @@ export function OnlineRequests({
                       {request.status === 'Pending' && !isReadOnly && (
                         <>
                           <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'process', isOtherDocuments })}>Process</Button>
+                          {isOtherDocuments && (
+                            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white text-xs" onClick={() => setReturningRequest(request)}>Process for Completion</Button>
+                          )}
                           <Button size="sm" variant="destructive" className="text-xs" onClick={() => setDenyingRequest(request)}>Deny</Button>
                         </>
                       )}
                       {request.status === 'Processing' && !isReadOnly && (
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready</Button>
+                        <>
+                          <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready</Button>
+                        </>
+                      )}
+                      {request.status === 'Processing Completion' && isOtherDocuments && !isReadOnly && (
+                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={() => setAppointmentRequest(request)}>Process</Button>
                       )}
                       {request.status === 'Ready for Pickup' && !isReadOnly && (
                         <Button size="sm" className="bg-gray-600 hover:bg-gray-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'complete', isOtherDocuments })}>Complete</Button>
@@ -647,7 +724,7 @@ export function OnlineRequests({
                   <p className="text-[10px] text-gray-400">{request.residentId}</p>
                 </div>
                 <Badge className={`${getStatusColor(request.status)} shrink-0 text-[10px]`}>
-                  <span className="flex items-center gap-1">{getStatusIcon(request.status)}{request.status}</span>
+                  <span className="flex items-center gap-1">{getStatusIcon(request.status)}{getStatusLabel(request.status)}</span>
                 </Badge>
               </div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-600">
@@ -667,11 +744,19 @@ export function OnlineRequests({
                 {request.status === 'Pending' && !isReadOnly && (
                   <>
                     <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-8" onClick={() => setConfirmAction({ request, kind: 'process', isOtherDocuments })}>Process</Button>
+                    {isOtherDocuments && (
+                      <Button size="sm" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-xs h-8" onClick={() => setReturningRequest(request)}>Process for Completion</Button>
+                    )}
                     <Button size="sm" variant="destructive" className="flex-1 text-xs h-8" onClick={() => setDenyingRequest(request)}>Deny</Button>
                   </>
                 )}
                 {request.status === 'Processing' && !isReadOnly && (
-                  <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs h-8" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready for Pickup</Button>
+                  <>
+                    <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs h-8" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready for Pickup</Button>
+                  </>
+                )}
+                {request.status === 'Processing Completion' && isOtherDocuments && !isReadOnly && (
+                  <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-8" onClick={() => setAppointmentRequest(request)}>Process</Button>
                 )}
                 {request.status === 'Ready for Pickup' && !isReadOnly && (
                   <Button size="sm" className="flex-1 bg-gray-600 hover:bg-gray-700 text-white text-xs h-8" onClick={() => setConfirmAction({ request, kind: 'complete', isOtherDocuments })}>Complete</Button>
@@ -742,14 +827,27 @@ export function OnlineRequests({
                   <>This will mark the request as Completed.</>
                 )}
             </AlertDialogDescription>
+            {confirmAction?.kind === 'complete' && (
+              <div className="pt-2 space-y-1">
+                <Label htmlFor="receiverName" className="text-sm font-medium text-gray-700">Name of Receiver</Label>
+                <Input
+                  id="receiverName"
+                  value={receiverName}
+                  onChange={(e) => {
+                    const lettersOnly = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                    setReceiverName(lettersOnly.toUpperCase());
+                  }}
+                  placeholder="Enter receiver name"
+                />
+              </div>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setReceiverName('')}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-[#2957a1] hover:bg-[#1e3f7a]"
               onClick={() => {
                 const action = confirmAction;
-                setConfirmAction(null);
                 if (!action) return;
 
                 if (action.kind === 'process') {
@@ -762,11 +860,21 @@ export function OnlineRequests({
                 }
 
                 if (action.kind === 'ready') {
+                  setConfirmAction(null);
                   handleStatusChange(action.request.id, 'Ready for Pickup');
                   return;
                 }
-
-                handleStatusChange(action.request.id, 'Completed');
+                if (!receiverName.trim()) {
+                  toast.error('Name of Receiver is required');
+                  return;
+                }
+                if (!/^[A-Za-z\s]+$/.test(receiverName.trim())) {
+                  toast.error('Name of Receiver must contain letters only');
+                  return;
+                }
+                setConfirmAction(null);
+                handleStatusChange(action.request.id, 'Completed', receiverName.trim());
+                setReceiverName('');
               }}
             >
               Confirm
@@ -803,9 +911,9 @@ export function OnlineRequests({
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 auto-rows-fr">
         <Card
-          className={`border-yellow-400 transition-all ${statusFilter === 'Pending' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
+          className={`h-full border-yellow-400 bg-white transition-all ${statusFilter === 'Pending' ? 'border-yellow-500 ring-2 ring-yellow-300 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => {
             if (statusFilter !== 'Pending') {
               setStatusFilter('Pending');
@@ -813,21 +921,18 @@ export function OnlineRequests({
             }
           }}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Pending</p>
-                <p className="text-2xl font-semibold text-gray-900">{pendingRequests.length}</p>
+          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center ${statusFilter === 'Pending' ? 'bg-yellow-100' : 'bg-yellow-50/30'}`}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className={`text-base sm:text-lg font-bold ${statusFilter === 'Pending' ? 'text-yellow-900' : 'text-yellow-800'}`}>Pending</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold text-yellow-900">{pendingRequests.length}</p>
               </div>
-              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <Clock className="w-6 h-6 text-yellow-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-yellow-100 rounded-lg flex items-center justify-center">
+                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-600" />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card
-          className={`border-blue-400 transition-all ${statusFilter === 'Processing' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
+          className={`h-full border-blue-400 bg-white transition-all ${statusFilter === 'Processing' ? 'border-blue-500 ring-2 ring-blue-300 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => {
             if (statusFilter !== 'Processing') {
               setStatusFilter('Processing');
@@ -835,21 +940,18 @@ export function OnlineRequests({
             }
           }}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Processing</p>
-                <p className="text-2xl font-semibold text-gray-900">{processingRequests.length}</p>
+          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center ${statusFilter === 'Processing' ? 'bg-blue-100' : 'bg-blue-50/30'}`}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className={`text-base sm:text-lg font-bold ${statusFilter === 'Processing' ? 'text-blue-900' : 'text-blue-800'}`}>Processing</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold text-blue-900">{processingRequests.length}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <FileText className="w-6 h-6 text-blue-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-blue-100 rounded-lg flex items-center justify-center">
+                <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card
-          className={`border-green-400 transition-all ${statusFilter === 'Ready for Pickup' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
+          className={`h-full border-green-400 bg-white transition-all ${statusFilter === 'Ready for Pickup' ? 'border-green-500 ring-2 ring-green-300 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => {
             if (statusFilter !== 'Ready for Pickup') {
               setStatusFilter('Ready for Pickup');
@@ -857,49 +959,62 @@ export function OnlineRequests({
             }
           }}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Ready for Pickup</p>
-                <p className="text-2xl font-semibold text-gray-900">{readyRequests.length}</p>
+          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center ${statusFilter === 'Ready for Pickup' ? 'bg-green-100' : 'bg-green-50/30'}`}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className={`text-base sm:text-lg font-bold ${statusFilter === 'Ready for Pickup' ? 'text-green-900' : 'text-green-800'}`}>Ready for Pickup</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold text-green-900">{readyRequests.length}</p>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-green-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-green-100 rounded-lg flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card
-          className={`border-gray-400 transition-all ${statusFilter === 'Completed' ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
+          className={`h-full border-emerald-700 bg-white transition-all ${statusFilter === 'Completed' ? 'border-emerald-700 ring-2 ring-emerald-400 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() => statusFilter !== 'Completed' && setStatusFilter('Completed')}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Completed</p>
-                <p className="text-2xl font-semibold text-gray-900">{completedRequests.length}</p>
+          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center ${statusFilter === 'Completed' ? 'bg-emerald-100' : 'bg-emerald-50/30'}`}>
+            <div className="w-full flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className={`text-base sm:text-lg font-bold ${statusFilter === 'Completed' ? 'text-emerald-900' : 'text-emerald-800'}`}>Completed</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold text-emerald-900">{completedRequests.length}</p>
               </div>
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-gray-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-700" />
               </div>
             </div>
           </CardContent>
         </Card>
         <Card
-          className={`border-2 border-red-500 transition-all ${statusFilter === 'Rejected' ? 'border-red-500 cursor-default' : 'cursor-pointer hover:shadow-md'}`}
+          className={`h-full border-red-500 bg-white transition-all ${statusFilter === 'Rejected' ? 'border-red-600 ring-2 ring-red-300 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`}
           onClick={() =>
             statusFilter !== 'Rejected' && setStatusFilter('Rejected')
           }
         >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Denied</p>
-                <p className="text-2xl font-semibold text-gray-900">{deniedRequests.length}</p>
+          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center ${statusFilter === 'Rejected' ? 'bg-red-100' : 'bg-red-50/30'}`}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className={`text-base sm:text-lg font-bold ${statusFilter === 'Rejected' ? 'text-red-900' : 'text-red-800'}`}>Denied</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold text-red-900">{deniedRequests.length}</p>
               </div>
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                <XCircle className="w-6 h-6 text-red-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-red-100 rounded-lg flex items-center justify-center">
+                <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card
+          className={`h-full border-orange-400 bg-white transition-all ${statusFilter === 'Processing Completion' ? 'border-orange-500 ring-2 ring-orange-300 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`}
+          onClick={() => {
+            if (statusFilter !== 'Processing Completion') setStatusFilter('Processing Completion');
+            if (activeTab !== 'other') {
+              setActiveTab('other');
+              onTabChange?.('other');
+            }
+          }}
+        >
+          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center ${statusFilter === 'Processing Completion' ? 'bg-orange-100' : 'bg-orange-50/30'}`}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className={`text-base sm:text-lg font-bold ${statusFilter === 'Processing Completion' ? 'text-orange-900' : 'text-orange-800'}`}>Processing Completion</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold text-orange-900">{returnedRequests.length}</p>
+              </div>
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-orange-100 rounded-lg flex items-center justify-center">
+                <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" />
               </div>
             </div>
           </CardContent>
@@ -989,7 +1104,7 @@ export function OnlineRequests({
                         <span className="inline-flex rounded-full bg-blue-50 px-4 py-1 text-sm font-semibold text-[#2957a1]">
                           Request No: {viewingRequest.requestNo}
                         </span>
-                        <Badge className={getStatusColor(viewingRequest.status)}>{viewingRequest.status}</Badge>
+                        <Badge className={getStatusColor(viewingRequest.status)}>{getStatusLabel(viewingRequest.status)}</Badge>
                       </div>
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Document Type</p>
@@ -1056,9 +1171,17 @@ export function OnlineRequests({
                         <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
                           <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Current Status</Label>
                           <div className="mt-2">
-                            <Badge className={getStatusColor(viewingRequest.status)}>{viewingRequest.status}</Badge>
+                            <Badge className={getStatusColor(viewingRequest.status)}>{getStatusLabel(viewingRequest.status)}</Badge>
                           </div>
                         </div>
+                        {viewingRequest.status === 'Completed' && (
+                          <div className="rounded-2xl bg-white px-4 py-4 shadow-sm sm:col-span-2">
+                            <Label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Received By</Label>
+                            <p className="mt-2 text-lg font-semibold text-gray-900 break-words">
+                              {viewingRequest.receiverName || 'NOT SPECIFIED'}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1101,13 +1224,29 @@ export function OnlineRequests({
                 )}
 
                 {viewingRequest.rejectionReason && (
-                  <div className="rounded-[28px] border border-red-200 bg-white p-6 shadow-sm">
-                    <div className="rounded-3xl border border-red-100 bg-red-50 p-5">
+                  <div className={`rounded-[28px] bg-white p-6 shadow-sm ${
+                    viewingRequest.status === 'Processing Completion' ? 'border border-orange-200' : 'border border-red-200'
+                  }`}>
+                    <div className={`rounded-3xl p-5 ${
+                      viewingRequest.status === 'Processing Completion'
+                        ? 'border border-orange-100 bg-orange-50'
+                        : 'border border-red-100 bg-red-50'
+                    }`}>
                       <div className="flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 text-red-700" />
-                        <Label className="text-xs font-semibold uppercase tracking-wide text-red-700">Rejection Reason</Label>
+                        <AlertCircle className={`h-4 w-4 ${
+                          viewingRequest.status === 'Processing Completion' ? 'text-orange-700' : 'text-red-700'
+                        }`} />
+                        <Label className={`text-xs font-semibold uppercase tracking-wide ${
+                          viewingRequest.status === 'Processing Completion' ? 'text-orange-700' : 'text-red-700'
+                        }`}>
+                          {viewingRequest.status === 'Processing Completion' ? 'Missing Requirement Reason' : 'Denial Reason'}
+                        </Label>
                       </div>
-                      <p className="mt-3 text-base font-medium text-red-700">{viewingRequest.rejectionReason}</p>
+                      <p className={`mt-3 text-base font-medium ${
+                        viewingRequest.status === 'Processing Completion' ? 'text-orange-700' : 'text-red-700'
+                      }`}>
+                        {viewingRequest.rejectionReason}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -1195,6 +1334,7 @@ export function OnlineRequests({
             setAppointmentRequest(null);
             setAppointmentDetails({ date: '', time: '', requirements: '', additionalNotes: '' });
             setAppointmentAttempted(false);
+            setConfirmSendAppointmentOpen(false);
           }
         }}
       >
@@ -1489,7 +1629,7 @@ export function OnlineRequests({
                   >
                     Cancel
                   </Button>
-                  <Button className="bg-[#2957a1] hover:bg-[#1e4080] text-sm font-semibold" onClick={handleSendAppointment}>
+                  <Button className="bg-[#2957a1] hover:bg-[#1e4080] text-sm font-semibold" onClick={() => setConfirmSendAppointmentOpen(true)}>
                     <Mail className="w-4 h-4 mr-2" />
                     Send Appointment
                   </Button>
@@ -1499,8 +1639,78 @@ export function OnlineRequests({
           )}
         </DialogContent>
       </Dialog>
+      <AlertDialog open={confirmSendAppointmentOpen} onOpenChange={setConfirmSendAppointmentOpen}>
+        <AlertDialogContent className="max-w-[420px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send this appointment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will send the appointment details to the resident and move this request to the Processing tab.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmSendAppointmentOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmSendAppointmentOpen(false);
+                handleSendAppointment();
+              }}
+            >
+              Yes, send appointment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* View Denial Reason Dialog */}
+      <Dialog
+        open={!!returningRequest}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReturningRequest(null);
+            setReturnReason('');
+          }
+        }}
+      >
+        <DialogContent>
+          {returningRequest && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-orange-600" />
+                  Return for Completion
+                </DialogTitle>
+                <DialogDescription>
+                  Provide the missing requirement reason for this request.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2">
+                <Label htmlFor="returnReason">Missing Requirement Reason *</Label>
+                <Textarea
+                  id="returnReason"
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  rows={4}
+                  maxLength={30}
+                />
+                <div className="flex justify-end">
+                  <span className={`text-xs ${returnReason.length >= 30 ? 'text-red-600' : 'text-gray-500'}`}>
+                    {returnReason.length}/30 characters
+                  </span>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setReturningRequest(null); setReturnReason(''); }}>
+                  Cancel
+                </Button>
+                <Button className="bg-orange-500 hover:bg-orange-600 text-white" onClick={handleReturnForCompletion}>
+                  Return Request
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog
         open={!!viewingDenialReason}
         onOpenChange={(open) => !open && setViewingDenialReason(null)}
@@ -1527,3 +1737,9 @@ export function OnlineRequests({
     </div>
   );
 }
+
+
+
+
+
+

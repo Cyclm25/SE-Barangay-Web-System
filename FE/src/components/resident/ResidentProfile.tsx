@@ -40,6 +40,24 @@ const createDefaultProfileData = () => ({
   emergencyContactNumber: '09123456789',
 });
 
+const RELIGION_OPTIONS = [
+  'Roman Catholic',
+  'Islam',
+  'Iglesia ni Cristo',
+  'Aglipayan',
+  'Seventh-day Adventist',
+  'Bible Baptist Church',
+  'United Church of Christ',
+  "Jehovah's Witnesses",
+  'The Church of Jesus Christ',
+  'Born Again Christian',
+  'Dating Daan',
+  'Buddhism',
+  'Hinduism',
+  'None',
+  'Other',
+];
+
 type ResidentProfileData = ReturnType<typeof createDefaultProfileData>;
 
 type ResidentDbSnapshot = {
@@ -570,9 +588,11 @@ export function ResidentProfile() {
                 /> */}
                 <FormField
                   label="Religion"
+                  type="select"
                   value={visibleProfileData.religion}
                   onChange={(value) => handleChange('religion', value)}
                   isEditing={isEditing}
+                  options={RELIGION_OPTIONS}
                 />
               </div>
             </div>

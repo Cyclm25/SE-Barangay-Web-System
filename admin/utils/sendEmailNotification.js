@@ -53,6 +53,40 @@ Barangay 160`,
   };
 }
 
+function buildRequestRejectedEmail({ residentName, documentType, reason }) {
+  return {
+    subject: "Your Document Request Was Denied",
+    text: `Good day, ${residentName}.
+
+Your requested document ${documentType} was denied by Barangay 160.
+
+Reason for denial:
+${reason}
+
+Please review the concern and submit a new request if needed.
+
+Thank you,
+Barangay 160`,
+  };
+}
+
+function buildReturnForCompletionEmail({ residentName, documentType, reason }) {
+  return {
+    subject: "Your Document Request Needs Completion",
+    text: `Good day, ${residentName}.
+
+Your requested document ${documentType} needs completion before Barangay 160 can continue processing it.
+
+Reason / missing requirements:
+${reason}
+
+Please complete the missing requirements and coordinate with Barangay 160 for the next step.
+
+Thank you,
+Barangay 160`,
+  };
+}
+
 async function logEmailAttempt({
   requestId,
   residentId,
@@ -144,6 +178,164 @@ async function sendReadyForPickupEmail({
   }
 }
 
+async function sendRequestRejectedEmail({
+  requestId,
+  residentId,
+  residentName,
+  documentType,
+  reason,
+  emailAddress,
+}) {
+  const normalizedEmail = String(emailAddress || "").trim().toLowerCase();
+  const cleanReason = String(reason || "").trim();
+  const { subject, text } = buildRequestRejectedEmail({
+    residentName,
+    documentType,
+    reason: cleanReason,
+  });
+
+  if (!normalizedEmail) {
+    const error = "Missing resident email address.";
+    await logEmailAttempt({
+      requestId,
+      residentId,
+      emailAddress: null,
+      subject,
+      message: text,
+      status: "failed",
+      errorMessage: error,
+    });
+    return { attempted: true, success: false, error };
+  }
+
+  if (!isValidEmail(normalizedEmail)) {
+    const error = "Invalid resident email address.";
+    await logEmailAttempt({
+      requestId,
+      residentId,
+      emailAddress: normalizedEmail,
+      subject,
+      message: text,
+      status: "failed",
+      errorMessage: error,
+    });
+    return { attempted: true, success: false, error };
+  }
+
+  try {
+    const transporter = getTransporter();
+    await transporter.sendMail({
+      from: `"Barangay 160" <${process.env.SMTP_USER}>`,
+      to: normalizedEmail,
+      subject,
+      text,
+    });
+
+    await logEmailAttempt({
+      requestId,
+      residentId,
+      emailAddress: normalizedEmail,
+      subject,
+      message: text,
+      status: "sent",
+    });
+
+    return { attempted: true, success: true };
+  } catch (error) {
+    await logEmailAttempt({
+      requestId,
+      residentId,
+      emailAddress: normalizedEmail,
+      subject,
+      message: text,
+      status: "failed",
+      errorMessage: error.message,
+    });
+
+    return { attempted: true, success: false, error: error.message };
+  }
+}
+
+async function sendReturnForCompletionEmail({
+  requestId,
+  residentId,
+  residentName,
+  documentType,
+  reason,
+  emailAddress,
+}) {
+  const normalizedEmail = String(emailAddress || "").trim().toLowerCase();
+  const cleanReason = String(reason || "").trim();
+  const { subject, text } = buildReturnForCompletionEmail({
+    residentName,
+    documentType,
+    reason: cleanReason,
+  });
+
+  if (!normalizedEmail) {
+    const error = "Missing resident email address.";
+    await logEmailAttempt({
+      requestId,
+      residentId,
+      emailAddress: null,
+      subject,
+      message: text,
+      status: "failed",
+      errorMessage: error,
+    });
+    return { attempted: true, success: false, error };
+  }
+
+  if (!isValidEmail(normalizedEmail)) {
+    const error = "Invalid resident email address.";
+    await logEmailAttempt({
+      requestId,
+      residentId,
+      emailAddress: normalizedEmail,
+      subject,
+      message: text,
+      status: "failed",
+      errorMessage: error,
+    });
+    return { attempted: true, success: false, error };
+  }
+
+  try {
+    const transporter = getTransporter();
+    await transporter.sendMail({
+      from: `"Barangay 160" <${process.env.SMTP_USER}>`,
+      to: normalizedEmail,
+      subject,
+      text,
+    });
+
+    await logEmailAttempt({
+      requestId,
+      residentId,
+      emailAddress: normalizedEmail,
+      subject,
+      message: text,
+      status: "sent",
+    });
+
+    return { attempted: true, success: true };
+  } catch (error) {
+    await logEmailAttempt({
+      requestId,
+      residentId,
+      emailAddress: normalizedEmail,
+      subject,
+      message: text,
+      status: "failed",
+      errorMessage: error.message,
+    });
+
+    return { attempted: true, success: false, error: error.message };
+  }
+}
+
 module.exports = {
   sendReadyForPickupEmail,
+  sendRequestRejectedEmail,
+  sendReturnForCompletionEmail,
 };

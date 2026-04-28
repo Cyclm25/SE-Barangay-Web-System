@@ -1,6 +1,11 @@
 const NAME_REGEX = /^[A-Za-z\s]+$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PH_MOBILE_REGEX = /^(09\d{9}|639\d{9})$/;
+const HOUSE_NO_REGEX = /^[A-Za-z0-9\s#-]+$/;
+const ADDRESS_TEXT_REGEX = /^[A-Za-z0-9\s.,#-]+$/;
+const RESIDENT_TYPES = new Set(["Student", "Senior Citizen", "PWD", "Indigenous", "Resident"]);
+const CIVIL_STATUSES = new Set(["Single", "Married", "Widowed", "Separated"]);
+const SEX_OPTIONS = new Set(["Male", "Female"]);
 
 function cleanString(value) {
   return String(value ?? "").trim();
@@ -79,11 +84,19 @@ function validateResidentPayload(payload, { requirePassword = false } = {}) {
   else if (!Number.isInteger(age) || age < 1 || age > 120) addError(errors, "age", "Age must be between 1 and 120");
 
   if (!gender) addError(errors, "gender", "Sex is required");
+  else if (!SEX_OPTIONS.has(gender)) addError(errors, "gender", "Sex must be one of the available options");
   if (!civilStatus) addError(errors, "civilStatus", "Civil Status is required");
+  else if (!CIVIL_STATUSES.has(civilStatus)) addError(errors, "civilStatus", "Civil Status must be one of the available options");
   if (!residentType) addError(errors, "residentType", "Resident Type is required");
+  else if (!RESIDENT_TYPES.has(residentType)) addError(errors, "residentType", "Resident Type must be one of the available options");
   if (!houseNo) addError(errors, "houseNo", "House No. is required");
+  else if (!HOUSE_NO_REGEX.test(houseNo)) addError(errors, "houseNo", "House No. must only contain letters, numbers, spaces, #, and -");
   if (!streetAddress) addError(errors, "streetAddress", "Address is required");
-  else if (`${houseNo} ${streetAddress}`.trim().length < 5) addError(errors, "streetAddress", "Address must be at least 5 characters");
+  else {
+    if (`${houseNo} ${streetAddress}`.trim().length < 5) addError(errors, "streetAddress", "Address must be at least 5 characters");
+    if (streetAddress.length > 150) addError(errors, "streetAddress", "Address must not exceed 150 characters");
+    if (!ADDRESS_TEXT_REGEX.test(streetAddress)) addError(errors, "streetAddress", "Address contains invalid characters");
+  }
 
   if (!PH_MOBILE_REGEX.test(contactNumber)) addError(errors, "contactNumber", "Contact number must be a valid Philippine mobile number");
   if (!email) addError(errors, "email", "Email is required");
@@ -93,8 +106,17 @@ function validateResidentPayload(payload, { requirePassword = false } = {}) {
   }
 
   if (!emergencyContactName) addError(errors, "emergencyContactName", "Emergency Contact Name is required");
+  else {
+    if (emergencyContactName.length < 2) addError(errors, "emergencyContactName", "Emergency Contact Name must be at least 2 characters");
+    if (emergencyContactName.length > 50) addError(errors, "emergencyContactName", "Emergency Contact Name must not exceed 50 characters");
+    if (!NAME_REGEX.test(emergencyContactName)) addError(errors, "emergencyContactName", "Emergency Contact Name must contain letters and spaces only");
+  }
   if (!PH_MOBILE_REGEX.test(emergencyContactNumber)) addError(errors, "emergencyContactNumber", "Emergency Contact Number must be a valid Philippine mobile number");
   if (!emergencyContactAddress) addError(errors, "emergencyContactAddress", "Emergency Contact Address is required");
+  else {
+    if (emergencyContactAddress.length > 150) addError(errors, "emergencyContactAddress", "Emergency Contact Address must not exceed 150 characters");
+    if (!ADDRESS_TEXT_REGEX.test(emergencyContactAddress)) addError(errors, "emergencyContactAddress", "Emergency Contact Address contains invalid characters");
+  }
 
   if (requirePassword) {
     if (!password) addError(errors, "password", "Password is required");
@@ -211,6 +233,7 @@ function validateRequestPayload(payload) {
   else {
     if (requestPurpose.length < 5) addError(errors, "requestPurpose", "Purpose must be at least 5 characters");
     if (requestPurpose.length > 200) addError(errors, "requestPurpose", "Purpose must not exceed 200 characters");
+    if (!/[A-Za-z]/.test(requestPurpose)) addError(errors, "requestPurpose", "Purpose must include letters");
   }
 
   return buildResult(errors);

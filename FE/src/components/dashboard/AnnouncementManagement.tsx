@@ -1872,8 +1872,8 @@ export function AnnouncementManagement({
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Posted Announcements</p>
-                  <p className="text-2xl font-semibold text-gray-900">
+                  <p className="text-base sm:text-lg font-bold text-gray-700">Posted Announcements</p>
+                  <p className="text-xl sm:text-2xl leading-tight font-semibold text-gray-900">
                     {postedAnnouncements.length}
                   </p>
                 </div>
@@ -1887,8 +1887,8 @@ export function AnnouncementManagement({
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Draft Announcements</p>
-                  <p className="text-2xl font-semibold text-gray-900">
+                  <p className="text-base sm:text-lg font-bold text-gray-700">Draft Announcements</p>
+                  <p className="text-xl sm:text-2xl leading-tight font-semibold text-gray-900">
                     {draftAnnouncements.length}
                   </p>
                 </div>
@@ -1902,8 +1902,8 @@ export function AnnouncementManagement({
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Archived</p>
-                  <p className="text-2xl font-semibold text-gray-900">
+                  <p className="text-base sm:text-lg font-bold text-gray-700">Archived</p>
+                  <p className="text-xl sm:text-2xl leading-tight font-semibold text-gray-900">
                     {archivedAnnouncements.length}
                   </p>
                 </div>

@@ -4,9 +4,33 @@ const pool = require("../db");
 const verifyToken = require("../middleware/verifyToken");
 const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
 const { sendReadyForPickupSms } = require("../utils/sendSmsNotification");
-const { sendReadyForPickupEmail } = require("../utils/sendEmailNotification");
+const {
+  sendReadyForPickupEmail,
+  sendRequestRejectedEmail,
+  sendReturnForCompletionEmail,
+} = require("../utils/sendEmailNotification");
 const { validateRequestPayload } = require("../utils/validation");
 require("dotenv").config();
+
+let hasReceiverNameColumnCache = null;
+async function checkReceiverNameColumn(client) {
+  if (typeof hasReceiverNameColumnCache === "boolean") return hasReceiverNameColumnCache;
+  const result = await client.query(
+    `SELECT 1
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'request'
+       AND column_name = 'ReceiverName'
+     LIMIT 1`
+  );
+  hasReceiverNameColumnCache = result.rowCount > 0;
+  return hasReceiverNameColumnCache;
+}
+
+async function ensureReceiverNameColumn(client) {
+  await client.query(`ALTER TABLE request ADD COLUMN IF NOT EXISTS "ReceiverName" TEXT`);
+  hasReceiverNameColumnCache = true;
+}
 
 function buildAppointmentNotificationMessage({
   date,
@@ -38,6 +62,30 @@ function parseAppointmentNotificationMessage(rawMessage) {
   }
 
   return null;
+}
+
+function normalizeRequestStatus(status) {
+  const value = String(status || "").trim().toLowerCase();
+
+  switch (value) {
+    case "pending":
+      return "Pending";
+    case "processing":
+      return "Processing";
+    case "returned for completion":
+    case "return for completion":
+    case "returned":
+    case "incomplete":
+      return "Returned for Completion";
+    case "ready for pickup":
+      return "Ready for Pickup";
+    case "completed":
+      return "Completed";
+    case "rejected":
+      return "Rejected";
+    default:
+      return null;
+  }
 }
 
 /* ==============================
@@ -141,10 +189,12 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
   const client = await pool.connect();
 
   try {
+    await ensureReceiverNameColumn(client);
     const { id } = req.params;
     const {
-      status,
+      status: rawStatus,
       reason,
+      receiver_name,
       appointmentDate,
       appointmentTime,
       requirements,
@@ -152,13 +202,30 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
       setByAdmin,
     } = req.body;
 
-    const allowed = ["Pending", "Processing", "Ready for Pickup", "Completed", "Rejected"];
+    const status = normalizeRequestStatus(rawStatus);
+    const allowed = ["Pending", "Processing", "Returned for Completion", "Ready for Pickup", "Completed", "Rejected"];
     if (!allowed.includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
     }
 
-    if (status === "Rejected" && (!reason || !String(reason).trim())) {
-      return res.status(400).json({ error: "Rejection reason is required" });
+    if (
+      (status === "Rejected" || status === "Returned for Completion") &&
+      (!reason || !String(reason).trim())
+    ) {
+      return res.status(400).json({ error: "Reason is required" });
+    }
+
+    if (
+      (status === "Rejected" || status === "Returned for Completion") &&
+      String(reason).trim().length > 30
+    ) {
+      return res.status(400).json({ error: "Reason must be 30 characters or less" });
+    }
+
+    const hasReceiverNameColumn = await checkReceiverNameColumn(client);
+
+    if (status === "Completed" && !String(receiver_name || "").trim()) {
+      return res.status(400).json({ error: "Name of Receiver is required" });
     }
 
     await client.query("BEGIN");
@@ -183,7 +250,7 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
     let idx = 2;
 
     // persist rejection reason
-    if (status === "Rejected") {
+    if (status === "Rejected" || status === "Returned for Completion") {
       updateQuery += `, "RejectionReason" = $${idx}`;
       params.push(String(reason).trim());
       idx++;
@@ -197,8 +264,16 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
       updateQuery += `, "CompletionDate" = NOW()`;
     }
 
+    if (status === "Completed" && hasReceiverNameColumn) {
+      updateQuery += `, "ReceiverName" = $${idx}`;
+      params.push(String(receiver_name).trim());
+      idx++;
+    }
+
     updateQuery += ` WHERE "RequestID" = $${idx}
-      RETURNING "RequestID","ResidentID","RequestType","RequestPurpose","RequestStatus","RequestDate","PickupDate","CompletionDate","RejectionReason"`;
+      RETURNING "RequestID","ResidentID","RequestType","RequestPurpose","RequestStatus","RequestDate","PickupDate","CompletionDate","RejectionReason"${
+        hasReceiverNameColumn ? ',"ReceiverName"' : ""
+      }`;
     params.push(id);
 
     const update = await client.query(updateQuery, params);
@@ -234,8 +309,24 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
       skipped: true,
       reason: "Email only triggers when transitioning to Ready for Pickup.",
     };
+    let rejectionEmail = {
+      attempted: false,
+      success: false,
+      skipped: true,
+      reason: "Rejection email only triggers when transitioning to Rejected.",
+    };
+    let returnForCompletionEmail = {
+      attempted: false,
+      success: false,
+      skipped: true,
+      reason: "Return for completion email only triggers when transitioning to Returned for Completion.",
+    };
 
-    if (status === "Ready for Pickup" && prevStatus !== "Ready for Pickup") {
+    if (
+      (status === "Ready for Pickup" && prevStatus !== "Ready for Pickup") ||
+      (status === "Rejected" && prevStatus !== "Rejected") ||
+      (status === "Returned for Completion" && prevStatus !== "Returned for Completion")
+    ) {
       const residentInfo = await pool.query(
         `SELECT "FirstName", "MiddleName", "LastName", "ContactNumber", "Email"
          FROM resident
@@ -244,43 +335,52 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
         [residentId]
       );
 
-      if (residentInfo.rowCount === 0) {
-        email = await sendReadyForPickupEmail({
-          requestId: Number(id),
-          residentId,
-          residentName: residentId,
-          documentType: requestType,
-          emailAddress: null,
-        });
-        sms = await sendReadyForPickupSms({
-          requestId: Number(id),
-          residentId,
-          residentName: residentId,
-          documentType: requestType,
-          rawPhoneNumber: null,
-        });
-      } else {
-        const resident = residentInfo.rows[0];
-        const residentName = [resident.FirstName, resident.MiddleName, resident.LastName]
-          .filter(Boolean)
-          .join(" ")
-          .replace(/\s+/g, " ")
-          .trim();
+      const resident = residentInfo.rowCount > 0 ? residentInfo.rows[0] : null;
+      const residentName = resident
+        ? [resident.FirstName, resident.MiddleName, resident.LastName]
+            .filter(Boolean)
+            .join(" ")
+            .replace(/\s+/g, " ")
+            .trim() || residentId
+        : residentId;
 
+      if (status === "Ready for Pickup" && prevStatus !== "Ready for Pickup") {
         email = await sendReadyForPickupEmail({
           requestId: Number(id),
           residentId,
-          residentName: residentName || residentId,
+          residentName,
           documentType: requestType,
-          emailAddress: resident.Email,
+          emailAddress: resident?.Email || null,
         });
 
         sms = await sendReadyForPickupSms({
           requestId: Number(id),
           residentId,
-          residentName: residentName || residentId,
+          residentName,
           documentType: requestType,
-          rawPhoneNumber: resident.ContactNumber,
+          rawPhoneNumber: resident?.ContactNumber || null,
+        });
+      }
+
+      if (status === "Rejected" && prevStatus !== "Rejected") {
+        rejectionEmail = await sendRequestRejectedEmail({
+          requestId: Number(id),
+          residentId,
+          residentName,
+          documentType: requestType,
+          reason: String(reason).trim(),
+          emailAddress: resident?.Email || null,
+        });
+      }
+
+      if (status === "Returned for Completion" && prevStatus !== "Returned for Completion") {
+        returnForCompletionEmail = await sendReturnForCompletionEmail({
+          requestId: Number(id),
+          residentId,
+          residentName,
+          documentType: requestType,
+          reason: String(reason).trim(),
+          emailAddress: resident?.Email || null,
         });
       }
     }
@@ -290,6 +390,8 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
       data: update.rows[0],
       email,
       sms,
+      rejectionEmail,
+      returnForCompletionEmail,
     });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -305,6 +407,8 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
 
 router.get("/admin/all", async (req, res) => {
   try {
+    await ensureReceiverNameColumn(pool);
+    const hasReceiverNameColumn = await checkReceiverNameColumn(pool);
     const result = await pool.query(
       `
       SELECT 
@@ -317,6 +421,7 @@ router.get("/admin/all", async (req, res) => {
         req."RequestPurpose",
         req."ResidentID",
         req."RejectionReason",
+        ${hasReceiverNameColumn ? 'req."ReceiverName",' : "NULL::text AS \"ReceiverName\","}
         latest_appt."Message" AS "AppointmentMessage",
         r."FirstName",
         r."MiddleName",
@@ -362,21 +467,28 @@ module.exports = router;
 // GET requests of a specific resident (for Track My Requests)
 router.get("/resident/:residentId", async (req, res) => {
   try {
+    await ensureReceiverNameColumn(pool);
     const { residentId } = req.params;
+    const hasReceiverNameColumn = await checkReceiverNameColumn(pool);
 
     const result = await pool.query(
       `
       SELECT
         req."RequestID",
         req."ResidentID",
+        r."FirstName",
+        r."LastName",
         req."RequestDate",
         req."PickupDate",
         req."CompletionDate",
         req."RequestType",
         req."RequestStatus",
         req."RequestPurpose",
+        req."RejectionReason",
+        ${hasReceiverNameColumn ? 'req."ReceiverName",' : "NULL::text AS \"ReceiverName\","}
         latest_appt."Message" AS "AppointmentMessage"
       FROM request req
+      LEFT JOIN resident r ON r."ResidentID" = req."ResidentID"
       LEFT JOIN LATERAL (
         SELECT n."Message"
         FROM notification n
