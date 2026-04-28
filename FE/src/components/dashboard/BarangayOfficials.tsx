@@ -34,6 +34,7 @@ import { User, Lock, Eye, EyeOff, Calendar } from "lucide-react";
 import { ProfileImageUpload } from "../ui/ProfileImageUpload";
 import { OfficialForgotPasswordPage } from "./OfficialForgotPasswordPage";
 import { toast } from "sonner";
+import { validateOfficialForm, validatePassword } from "../../utils/validation";
 import { api } from "../../utils/api";
 
 type StatusText = "Active" | "Inactive";
@@ -348,28 +349,9 @@ export function BarangayOfficials() {
   const handleStartSubmit = () => {
     setSaveAttempted(true);
 
-    if (!formData.name.trim()) {
-      toast.error("Full Name is required");
-      return;
-    }
-    if (hasInvalidNameCharacters) {
-      toast.error("Full Name must contain letters and spaces only");
-      return;
-    }
-    if (!formData.email.trim()) {
-      toast.error("Email is required");
-      return;
-    }
-    if (!gmailRegex.test(formData.email.trim())) {
-      toast.error("Only Gmail addresses are allowed");
-      return;
-    }
-    if (contactDigits.length !== 11) {
-      toast.error("Contact number must be exactly 11 digits");
-      return;
-    }
-    if (!formData.position) {
-      toast.error("Position is required");
+    const errors = validateOfficialForm(formData);
+    if (Object.keys(errors).length > 0) {
+      toast.error(Object.values(errors)[0]);
       return;
     }
     console.log("Form data validated, showing privacy dialog");
@@ -393,16 +375,9 @@ export function BarangayOfficials() {
   };
 
   const handleFinalSubmit = async () => {
-    if (!password) {
-      toast.error("Password is required");
-      return;
-    }
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
-    }
-    if (password !== confirmPassword) {
-      toast.error("Passwords do not match");
+    const passwordErrors = validatePassword(password, confirmPassword);
+    if (Object.keys(passwordErrors).length > 0) {
+      toast.error(Object.values(passwordErrors)[0]);
       return;
     }
     console.log("Passwords validated, calling handleAddOfficial");

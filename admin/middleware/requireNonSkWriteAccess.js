@@ -11,7 +11,7 @@ module.exports = function requireNonSkWriteAccess(req, res, next) {
 
   if (userType === "barangayadmin" && position === "sk kagawad") {
     return res.status(403).json({
-      error: "SK Kagawad accounts are view-only and cannot modify records.",
+      error: "Access denied: View-only role",
     });
   }
 

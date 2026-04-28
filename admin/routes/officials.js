@@ -4,6 +4,11 @@ const pool = require("../db");
 const bcrypt = require("bcrypt");
 const verifyToken = require("../middleware/verifyToken");
 const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
+const {
+    cleanString,
+    normalizeDigits,
+    validateOfficialPayload,
+} = require("../utils/validation");
 
 const OFFICIAL_POSITIONS = new Set([
     "Barangay Captain",
@@ -13,54 +18,6 @@ const OFFICIAL_POSITIONS = new Set([
     "Secretary",
     "Treasurer",
 ]);
-
-function cleanString(value) {
-    return String(value ?? "").trim();
-}
-
-function normalizeDigits(value) {
-    return String(value ?? "").replace(/\D/g, "").trim();
-}
-
-function isValidGmail(value) {
-    return /^[a-z0-9](\.?[a-z0-9]){5,29}@gmail\.com$/i.test(cleanString(value).toLowerCase());
-}
-
-function isLettersAndSpaces(value) {
-    return /^[A-Za-z\s]+$/.test(cleanString(value));
-}
-
-function validateOfficialPayload({
-    adminName,
-    position,
-    email,
-    contactnumber,
-    requirePassword = false,
-    password,
-    termStart,
-    termEnd,
-}) {
-    if (!cleanString(adminName)) return "Full name is required.";
-    if (!isLettersAndSpaces(adminName)) return "Full name must contain letters and spaces only.";
-    if (cleanString(adminName).length > 50) return "Full name must not exceed 50 characters.";
-
-    if (!cleanString(position)) return "Position is required.";
-    if (!OFFICIAL_POSITIONS.has(cleanString(position))) return "Position is invalid.";
-
-    if (!cleanString(email)) return "Email is required.";
-    if (!isValidGmail(email)) return "Only valid Gmail addresses are allowed.";
-    if (cleanString(email).length > 60) return "Email must not exceed 60 characters.";
-
-    if (!/^\d{11}$/.test(contactnumber)) return "Contact number must be exactly 11 digits.";
-
-    if (requirePassword && !cleanString(password)) return "Password is required.";
-
-    if (termStart && termEnd && termEnd < termStart) {
-        return "Term end date cannot be earlier than term start date.";
-    }
-
-    return null;
-}
 
 function normalizeDateValue(value) {
     if (!value) return null;
@@ -152,9 +109,14 @@ router.post("/", verifyToken, requireNonSkWriteAccess, async (req, res) => {
             password,
             termStart,
             termEnd,
+            allowedPositions: Array.from(OFFICIAL_POSITIONS),
         });
         if (validationError) {
-            return res.status(400).json({ message: validationError });
+            return res.status(400).json({ message: validationError.message, errors: validationError.errors });
+        }
+
+        if (termStart && termEnd && termEnd < termStart) {
+            return res.status(400).json({ message: "Term end date cannot be earlier than term start date.", errors: { termEnd: "Term end date cannot be earlier than term start date." } });
         }
 
         await client.query("BEGIN");
@@ -254,9 +216,14 @@ router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
             contactnumber,
             termStart,
             termEnd,
+            allowedPositions: Array.from(OFFICIAL_POSITIONS),
         });
         if (validationError) {
-            return res.status(400).json({ message: validationError });
+            return res.status(400).json({ message: validationError.message, errors: validationError.errors });
+        }
+
+        if (termStart && termEnd && termEnd < termStart) {
+            return res.status(400).json({ message: "Term end date cannot be earlier than term start date.", errors: { termEnd: "Term end date cannot be earlier than term start date." } });
         }
 
         const result = await pool.query(

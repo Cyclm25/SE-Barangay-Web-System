@@ -44,7 +44,7 @@ export function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-200">
+      <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-200 transition-colors duration-300">
         {/* Header */}
         <div className={`bg-gradient-to-r ${typeColors[type].bg} p-6 rounded-t-2xl relative`}>
           <button
@@ -59,7 +59,7 @@ export function ConfirmDialog({
 
         {/* Content */}
         <div className="p-6">
-          <p className="text-gray-700 text-[15px] leading-relaxed mb-4">{message}</p>
+          <p className="text-muted-foreground text-[15px] leading-relaxed mb-4">{message}</p>
           {children}
         </div>
 
@@ -68,7 +68,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 px-6 py-3 rounded-xl text-[15px] font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-all"
+            className="flex-1 px-6 py-3 rounded-xl text-[15px] font-semibold text-foreground bg-muted hover:bg-accent transition-all"
           >
             {cancelText}
           </button>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { validateDocumentRequestForm, type ValidationErrors } from '../../utils/validation';
 
 type ServiceType = 'barangay-id' | 'certificate' | 'other' | null;
 
@@ -147,6 +148,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
   const [showFinalSubmitConfirm, setShowFinalSubmitConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
 
 
   useEffect(() => {
@@ -189,6 +191,12 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    setValidationErrors(prev => {
+      const next = { ...prev };
+      delete next[field];
+      if (field === 'documentType') delete next.customDocumentType;
+      return next;
+    });
   };
 
   const finalDocumentType =
@@ -197,7 +205,13 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
   const handleSubmitClick = (event?: React.MouseEvent<HTMLButtonElement>) => {
     event?.preventDefault();
     event?.stopPropagation();
-    if (!finalDocumentType || !formData.purpose) return;
+    const errors = validateDocumentRequestForm({
+      documentType: formData.documentType,
+      customDocumentType: formData.customDocumentType,
+      purpose: formData.purpose,
+    });
+    setValidationErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     requestAnimationFrame(() => setShowSubmitConfirm(true));
   };
 
@@ -209,7 +223,13 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
       return;
     }
 
-    if (!finalDocumentType || !formData.purpose) {
+    const errors = validateDocumentRequestForm({
+      documentType: formData.documentType,
+      customDocumentType: formData.customDocumentType,
+      purpose: formData.purpose,
+    });
+    setValidationErrors(errors);
+    if (Object.keys(errors).length > 0) {
       setShowSubmitConfirm(false);
       return;
     }
@@ -269,6 +289,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
 
       // reset form
       setFormData({ documentType: "", customDocumentType: "", purpose: "" });
+      setValidationErrors({});
       setShowFinalSubmitConfirm(false);
       setShowSubmitConfirm(false);
     } finally {
@@ -282,6 +303,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
 
   const handleConfirmCancel = () => {
     setFormData({ documentType: '', customDocumentType: '', purpose: '' });
+    setValidationErrors({});
     onBack();
   };
 
@@ -478,7 +500,7 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                   <select
                     value={formData.documentType}
                     onChange={(e) => handleChange('documentType', e.target.value)}
-                    className="w-full border-2 border-[#2957a1] focus:border-[#1e4380] rounded-lg px-4 py-3 text-[14px] text-gray-900 transition-all outline-none bg-white"
+                    className={`w-full rounded-lg px-4 py-3 text-[14px] text-gray-900 transition-all outline-none bg-white border-2 ${validationErrors.documentType ? 'border-red-500 focus:border-red-600' : 'border-[#2957a1] focus:border-[#1e4380]'}`}
                   >
                     <option value="">Select Document Type</option>
                     {serviceType === 'barangay-id' ? (
@@ -495,6 +517,9 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                       </>
                     )}
                   </select>
+                  {validationErrors.documentType && (
+                    <p className="mt-1 text-xs font-medium text-red-600">{validationErrors.documentType}</p>
+                  )}
                 </div>
 
                 {formData.documentType === 'Others' && (
@@ -506,9 +531,13 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                       type="text"
                       value={formData.customDocumentType}
                       onChange={(e) => handleChange('customDocumentType', e.target.value)}
-                      className="w-full border-2 border-[#2957a1] focus:border-[#1e4380] rounded-lg px-4 py-3 text-[14px] text-gray-900 transition-all outline-none"
+                      maxLength={100}
+                      className={`w-full rounded-lg px-4 py-3 text-[14px] text-gray-900 transition-all outline-none border-2 ${validationErrors.customDocumentType ? 'border-red-500 focus:border-red-600' : 'border-[#2957a1] focus:border-[#1e4380]'}`}
                       placeholder="Enter document type"
                     />
+                    {validationErrors.customDocumentType && (
+                      <p className="mt-1 text-xs font-medium text-red-600">{validationErrors.customDocumentType}</p>
+                    )}
                   </div>
                 )}
 
@@ -520,9 +549,13 @@ function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebform
                     type="text"
                     value={formData.purpose}
                     onChange={(e) => handleChange('purpose', e.target.value)}
-                    className="w-full border-2 border-[#2957a1] focus:border-[#1e4380] rounded-lg px-4 py-3 text-[14px] text-gray-900 transition-all outline-none"
+                    maxLength={200}
+                    className={`w-full rounded-lg px-4 py-3 text-[14px] text-gray-900 transition-all outline-none border-2 ${validationErrors.purpose ? 'border-red-500 focus:border-red-600' : 'border-[#2957a1] focus:border-[#1e4380]'}`}
                     placeholder="e.g. Employment, School Requirements, Business Registration"
                   />
+                  {validationErrors.purpose && (
+                    <p className="mt-1 text-xs font-medium text-red-600">{validationErrors.purpose}</p>
+                  )}
                 </div>
               </div>
             </div>

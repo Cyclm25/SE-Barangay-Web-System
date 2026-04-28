@@ -40,6 +40,7 @@ import {
 } from "../ui/table";
 import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X, FileText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { toast } from "sonner";
+import { validatePassword, validateResidentForm } from "../../utils/validation";
 import { formatId } from "../../utils/formatId";
 import OcrScanner from "../../OcrScanner";
 import { Calendar } from "../ui/calendar";
@@ -925,21 +926,13 @@ export function ResidentRecords({
   const handleSaveResident = () => {
     setSaveAttempted(true);
 
+    const errors = validateResidentForm(formData);
     if (
-      isBlank(formData.firstName) ||
-      isBlank(formData.lastName) ||
-      isBlank(formData.birthday) ||
-      invalidContact(formData.contactNumber) ||
+      Object.keys(errors).length > 0 ||
       contactNumberAlreadyExists ||
-      invalidEmail(formData.email) ||
-      emailAlreadyExists ||
-      isBlank(formData.houseNo) ||
-      isBlank(formData.streetAddress) ||
-      isBlank(formData.emergencyContactName) ||
-      invalidContact(formData.emergencyContactNumber) ||
-      isBlank(formData.emergencyContactAddress)
+      emailAlreadyExists
     ) {
-      toast.error("Please fill in all required fields correctly.");
+      toast.error(errors.contactNumber || errors.email || Object.values(errors)[0] || "Please fill in all required fields correctly.");
       return;
     }
 
@@ -1029,12 +1022,9 @@ export function ResidentRecords({
   };
 
   const handleFinalSubmit = async () => {
-    if (!password || !confirmPassword) {
-      toast.error("Please fill in both password fields.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      toast.error("Passwords do not match!");
+    const passwordErrors = validatePassword(password, confirmPassword);
+    if (Object.keys(passwordErrors).length > 0) {
+      toast.error(Object.values(passwordErrors)[0]);
       return;
     }
     if (!pendingResident) return;

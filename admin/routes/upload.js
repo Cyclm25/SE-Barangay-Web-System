@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const pool = require("../db");
 const verifyToken = require("../middleware/verifyToken");
+const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
 
 /* ─────────────────────────────────────────────────────────────
    PROFILE PICTURES
@@ -65,6 +66,7 @@ const uploadAnnouncement = multer({
 router.post(
   "/profile-picture/:residentId",
   verifyToken,
+  requireNonSkWriteAccess,
   uploadProfile.single("profileImage"),
   async (req, res) => {
     try {
@@ -102,6 +104,7 @@ router.post(
 router.post(
   "/profile-picture-new",
   verifyToken,
+  requireNonSkWriteAccess,
   uploadProfile.single("profileImage"),
   (req, res) => {
     try {
@@ -124,7 +127,7 @@ router.post(
    Accepts field name: "image"
    Max: 5MB, JPEG/PNG/WebP only
 ========================= */
-router.post("/announcement-image", (req, res) => {
+router.post("/announcement-image", verifyToken, requireNonSkWriteAccess, (req, res) => {
   uploadAnnouncement.single("image")(req, res, (err) => {
     try {
       if (err instanceof multer.MulterError) {

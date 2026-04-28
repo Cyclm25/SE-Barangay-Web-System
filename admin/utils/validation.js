@@ -1,0 +1,228 @@
+const NAME_REGEX = /^[A-Za-z\s]+$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PH_MOBILE_REGEX = /^(09\d{9}|639\d{9})$/;
+
+function cleanString(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeDigits(value) {
+  return String(value ?? "").replace(/\D/g, "").trim();
+}
+
+function normalizePhMobile(value) {
+  const digits = normalizeDigits(value);
+  if (digits.startsWith("63") && digits.length === 12) return digits;
+  if (digits.startsWith("09") && digits.length === 11) return digits;
+  return digits;
+}
+
+function addError(errors, field, message) {
+  if (!errors[field]) errors[field] = message;
+}
+
+function buildResult(errors) {
+  const fields = Object.keys(errors);
+  if (fields.length === 0) return null;
+  return { message: errors[fields[0]], errors };
+}
+
+function validateResidentPayload(payload, { requirePassword = false } = {}) {
+  const errors = {};
+  const firstName = cleanString(payload.firstName);
+  const middleName = cleanString(payload.middleName);
+  const lastName = cleanString(payload.lastName);
+  const birthday = cleanString(payload.birthday);
+  const ageValue = cleanString(payload.age);
+  const gender = cleanString(payload.gender);
+  const civilStatus = cleanString(payload.civilStatus);
+  const residentType = cleanString(payload.residentType);
+  const houseNo = cleanString(payload.houseNo);
+  const streetAddress = cleanString(payload.streetAddress);
+  const contactNumber = normalizePhMobile(payload.contactNumber);
+  const email = cleanString(payload.email).toLowerCase();
+  const emergencyContactName = cleanString(payload.emergencyContactName);
+  const emergencyContactNumber = normalizePhMobile(payload.emergencyContactNumber);
+  const emergencyContactAddress = cleanString(payload.emergencyContactAddress);
+  const password = cleanString(payload.password);
+
+  if (!firstName) addError(errors, "firstName", "First Name is required");
+  else {
+    if (firstName.length < 2) addError(errors, "firstName", "First Name must be at least 2 characters");
+    if (firstName.length > 50) addError(errors, "firstName", "First Name must not exceed 50 characters");
+    if (!NAME_REGEX.test(firstName)) addError(errors, "firstName", "First Name must contain letters and spaces only");
+  }
+
+  if (middleName) {
+    if (middleName.length > 50) addError(errors, "middleName", "Middle Name must not exceed 50 characters");
+    if (!NAME_REGEX.test(middleName)) addError(errors, "middleName", "Middle Name must contain letters and spaces only");
+  }
+
+  if (!lastName) addError(errors, "lastName", "Last Name is required");
+  else {
+    if (lastName.length < 2) addError(errors, "lastName", "Last Name must be at least 2 characters");
+    if (lastName.length > 50) addError(errors, "lastName", "Last Name must not exceed 50 characters");
+    if (!NAME_REGEX.test(lastName)) addError(errors, "lastName", "Last Name must contain letters and spaces only");
+  }
+
+  if (!birthday) addError(errors, "birthday", "Birth Date is required");
+  else {
+    const parsed = new Date(`${birthday}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (Number.isNaN(parsed.getTime())) addError(errors, "birthday", "Birth Date must be valid");
+    else if (parsed >= today) addError(errors, "birthday", "Birth Date must be in the past");
+  }
+
+  const age = Number(ageValue);
+  if (!ageValue) addError(errors, "age", "Age is required");
+  else if (!Number.isInteger(age) || age < 1 || age > 120) addError(errors, "age", "Age must be between 1 and 120");
+
+  if (!gender) addError(errors, "gender", "Sex is required");
+  if (!civilStatus) addError(errors, "civilStatus", "Civil Status is required");
+  if (!residentType) addError(errors, "residentType", "Resident Type is required");
+  if (!houseNo) addError(errors, "houseNo", "House No. is required");
+  if (!streetAddress) addError(errors, "streetAddress", "Address is required");
+  else if (`${houseNo} ${streetAddress}`.trim().length < 5) addError(errors, "streetAddress", "Address must be at least 5 characters");
+
+  if (!PH_MOBILE_REGEX.test(contactNumber)) addError(errors, "contactNumber", "Contact number must be a valid Philippine mobile number");
+  if (!email) addError(errors, "email", "Email is required");
+  else {
+    if (email.length > 100) addError(errors, "email", "Email must not exceed 100 characters");
+    if (!EMAIL_REGEX.test(email)) addError(errors, "email", "Email must be a valid email address");
+  }
+
+  if (!emergencyContactName) addError(errors, "emergencyContactName", "Emergency Contact Name is required");
+  if (!PH_MOBILE_REGEX.test(emergencyContactNumber)) addError(errors, "emergencyContactNumber", "Emergency Contact Number must be a valid Philippine mobile number");
+  if (!emergencyContactAddress) addError(errors, "emergencyContactAddress", "Emergency Contact Address is required");
+
+  if (requirePassword) {
+    if (!password) addError(errors, "password", "Password is required");
+    else {
+      if (password.length < 8) addError(errors, "password", "Password must be at least 8 characters");
+      if (password.length > 64) addError(errors, "password", "Password must not exceed 64 characters");
+    }
+  }
+
+  return buildResult(errors);
+}
+
+function validateResidentSelfProfilePayload(payload) {
+  return validateResidentPayload(
+    {
+      ...payload,
+      gender: payload.gender ?? "Resident",
+      residentType: payload.residentType ?? "Resident",
+      emergencyContactName: payload.emergencyContactName ?? payload.contactPerson,
+      emergencyContactNumber: payload.emergencyContactNumber ?? payload.contactPersonNo,
+      emergencyContactAddress: payload.emergencyContactAddress ?? payload.contactPersonAddress,
+      houseNo: payload.houseNo ?? "N/A",
+      streetAddress: payload.streetAddress ?? "Resident Address",
+      age: payload.age ?? 18,
+      birthday: payload.birthday ?? "2000-01-01",
+      firstName: payload.firstName ?? "Resident",
+      lastName: payload.lastName ?? "Resident",
+    },
+    { requirePassword: false }
+  );
+}
+
+function validateOfficialPayload(payload, { requirePassword = false, allowedPositions = [] } = {}) {
+  const errors = {};
+  const adminName = cleanString(payload.adminName ?? payload.adminname);
+  const position = cleanString(payload.position);
+  const email = cleanString(payload.email).toLowerCase();
+  const contactnumber = normalizePhMobile(payload.contactnumber ?? payload.contactNumber);
+  const password = cleanString(payload.password);
+
+  if (!adminName) addError(errors, "adminname", "Admin Name is required");
+  else {
+    if (adminName.length < 2) addError(errors, "adminname", "Admin Name must be at least 2 characters");
+    if (adminName.length > 100) addError(errors, "adminname", "Admin Name must not exceed 100 characters");
+    if (!NAME_REGEX.test(adminName)) addError(errors, "adminname", "Admin Name must contain letters and spaces only");
+  }
+
+  if (!position) addError(errors, "position", "Position is required");
+  else if (allowedPositions.length > 0 && !allowedPositions.includes(position)) addError(errors, "position", "Position is invalid");
+
+  if (!email) addError(errors, "email", "Email is required");
+  else {
+    if (email.length > 100) addError(errors, "email", "Email must not exceed 100 characters");
+    if (!EMAIL_REGEX.test(email)) addError(errors, "email", "Email must be a valid email address");
+  }
+
+  if (!PH_MOBILE_REGEX.test(contactnumber)) addError(errors, "contactnumber", "Contact number must be a valid Philippine mobile number");
+
+  if (requirePassword) {
+    if (!password) addError(errors, "password", "Password is required");
+    else {
+      if (password.length < 8) addError(errors, "password", "Password must be at least 8 characters");
+      if (password.length > 64) addError(errors, "password", "Password must not exceed 64 characters");
+    }
+  }
+
+  return buildResult(errors);
+}
+
+function validateAnnouncementPayload(payload) {
+  const errors = {};
+  const title = cleanString(payload.title);
+  const body = cleanString(payload.body);
+  const audiences = Array.isArray(payload.targetAudience) ? payload.targetAudience : [];
+
+  if (!title) addError(errors, "title", "Title is required");
+  else {
+    if (title.length < 5) addError(errors, "title", "Title must be at least 5 characters");
+    if (title.length > 100) addError(errors, "title", "Title must not exceed 100 characters");
+  }
+
+  if (!body) addError(errors, "body", "Content is required");
+  else {
+    if (body.length < 10) addError(errors, "body", "Content must be at least 10 characters");
+    if (body.length > 1000) addError(errors, "body", "Content must not exceed 1000 characters");
+  }
+
+  if (audiences.length === 0 && cleanString(payload.targetAudience) === "") {
+    addError(errors, "targetAudience", "Target Audience is required");
+  }
+
+  if (payload.isScheduled) {
+    const schedule = cleanString(payload.scheduledPublishDate);
+    if (!schedule) addError(errors, "scheduledPublishDate", "Schedule Date is required");
+    else if (Number.isNaN(new Date(schedule).getTime()) || new Date(schedule) <= new Date()) {
+      addError(errors, "scheduledPublishDate", "Schedule Date must be in the future");
+    }
+  }
+
+  return buildResult(errors);
+}
+
+function validateRequestPayload(payload) {
+  const errors = {};
+  const residentId = cleanString(payload.residentId);
+  const requestType = cleanString(payload.requestType);
+  const requestPurpose = cleanString(payload.requestPurpose);
+
+  if (!residentId) addError(errors, "residentId", "Resident is required");
+  if (!requestType) addError(errors, "requestType", "Document Type is required");
+  else if (requestType.length > 100) addError(errors, "requestType", "Document Type must not exceed 100 characters");
+
+  if (!requestPurpose) addError(errors, "requestPurpose", "Purpose is required");
+  else {
+    if (requestPurpose.length < 5) addError(errors, "requestPurpose", "Purpose must be at least 5 characters");
+    if (requestPurpose.length > 200) addError(errors, "requestPurpose", "Purpose must not exceed 200 characters");
+  }
+
+  return buildResult(errors);
+}
+
+module.exports = {
+  cleanString,
+  normalizeDigits,
+  normalizePhMobile,
+  validateResidentPayload,
+  validateResidentSelfProfilePayload,
+  validateOfficialPayload,
+  validateAnnouncementPayload,
+  validateRequestPayload,
+};

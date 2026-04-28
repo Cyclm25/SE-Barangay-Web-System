@@ -12,6 +12,7 @@ import { SetNewPasswordPage } from './components/auth/SetNewPasswordPage';
 import { ResidentPortal } from './components/resident/ResidentPortal';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
+import { isSkKagawadPosition } from './utils/adminAccess';
 
 // Helper: Get default cutoff date (30 days ago)
 const getDefaultCutoffDate = () => {
@@ -130,7 +131,7 @@ export default function App() {
       normalizedRole = 'admin';
     } else if (dbRole === 'barangayadmin' || dbRole === 'admin') {
       // Check if this admin is SK Kagawad — handle any casing/spacing variant
-      const isSkKagawad = position.includes('sk') && position.includes('kagawad');
+      const isSkKagawad = isSkKagawadPosition(position);
       normalizedRole = isSkKagawad ? 'sk_kagawad' : 'official';
     } else {
       normalizedRole = 'resident';
@@ -192,7 +193,7 @@ export default function App() {
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
-            userRole={user.role === 'sk_kagawad' ? 'official' : user.role}
+            userRole={user.role}
           />
         );
       case 'residents':
@@ -212,7 +213,7 @@ export default function App() {
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
-            userRole={user.role === 'sk_kagawad' ? 'official' : user.role}
+            userRole={user.role}
           />
         );
       case 'requests':
@@ -226,7 +227,7 @@ export default function App() {
           />
         );
       case 'announcements':
-        return <AnnouncementManagement />;
+        return <AnnouncementManagement userRole={user.role} />;
       case 'transactions':
         return (user.role === 'admin' || user.role === 'official') ? (
           <TransactionHistory />
@@ -235,7 +236,7 @@ export default function App() {
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
-            userRole={user.role === 'sk_kagawad' ? 'official' : user.role}
+            userRole={user.role}
           />
         );
       default:
@@ -244,7 +245,7 @@ export default function App() {
             adminName={user.name}
             onNavigate={handleDashboardNavigate}
             registrationCutoffDate={registrationCutoffDate}
-            userRole={user.role === 'sk_kagawad' ? 'official' : user.role}
+            userRole={user.role}
           />
         );
     }

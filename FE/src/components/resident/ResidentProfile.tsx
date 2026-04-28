@@ -3,6 +3,7 @@ import { Camera, Edit2, CreditCard } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { toast } from 'sonner';
 import { ViewBarangayID } from './ViewBarangayID';
+import { validateResidentForm, type ValidationErrors } from '../../utils/validation';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,6 +62,7 @@ export function ResidentProfile() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [residentDbSnapshot, setResidentDbSnapshot] = useState<ResidentDbSnapshot | null>(null);
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
 
   useEffect(() => {
     const userType = localStorage.getItem("userType");
@@ -229,11 +231,20 @@ export function ResidentProfile() {
   const handleEditStart = () => {
     setDraftProfileData({ ...profileData });
     setContactError('');
+    setValidationErrors({});
     setIsEditing(true);
   };
 
   const handleChange = (field: keyof ResidentProfileData, value: string) => {
     if (!isEditing) return;
+    setValidationErrors((prev) => {
+      const next = { ...prev };
+      delete next[field];
+      if (field === 'birthdate') delete next.birthday;
+      if (field === 'sex') delete next.gender;
+      if (field === 'street') delete next.streetAddress;
+      return next;
+    });
     setDraftProfileData(prev => ({ ...(prev ?? profileData), [field]: value }));
   };
 
@@ -253,9 +264,19 @@ export function ResidentProfile() {
     if (!isEditing || !draftProfileData) return;
 
     const local = (contactLocal || '').trim();
-    if (!/^09\d{9}$/.test(local)) {
-      setContactError('Enter 11 digits starting with 09');
-      toast.error('Contact number must be exactly 11 digits and start with 09');
+    const errors = validateResidentForm({
+      ...draftProfileData,
+      birthdate: draftProfileData.birthdate,
+      sex: draftProfileData.sex,
+      street: draftProfileData.street,
+      residentType: residentDbSnapshot?.residentType || 'Resident',
+      emergencyContactNumber: draftProfileData.emergencyContactNumber,
+      contactNumber: local,
+    });
+    setValidationErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setContactError(errors.contactNumber || '');
+      toast.error(Object.values(errors)[0]);
       return;
     }
 
@@ -284,9 +305,19 @@ export function ResidentProfile() {
     }
 
     const local = (contactLocal || '').trim();
-    if (!/^09\d{9}$/.test(local)) {
-      setContactError('Enter 11 digits starting with 09');
-      toast.error('Contact number must be exactly 11 digits and start with 09');
+    const errors = validateResidentForm({
+      ...draftProfileData,
+      birthdate: draftProfileData.birthdate,
+      sex: draftProfileData.sex,
+      street: draftProfileData.street,
+      residentType: residentDbSnapshot?.residentType || 'Resident',
+      emergencyContactNumber: draftProfileData.emergencyContactNumber,
+      contactNumber: local,
+    });
+    setValidationErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setContactError(errors.contactNumber || '');
+      toast.error(Object.values(errors)[0]);
       return;
     }
 

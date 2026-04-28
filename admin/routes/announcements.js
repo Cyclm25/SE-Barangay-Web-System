@@ -2,6 +2,7 @@ const router = require("express").Router();
 const pool = require("../db");
 const verifyToken = require("../middleware/verifyToken");
 const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
+const { validateAnnouncementPayload } = require("../utils/validation");
 
 async function generateNextAnnouncementId(db = pool) {
   const result = await db.query(
@@ -168,8 +169,9 @@ router.post("/", verifyToken, requireNonSkWriteAccess, async (req, res) => {
       isScheduled, scheduledPublishDate, expirationDate, images,
     } = req.body;
 
-    if (!title || !body) {
-      return res.status(400).json({ error: "Title and body are required" });
+    const validationError = validateAnnouncementPayload(req.body);
+    if (validationError) {
+      return res.status(400).json({ error: validationError.message, errors: validationError.errors });
     }
 
     const finalIsScheduled = isScheduled === true;
@@ -234,6 +236,11 @@ router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
       title, body, status, targetAudience, isScheduled,
       scheduledPublishDate, expirationDate, images,
     } = req.body;
+
+    const validationError = validateAnnouncementPayload(req.body);
+    if (validationError) {
+      return res.status(400).json({ error: validationError.message, errors: validationError.errors });
+    }
 
     const finalIsScheduled = isScheduled === true;
     const dbStatus = finalIsScheduled ? "Drafts" : status === "draft" ? "Drafts" : "Active";

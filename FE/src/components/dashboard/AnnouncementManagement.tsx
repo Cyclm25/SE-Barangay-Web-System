@@ -51,6 +51,8 @@ import {
 import { toast } from "sonner";
 import { api } from "../../utils/api";
 import imgBarangayLogo from "../../assets/barangaylogo.png";
+import { getStoredAdminViewOnly, isSkKagawadRole } from "../../utils/adminAccess";
+import { validateAnnouncementForm, type ValidationErrors } from "../../utils/validation";
 
 interface Announcement {
   id: string;
@@ -225,7 +227,14 @@ function mapApiAnnouncementToUI(a: any): Announcement {
   };
 }
 
-export function AnnouncementManagement() {
+interface AnnouncementManagementProps {
+  userRole?: "admin" | "official" | "resident" | "sk_kagawad";
+}
+
+export function AnnouncementManagement({
+  userRole,
+}: AnnouncementManagementProps) {
+  const isReadOnly = isSkKagawadRole(userRole) || getStoredAdminViewOnly();
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [customTargetAudiences, setCustomTargetAudiences] = useState<string[]>([]);
@@ -241,6 +250,7 @@ export function AnnouncementManagement() {
   const [isScheduleConfirmOpen, setIsScheduleConfirmOpen] = useState(false);
   const [activeAnnouncementTab, setActiveAnnouncementTab] = useState("posted");
   const previousDraftIdsRef = useRef<string[]>([]);
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
 
   const [formData, setFormData] = useState(createEmptyAnnouncementForm);
 
@@ -251,6 +261,7 @@ export function AnnouncementManagement() {
     setEditingAnnouncement(null);
     setNewCustomAudience("");
     setImageUploadSizes({});
+    setValidationErrors({});
   };
 
   const closeFullScreenImage = () => {
@@ -365,6 +376,10 @@ export function AnnouncementManagement() {
   }, [fullScreenImage]);
 
   const handleImageFileUpload = async (file: File, index: number) => {
+    if (isReadOnly) {
+      toast.error("Access denied: View-only role");
+      return;
+    }
     if (!file) return;
     try {
       const allowedImageTypes = ["image/jpeg", "image/png", "image/webp"];
@@ -407,6 +422,10 @@ export function AnnouncementManagement() {
   };
 
   const handleAddCustomAudience = () => {
+    if (isReadOnly) {
+      toast.error("Access denied: View-only role");
+      return;
+    }
     if (!newCustomAudience.trim()) {
       toast.error("Please enter a custom target audience");
       return;
@@ -421,6 +440,10 @@ export function AnnouncementManagement() {
   };
 
   const toggleTargetAudience = (value: string) => {
+    if (isReadOnly) {
+      toast.error("Access denied: View-only role");
+      return;
+    }
     const normalizedValue = normalizeTargetAudienceValue(value);
 
     setFormData((prev) => {
@@ -453,8 +476,23 @@ export function AnnouncementManagement() {
 
   // FIX: Handles UPDATE via PUT route and logs Transactions
   const handleCreateOrUpdate = async (saveAsDraft: boolean = false) => {
-    if (!formData.title.trim() || !formData.content.trim()) {
-      toast.error("Please fill in all required fields");
+    if (isReadOnly) {
+      toast.error("Access denied: View-only role");
+      return;
+    }
+    const errors = validateAnnouncementForm({
+      title: formData.title,
+      content: formData.content,
+      targetAudience: formData.targetAudience,
+      isScheduled: formData.isScheduled,
+      scheduledDate:
+        formData.isScheduled && formData.scheduledDate
+          ? `${formData.scheduledDate}T${formData.scheduledTime || "00:00"}:00`
+          : "",
+    });
+    setValidationErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      toast.error(Object.values(errors)[0]);
       return;
     }
 
@@ -539,12 +577,20 @@ export function AnnouncementManagement() {
   };
 
   const handleEdit = (announcement: Announcement) => {
+    if (isReadOnly) {
+      toast.error("Access denied: View-only role");
+      return;
+    }
     setEditingAnnouncement(announcement);
     setFormData(buildAnnouncementFormState(announcement));
     setIsDialogOpen(true);
   };
 
   const handleArchive = async (id: string) => {
+    if (isReadOnly) {
+      toast.error("Access denied: View-only role");
+      return;
+    }
     try {
       await api.patch(`/api/announcements/${id}/archive`);
       toast.success("Announcement archived");
@@ -556,6 +602,10 @@ export function AnnouncementManagement() {
   };
 
   const handleDelete = async (id: string) => {
+    if (isReadOnly) {
+      toast.error("Access denied: View-only role");
+      return;
+    }
     try {
       await api.patch(`/api/announcements/${id}/archive`);
       toast.success("Announcement removed");
@@ -567,6 +617,10 @@ export function AnnouncementManagement() {
   };
 
   const handlePublish = async (id: string) => {
+    if (isReadOnly) {
+      toast.error("Access denied: View-only role");
+      return;
+    }
     try {
       const target = announcements.find(a => a.id === id);
       if (target) {
@@ -750,16 +804,18 @@ export function AnnouncementManagement() {
                 <Eye className="w-3 h-3" />
                 View
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleEdit(announcement)}
-                className="gap-1"
-              >
-                <Edit className="w-3 h-3" />
-                Edit
-              </Button>
-              {announcement.status === "draft" && (
+              {!isReadOnly && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEdit(announcement)}
+                  className="gap-1"
+                >
+                  <Edit className="w-3 h-3" />
+                  Edit
+                </Button>
+              )}
+              {!isReadOnly && announcement.status === "draft" && (
                 <Button
                   variant="default"
                   size="sm"
@@ -770,7 +826,7 @@ export function AnnouncementManagement() {
                   Publish
                 </Button>
               )}
-              {announcement.status === "posted" && (
+              {!isReadOnly && announcement.status === "posted" && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="outline" size="sm" className="gap-1">
@@ -927,16 +983,18 @@ export function AnnouncementManagement() {
                 <Eye className="h-3 w-3" />
                 View
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleEdit(announcement)}
-                className="gap-1"
-              >
-                <Edit className="h-3 w-3" />
-                Edit
-              </Button>
-              {announcement.status === "draft" && (
+              {!isReadOnly && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEdit(announcement)}
+                  className="gap-1"
+                >
+                  <Edit className="h-3 w-3" />
+                  Edit
+                </Button>
+              )}
+              {!isReadOnly && announcement.status === "draft" && (
                 <Button
                   variant="default"
                   size="sm"
@@ -947,7 +1005,7 @@ export function AnnouncementManagement() {
                   Publish
                 </Button>
               )}
-              {announcement.status === "posted" && (
+              {!isReadOnly && announcement.status === "posted" && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="outline" size="sm" className="gap-1">
@@ -1073,16 +1131,18 @@ export function AnnouncementManagement() {
                 <Eye className="h-4 w-4" />
                 View
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleEdit(announcement)}
-                className="gap-2"
-              >
-                <Edit className="h-4 w-4" />
-                Edit
-              </Button>
-              {announcement.status === "draft" && (
+              {!isReadOnly && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEdit(announcement)}
+                  className="gap-2"
+                >
+                  <Edit className="h-4 w-4" />
+                  Edit
+                </Button>
+              )}
+              {!isReadOnly && announcement.status === "draft" && (
                 <Button
                   variant="default"
                   size="sm"
@@ -1093,7 +1153,7 @@ export function AnnouncementManagement() {
                   Publish
                 </Button>
               )}
-              {announcement.status === "posted" && (
+              {!isReadOnly && announcement.status === "posted" && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="outline" size="sm" className="gap-2">
@@ -1138,6 +1198,11 @@ export function AnnouncementManagement() {
             <p className="text-gray-600 mt-1">
               Create and manage barangay announcements
             </p>
+            {isReadOnly && (
+              <p className="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700">
+                View Only Access
+              </p>
+            )}
           </div>
 
           <Dialog
@@ -1155,12 +1220,14 @@ export function AnnouncementManagement() {
               requestAnnouncementDialogClose();
             }}
           >
-            <DialogTrigger asChild>
-              <Button className="gap-2 bg-[#2957a1] text-white hover:bg-[#1e3f7a]">
-                <Plus className="w-4 h-4" />
-                ADD NEW ANNOUNCEMENT
-              </Button>
-            </DialogTrigger>
+            {!isReadOnly && (
+              <DialogTrigger asChild>
+                <Button className="gap-2 bg-[#2957a1] text-white hover:bg-[#1e3f7a]">
+                  <Plus className="w-4 h-4" />
+                  ADD NEW ANNOUNCEMENT
+                </Button>
+              </DialogTrigger>
+            )}
 
             <DialogContent
               className="w-[95vw] sm:max-w-[700px] md:max-w-[850px] lg:max-w-[1000px] max-h-[90vh] overflow-y-auto"
@@ -1216,10 +1283,20 @@ export function AnnouncementManagement() {
                     id="title"
                     value={formData.title}
                     onChange={(e) =>
-                      setFormData({ ...formData, title: e.target.value })
+                      {
+                        setValidationErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.title;
+                          return next;
+                        });
+                        setFormData({ ...formData, title: e.target.value.slice(0, 100) });
+                      }
                     }
                     placeholder="Enter announcement title"
+                    maxLength={100}
+                    className={validationErrors.title ? "border-red-500 focus-visible:ring-red-500" : ""}
                   />
+                  {validationErrors.title && <p className="text-xs font-medium text-red-600">{validationErrors.title}</p>}
                 </div>
 
                 {/* Content */}
@@ -1229,11 +1306,21 @@ export function AnnouncementManagement() {
                     id="content"
                     value={formData.content}
                     onChange={(e) =>
-                      setFormData({ ...formData, content: e.target.value })
+                      {
+                        setValidationErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.content;
+                          return next;
+                        });
+                        setFormData({ ...formData, content: e.target.value.slice(0, 1000) });
+                      }
                     }
                     placeholder="Enter announcement content"
                     rows={6}
+                    maxLength={1000}
+                    className={validationErrors.content ? "border-red-500 focus-visible:ring-red-500" : ""}
                   />
+                  {validationErrors.content && <p className="text-xs font-medium text-red-600">{validationErrors.content}</p>}
                 </div>
 
                 {/* ── Images: file upload + URL ── */}
@@ -1439,6 +1526,9 @@ export function AnnouncementManagement() {
                         );
                       })}
                     </div>
+                    {validationErrors.targetAudience && (
+                      <p className="mt-2 text-xs font-medium text-red-600">{validationErrors.targetAudience}</p>
+                    )}
 
                     <p className="mt-3 text-xs text-gray-500">
                       Choose up to 3 target audiences. Selecting All will override the other choices.
@@ -1485,11 +1575,19 @@ export function AnnouncementManagement() {
                             type="date"
                             value={formData.scheduledDate}
                             onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                scheduledDate: e.target.value,
-                              })
+                              {
+                                setValidationErrors((prev) => {
+                                  const next = { ...prev };
+                                  delete next.scheduledDate;
+                                  return next;
+                                });
+                                setFormData({
+                                  ...formData,
+                                  scheduledDate: e.target.value,
+                                });
+                              }
                             }
+                            className={validationErrors.scheduledDate ? "border-red-500 focus-visible:ring-red-500" : ""}
                           />
                         </div>
                         <div className="space-y-2">
@@ -1522,6 +1620,9 @@ export function AnnouncementManagement() {
                           ` at ${new Date(`2000-01-01T${formData.scheduledTime || "00:00"}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
                           : "the selected date"}
                       </p>
+                      {validationErrors.scheduledDate && (
+                        <p className="text-xs font-medium text-red-600">{validationErrors.scheduledDate}</p>
+                      )}
                     </div>
                   )}
                 </div>

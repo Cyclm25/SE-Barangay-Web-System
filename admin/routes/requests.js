@@ -1,24 +1,12 @@
 // requests.js
 const router = require("express").Router();
 const pool = require("../db");
-const nodemailer = require("nodemailer");
 const verifyToken = require("../middleware/verifyToken");
 const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
+const { sendReadyForPickupSms } = require("../utils/sendSmsNotification");
+const { sendReadyForPickupEmail } = require("../utils/sendEmailNotification");
+const { validateRequestPayload } = require("../utils/validation");
 require("dotenv").config();
-
-/* ==============================
-   MAILER CONFIG
-============================== */
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 465),
-  secure: true,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
 
 function buildAppointmentNotificationMessage({
   date,
@@ -62,9 +50,11 @@ router.post("/", async (req, res) => {
   try {
     const { residentId, requestType, requestPurpose } = req.body;
 
-    if (!residentId || !requestType || !requestPurpose) {
+    const validationError = validateRequestPayload(req.body);
+    if (validationError) {
       return res.status(400).json({
-        error: "residentId, requestType, requestPurpose are required",
+        error: validationError.message,
+        errors: validationError.errors,
       });
     }
 
@@ -174,7 +164,9 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
     await client.query("BEGIN");
 
     const current = await client.query(
-      `SELECT "RequestStatus", "ResidentID" FROM request WHERE "RequestID" = $1`,
+      `SELECT "RequestStatus", "ResidentID", "RequestType"
+       FROM request
+       WHERE "RequestID" = $1`,
       [id]
     );
     if (current.rowCount === 0) {
@@ -184,6 +176,7 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
 
     const prevStatus = current.rows[0].RequestStatus;
     const residentId = current.rows[0].ResidentID;
+    const requestType = current.rows[0].RequestType;
 
     let updateQuery = `UPDATE request SET "RequestStatus" = $1`;
     const params = [status];
@@ -229,7 +222,75 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
 
     await client.query("COMMIT");
 
-    return res.json({ message: "Status updated", data: update.rows[0] });
+    let sms = {
+      attempted: false,
+      success: false,
+      skipped: true,
+      reason: "SMS only triggers when transitioning to Ready for Pickup.",
+    };
+    let email = {
+      attempted: false,
+      success: false,
+      skipped: true,
+      reason: "Email only triggers when transitioning to Ready for Pickup.",
+    };
+
+    if (status === "Ready for Pickup" && prevStatus !== "Ready for Pickup") {
+      const residentInfo = await pool.query(
+        `SELECT "FirstName", "MiddleName", "LastName", "ContactNumber", "Email"
+         FROM resident
+         WHERE "ResidentID" = $1
+         LIMIT 1`,
+        [residentId]
+      );
+
+      if (residentInfo.rowCount === 0) {
+        email = await sendReadyForPickupEmail({
+          requestId: Number(id),
+          residentId,
+          residentName: residentId,
+          documentType: requestType,
+          emailAddress: null,
+        });
+        sms = await sendReadyForPickupSms({
+          requestId: Number(id),
+          residentId,
+          residentName: residentId,
+          documentType: requestType,
+          rawPhoneNumber: null,
+        });
+      } else {
+        const resident = residentInfo.rows[0];
+        const residentName = [resident.FirstName, resident.MiddleName, resident.LastName]
+          .filter(Boolean)
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        email = await sendReadyForPickupEmail({
+          requestId: Number(id),
+          residentId,
+          residentName: residentName || residentId,
+          documentType: requestType,
+          emailAddress: resident.Email,
+        });
+
+        sms = await sendReadyForPickupSms({
+          requestId: Number(id),
+          residentId,
+          residentName: residentName || residentId,
+          documentType: requestType,
+          rawPhoneNumber: resident.ContactNumber,
+        });
+      }
+    }
+
+    return res.json({
+      message: "Status updated",
+      data: update.rows[0],
+      email,
+      sms,
+    });
   } catch (err) {
     await client.query("ROLLBACK");
     return res.status(500).json({ error: err.message });

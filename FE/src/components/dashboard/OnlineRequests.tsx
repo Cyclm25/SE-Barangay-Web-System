@@ -309,6 +309,8 @@ export function OnlineRequests({
 
   const handleStatusChange = async (id: string, newStatus: RequestStatus) => {
     try {
+      const token = localStorage.getItem("token") || "";
+
       // Optimistic update
       setRequests(prev =>
         prev.map(req =>
@@ -318,7 +320,10 @@ export function OnlineRequests({
 
       const res = await fetch(`${API_BASE}/requests/${id}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ status: newStatus })
       });
 
@@ -332,7 +337,30 @@ export function OnlineRequests({
 
       await loadInbox(false);
 
-      toast.success(`Moved to ${newStatus}`);
+      if (newStatus === 'Ready for Pickup') {
+        const emailStatus = data?.email;
+        const smsStatus = data?.sms;
+        const emailOk = !!emailStatus?.success;
+        const smsOk = !!smsStatus?.success;
+
+        if (emailOk && smsOk) {
+          toast.success(`Moved to ${newStatus}. Email and SMS sent successfully.`);
+        } else if (emailOk && !smsOk && smsStatus?.attempted) {
+          toast.warning(`Moved to ${newStatus}. Email sent, but SMS failed: ${smsStatus.error || 'Unknown SMS error'}`);
+        } else if (!emailOk && emailStatus?.attempted && smsOk) {
+          toast.warning(`Moved to ${newStatus}. SMS sent, but email failed: ${emailStatus.error || 'Unknown email error'}`);
+        } else if (emailStatus?.attempted || smsStatus?.attempted) {
+          const issues = [
+            emailStatus?.attempted && !emailOk ? `Email failed: ${emailStatus.error || 'Unknown email error'}` : null,
+            smsStatus?.attempted && !smsOk ? `SMS failed: ${smsStatus.error || 'Unknown SMS error'}` : null,
+          ].filter(Boolean).join(' ');
+          toast.warning(`Moved to ${newStatus}, but notifications had issues. ${issues}`);
+        } else {
+          toast.success(`Moved to ${newStatus}`);
+        }
+      } else {
+        toast.success(`Moved to ${newStatus}`);
+      }
 
     } catch {
       toast.error("Server error while updating.");
@@ -346,6 +374,8 @@ export function OnlineRequests({
     }
 
     try {
+      const token = localStorage.getItem("token") || "";
+
       // Optimistic update
       setRequests(prev =>
         prev.map(req =>
@@ -357,7 +387,10 @@ export function OnlineRequests({
 
       const res = await fetch(`${API_BASE}/requests/${denyingRequest.id}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ status: 'Rejected', reason: denyReason })
       });
 
@@ -392,6 +425,7 @@ export function OnlineRequests({
     }
 
     try {
+      const token = localStorage.getItem("token") || "";
       const rawUser = localStorage.getItem("app_user");
       const currentUser = rawUser ? JSON.parse(rawUser) : null;
       const setByAdmin = String(currentUser?.name || currentUser?.id || "Barangay Admin").trim();
@@ -402,7 +436,10 @@ export function OnlineRequests({
 
       const res = await fetch(`${API_BASE}/requests/${appointmentRequest.id}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           status: "Processing",
           appointmentDate: appointmentDetails.date,
@@ -699,11 +736,11 @@ export function OnlineRequests({
                 ) : (
                   <>This will move the request from Pending to Processing.</>
                 )
-              ) : confirmAction?.kind === 'ready' ? (
-                <>This will move the request from Processing to Ready for Pickup.</>
-              ) : (
-                <>This will mark the request as Completed.</>
-              )}
+                ) : confirmAction?.kind === 'ready' ? (
+                <>This will move the request from Processing to Ready for Pickup. The resident will be notified via email and SMS.</>
+                ) : (
+                  <>This will mark the request as Completed.</>
+                )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

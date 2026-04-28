@@ -15,6 +15,7 @@ import {
 import imgImage3 from "../../assets/barangaylogo.png";
 import { formatId } from '../../utils/formatId';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { isAdminViewOnly } from '../../utils/adminAccess';
 
 interface SidebarProps {
   activeTab: string;
@@ -34,7 +35,7 @@ const navigation = [
   { id: 'officials',     label: 'Barangay Officials', icon: User,            roles: ['admin', 'superadmin'] },
   { id: 'requests',      label: 'Online Requests',    icon: FileText,        roles: ['admin', 'official', 'sk_kagawad'] },
   { id: 'announcements', label: 'Announcements',      icon: Megaphone,       roles: ['admin', 'official', 'sk_kagawad'] },
-  { id: 'transactions',  label: 'Activity Logs',       icon: History,         roles: ['admin', 'superadmin'] },
+  { id: 'transactions',  label: 'Activity Logs',      icon: History,         roles: ['admin', 'superadmin'] },
 ];
 
 export function Sidebar({
@@ -49,6 +50,7 @@ export function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const isViewOnly = isAdminViewOnly(userRole, position);
 
   const displayRoleLabel =
     userRole === 'superadmin'
@@ -136,6 +138,11 @@ export function Sidebar({
             <p className="text-[11px] text-white/70 truncate">
               {displayRoleLabel}
             </p>
+            {isViewOnly && (
+              <p className="mt-1 inline-flex rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                View Only
+              </p>
+            )}
           </div>
         </div>
         <Button
@@ -200,7 +207,7 @@ export function MobileHeader({ adminName, onMenuOpen }: MobileHeaderProps) {
     <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
       <div className="flex items-center gap-2">
         <img
-          src="/src/assets/barangaylogo.png"
+          src={imgImage3}
           alt="Barangay Logo"
           className="w-7 h-7 object-cover"
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
