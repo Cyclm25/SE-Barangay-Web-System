@@ -82,21 +82,21 @@ function formatAppointmentTime(value?: string | null) {
 function getStatusUI(statusRaw: string) {
   const c = canonicalStatus(statusRaw);
   if (c === "ready") {
-    return { label: "Ready for Pickup", color: "bg-[#5ce36c]", icon: <CheckCircle className="w-5 h-5" /> };
+    return { label: "Ready for Pickup", color: "bg-[#CA2DE3]", icon: <CheckCircle className="w-5 h-5" /> };
   }
   if (c === "completed") {
-    return { label: "Completed", color: "bg-[#5ce36c]", icon: <CheckCircle className="w-5 h-5" /> };
+    return { label: "Completed", color: "bg-[#5CE36C]", icon: <CheckCircle className="w-5 h-5" /> };
   }
   if (c === "processing") {
-    return { label: "Processing", color: "bg-[#2957a1]", icon: <Clock className="w-5 h-5" /> };
+    return { label: "Processing", color: "bg-[#2957A1]", icon: <Clock className="w-5 h-5" /> };
   }
   if (c === "returned") {
-    return { label: "Processing Completion", color: "bg-[#f97316]", icon: <AlertCircle className="w-5 h-5" /> };
+    return { label: "Processing Completion", color: "bg-[#EF9925]", icon: <AlertCircle className="w-5 h-5" /> };
   }
   if (c === "denied") {
-    return { label: "Denied", color: "bg-[#ea4d48]", icon: <XCircle className="w-5 h-5" /> };
+    return { label: "Denied", color: "bg-[#EA4D48]", icon: <XCircle className="w-5 h-5" /> };
   }
-  return { label: "Pending", color: "bg-[#2957a1]", icon: <Clock className="w-5 h-5" /> };
+  return { label: "Pending", color: "bg-[#FFDA5E]", icon: <Clock className="w-5 h-5" /> };
 }
 
 function matchesFilter(request: DBRequest, filter: FilterStatus): boolean {

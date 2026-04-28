@@ -535,12 +535,12 @@ export function OnlineRequests({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Pending': return 'bg-yellow-100 text-yellow-800';
-      case 'Processing': return 'bg-blue-100 text-blue-800';
-      case 'Processing Completion': return 'bg-orange-100 text-orange-800';
-      case 'Ready for Pickup': return 'bg-green-100 text-green-800';
-      case 'Completed': return 'bg-emerald-100 text-emerald-900';
-      case 'Rejected': return 'bg-red-100 text-red-800';
+      case 'Pending': return 'bg-[#FFDA5E]/30 text-[#8a7000]';
+      case 'Processing': return 'bg-[#2957A1]/20 text-[#2957A1]';
+      case 'Processing Completion': return 'bg-[#EF9925]/20 text-[#7a4d00]';
+      case 'Ready for Pickup': return 'bg-[#CA2DE3]/20 text-[#7a008a]';
+      case 'Completed': return 'bg-[#5CE36C]/30 text-[#1a6b27]';
+      case 'Rejected': return 'bg-[#EA4D48]/20 text-[#8a0a0a]';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -548,18 +548,25 @@ export function OnlineRequests({
   const getTabCountColor = () => {
     switch (statusFilter) {
       case 'Pending':
-        return 'bg-red-600 text-white';
+        return 'text-white' ; // yellow — use inline style below
       case 'Processing':
-        return 'bg-blue-600 text-white';
+        return 'text-white bg-[#2957A1]';
+      case 'Processing Completion':
+        return 'text-white bg-[#EF9925]';
       case 'Ready for Pickup':
-        return 'bg-green-600 text-white';
+        return 'text-white bg-[#CA2DE3]';
       case 'Completed':
-        return 'bg-emerald-800 text-white';
+        return 'text-white bg-[#22a435]';
       case 'Rejected':
-        return 'bg-red-600 text-white';
+        return 'text-white bg-[#EA4D48]';
       default:
-        return 'bg-red-600 text-white';
+        return 'text-white bg-[#2957A1]';
     }
+  };
+
+  const getTabCountStyle = (): React.CSSProperties => {
+    if (statusFilter === 'Pending') return { backgroundColor: '#b8940a' };
+    return {};
   };
 
   const getStatusIcon = (status: string) => {
@@ -689,14 +696,14 @@ export function OnlineRequests({
                       )}
                       {request.status === 'Processing' && !isReadOnly && (
                         <>
-                          <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready</Button>
+                          <Button size="sm" className="bg-purple-600 hover:bg-green-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready</Button>
                         </>
                       )}
                       {request.status === 'Processing Completion' && isOtherDocuments && !isReadOnly && (
                         <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={() => setAppointmentRequest(request)}>Process</Button>
                       )}
                       {request.status === 'Ready for Pickup' && !isReadOnly && (
-                        <Button size="sm" className="bg-gray-600 hover:bg-gray-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'complete', isOtherDocuments })}>Complete</Button>
+                        <Button size="sm" className="bg-green-600 hover:bg-gray-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'complete', isOtherDocuments })}>Complete</Button>
                       )}
                     </div>
                   </TableCell>
@@ -913,7 +920,7 @@ export function OnlineRequests({
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 auto-rows-fr">
         <Card
-          className={`h-full border-yellow-400 bg-white transition-all ${statusFilter === 'Pending' ? 'border-yellow-500 ring-2 ring-yellow-300 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`}
+          className={`h-full bg-white transition-all ${statusFilter === 'Pending' ? 'ring-2 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#FFDA5E', ...(statusFilter === 'Pending' ? { outlineColor: '#FFDA5E' } : {}) }}
           onClick={() => {
             if (statusFilter !== 'Pending') {
               setStatusFilter('Pending');
@@ -921,18 +928,18 @@ export function OnlineRequests({
             }
           }}
         >
-          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center ${statusFilter === 'Pending' ? 'bg-yellow-100' : 'bg-yellow-50/30'}`}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className={`text-base sm:text-lg font-bold ${statusFilter === 'Pending' ? 'text-yellow-900' : 'text-yellow-800'}`}>Pending</p>
-                <p className="text-xl sm:text-2xl leading-tight font-semibold text-yellow-900">{pendingRequests.length}</p>
+          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center`} style={{ backgroundColor: statusFilter === 'Pending' ? '#FFDA5E33' : '#FFDA5E08' }}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className="text-base sm:text-lg font-bold" style={{ color: '#7a5e00' }}>Pending</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold" style={{ color: '#7a5e00' }}>{pendingRequests.length}</p>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#FFDA5E44' }}>
+                <Clock className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#FFDA5E' }} />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card
-          className={`h-full border-blue-400 bg-white transition-all ${statusFilter === 'Processing' ? 'border-blue-500 ring-2 ring-blue-300 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`}
+          className={`h-full bg-white transition-all ${statusFilter === 'Processing' ? 'ring-2 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#2957A1' }}
           onClick={() => {
             if (statusFilter !== 'Processing') {
               setStatusFilter('Processing');
@@ -940,18 +947,18 @@ export function OnlineRequests({
             }
           }}
         >
-          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center ${statusFilter === 'Processing' ? 'bg-blue-100' : 'bg-blue-50/30'}`}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className={`text-base sm:text-lg font-bold ${statusFilter === 'Processing' ? 'text-blue-900' : 'text-blue-800'}`}>Processing</p>
-                <p className="text-xl sm:text-2xl leading-tight font-semibold text-blue-900">{processingRequests.length}</p>
+          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center`} style={{ backgroundColor: statusFilter === 'Processing' ? '#2957A133' : '#2957A108' }}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className="text-base sm:text-lg font-bold" style={{ color: '#1a3870' }}>Processing</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold" style={{ color: '#1a3870' }}>{processingRequests.length}</p>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-blue-100 rounded-lg flex items-center justify-center">
-                <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#2957A133' }}>
+                <FileText className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#2957A1' }} />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card
-          className={`h-full border-green-400 bg-white transition-all ${statusFilter === 'Ready for Pickup' ? 'border-green-500 ring-2 ring-green-300 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`}
+          className={`h-full bg-white transition-all ${statusFilter === 'Ready for Pickup' ? 'ring-2 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#CA2DE3' }}
           onClick={() => {
             if (statusFilter !== 'Ready for Pickup') {
               setStatusFilter('Ready for Pickup');
@@ -959,25 +966,25 @@ export function OnlineRequests({
             }
           }}
         >
-          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center ${statusFilter === 'Ready for Pickup' ? 'bg-green-100' : 'bg-green-50/30'}`}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className={`text-base sm:text-lg font-bold ${statusFilter === 'Ready for Pickup' ? 'text-green-900' : 'text-green-800'}`}>Ready for Pickup</p>
-                <p className="text-xl sm:text-2xl leading-tight font-semibold text-green-900">{readyRequests.length}</p>
+          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center`} style={{ backgroundColor: statusFilter === 'Ready for Pickup' ? '#CA2DE333' : '#CA2DE308' }}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className="text-base sm:text-lg font-bold" style={{ color: '#7a008a' }}>Ready for Pickup</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold" style={{ color: '#7a008a' }}>{readyRequests.length}</p>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-green-100 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#CA2DE333' }}>
+                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#CA2DE3' }} />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card
-          className={`h-full border-emerald-700 bg-white transition-all ${statusFilter === 'Completed' ? 'border-emerald-700 ring-2 ring-emerald-400 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`}
+          className={`h-full bg-white transition-all ${statusFilter === 'Completed' ? 'ring-2 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#5CE36C' }}
           onClick={() => statusFilter !== 'Completed' && setStatusFilter('Completed')}
         >
-          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center ${statusFilter === 'Completed' ? 'bg-emerald-100' : 'bg-emerald-50/30'}`}>
+          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center`} style={{ backgroundColor: statusFilter === 'Completed' ? '#5CE36C33' : '#5CE36C08' }}>
             <div className="w-full flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className={`text-base sm:text-lg font-bold ${statusFilter === 'Completed' ? 'text-emerald-900' : 'text-emerald-800'}`}>Completed</p>
-                <p className="text-xl sm:text-2xl leading-tight font-semibold text-emerald-900">{completedRequests.length}</p>
+                <p className="text-base sm:text-lg font-bold" style={{ color: '#1a6b27' }}>Completed</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold" style={{ color: '#1a6b27' }}>{completedRequests.length}</p>
               </div>
               <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-emerald-100 rounded-lg flex items-center justify-center">
                 <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-700" />
@@ -986,22 +993,22 @@ export function OnlineRequests({
           </CardContent>
         </Card>
         <Card
-          className={`h-full border-red-500 bg-white transition-all ${statusFilter === 'Rejected' ? 'border-red-600 ring-2 ring-red-300 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`}
+          className={`h-full bg-white transition-all ${statusFilter === 'Rejected' ? 'ring-2 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#EA4D48' }}
           onClick={() =>
             statusFilter !== 'Rejected' && setStatusFilter('Rejected')
           }
         >
-          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center ${statusFilter === 'Rejected' ? 'bg-red-100' : 'bg-red-50/30'}`}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className={`text-base sm:text-lg font-bold ${statusFilter === 'Rejected' ? 'text-red-900' : 'text-red-800'}`}>Denied</p>
-                <p className="text-xl sm:text-2xl leading-tight font-semibold text-red-900">{deniedRequests.length}</p>
+          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center`} style={{ backgroundColor: statusFilter === 'Rejected' ? '#EA4D4833' : '#EA4D4808' }}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className="text-base sm:text-lg font-bold" style={{ color: '#8a0a0a' }}>Denied</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold" style={{ color: '#8a0a0a' }}>{deniedRequests.length}</p>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-red-100 rounded-lg flex items-center justify-center">
-                <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#EA4D4833' }}>
+                <XCircle className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: '#EA4D48' }} />
               </div>
             </div>
           </CardContent>
         </Card>
         <Card
-          className={`h-full border-orange-400 bg-white transition-all ${statusFilter === 'Processing Completion' ? 'border-orange-500 ring-2 ring-orange-300 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`}
+          className={`h-full bg-white transition-all ${statusFilter === 'Processing Completion' ? 'ring-2 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#EF9925' }}
           onClick={() => {
             if (statusFilter !== 'Processing Completion') setStatusFilter('Processing Completion');
             if (activeTab !== 'other') {
@@ -1010,8 +1017,8 @@ export function OnlineRequests({
             }
           }}
         >
-          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center ${statusFilter === 'Processing Completion' ? 'bg-orange-100' : 'bg-orange-50/30'}`}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className={`text-base sm:text-lg font-bold ${statusFilter === 'Processing Completion' ? 'text-orange-900' : 'text-orange-800'}`}>Processing Completion</p>
-                <p className="text-xl sm:text-2xl leading-tight font-semibold text-orange-900">{returnedRequests.length}</p>
+          <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center`} style={{ backgroundColor: statusFilter === 'Processing Completion' ? '#EF992533' : '#EF992508' }}>            <div className="w-full flex items-center justify-between gap-2">              <div className="min-w-0">                <p className="text-base sm:text-lg font-bold" style={{ color: '#7a4d00' }}>Processing Completion</p>
+                <p className="text-xl sm:text-2xl leading-tight font-semibold" style={{ color: '#7a4d00' }}>{returnedRequests.length}</p>
               </div>
               <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-orange-100 rounded-lg flex items-center justify-center">
                 <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" />
@@ -1032,7 +1039,7 @@ export function OnlineRequests({
             <div className="flex items-center gap-2">
               <span>Certificates</span>
               {certificateCount > 0 && (
-                <span className={`min-w-[26px] h-6 px-2 rounded-full text-sm font-semibold flex items-center justify-center ${getTabCountColor()}`}>
+                <span className={`min-w-[26px] h-6 px-2 rounded-full text-sm font-semibold flex items-center justify-center ${getTabCountColor()}`} style={getTabCountStyle()}>
                   {certificateCount}
                 </span>
               )}
@@ -1043,7 +1050,7 @@ export function OnlineRequests({
             <div className="flex items-center gap-2">
               <span>Other Documents</span>
               {otherCount > 0 && (
-                <span className={`min-w-[26px] h-6 px-2 rounded-full text-sm font-semibold flex items-center justify-center ${getTabCountColor()}`}>
+                <span className={`min-w-[26px] h-6 px-2 rounded-full text-sm font-semibold flex items-center justify-center ${getTabCountColor()}`} style={getTabCountStyle()}>
                   {otherCount}
                 </span>
               )}
@@ -1737,9 +1744,3 @@ export function OnlineRequests({
     </div>
   );
 }
-
-
-
-
-
-
