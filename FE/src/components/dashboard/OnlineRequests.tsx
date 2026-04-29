@@ -688,15 +688,15 @@ export function OnlineRequests({
                       {request.status === 'Pending' && !isReadOnly && (
                         <>
                           <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'process', isOtherDocuments })}>Process</Button>
-                          {isOtherDocuments && (
-                            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white text-xs" onClick={() => setReturningRequest(request)}>Process for Completion</Button>
-                          )}
                           <Button size="sm" variant="destructive" className="text-xs" onClick={() => setDenyingRequest(request)}>Deny</Button>
                         </>
                       )}
                       {request.status === 'Processing' && !isReadOnly && (
                         <>
-                          <Button size="sm" className="bg-purple-600 hover:bg-green-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready</Button>
+                          <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white text-xs" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready</Button>
+                          {isOtherDocuments && (
+                            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white text-xs" onClick={() => setReturningRequest(request)}>Process for Completion</Button>
+                          )}
                         </>
                       )}
                       {request.status === 'Processing Completion' && isOtherDocuments && !isReadOnly && (
@@ -751,15 +751,15 @@ export function OnlineRequests({
                 {request.status === 'Pending' && !isReadOnly && (
                   <>
                     <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-8" onClick={() => setConfirmAction({ request, kind: 'process', isOtherDocuments })}>Process</Button>
-                    {isOtherDocuments && (
-                      <Button size="sm" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-xs h-8" onClick={() => setReturningRequest(request)}>Process for Completion</Button>
-                    )}
                     <Button size="sm" variant="destructive" className="flex-1 text-xs h-8" onClick={() => setDenyingRequest(request)}>Deny</Button>
                   </>
                 )}
                 {request.status === 'Processing' && !isReadOnly && (
                   <>
                     <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs h-8" onClick={() => setConfirmAction({ request, kind: 'ready', isOtherDocuments })}>Ready for Pickup</Button>
+                    {isOtherDocuments && (
+                      <Button size="sm" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-xs h-8" onClick={() => setReturningRequest(request)}>Process for Completion</Button>
+                    )}
                   </>
                 )}
                 {request.status === 'Processing Completion' && isOtherDocuments && !isReadOnly && (
