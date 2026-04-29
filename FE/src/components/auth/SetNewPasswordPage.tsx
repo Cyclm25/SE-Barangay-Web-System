@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { Eye, EyeOff, Check, X, MapPin } from "lucide-react";
+import { Eye, EyeOff, Check, X, MapPin, KeyRound, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import imgImage2 from "../../assets/barangaylogo.png";
 import { api } from "../../utils/api";
@@ -28,6 +28,11 @@ export function SetNewPasswordPage({ residentAccountId, otpCode, identity, onPas
   const [isLoading, setIsLoading] = useState(false);
 
   const passwordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
+
+  // Password strength checks
+  const hasMinLength = newPassword.length >= 8;
+  const hasLetters = /[A-Za-z]/.test(newPassword);
+  const hasNumbers = /[0-9]/.test(newPassword);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +78,15 @@ export function SetNewPasswordPage({ residentAccountId, otpCode, identity, onPas
     }
   };
 
+  const StrengthIndicator = ({ met, label }: { met: boolean; label: string }) => (
+    <div className={`flex items-center gap-1.5 text-[12px] font-medium transition-colors ${met ? "text-green-600" : "text-gray-400"}`}>
+      <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-all ${met ? "bg-green-100" : "bg-gray-100"}`}>
+        {met ? <Check className="w-2.5 h-2.5" /> : <X className="w-2.5 h-2.5" />}
+      </div>
+      <span>{label}</span>
+    </div>
+  );
+
   return (
     <div
       className="min-h-screen w-screen flex flex-col md:flex-row"
@@ -80,7 +94,7 @@ export function SetNewPasswordPage({ residentAccountId, otpCode, identity, onPas
         background: "linear-gradient(135deg, #dde9f7 0%, #eaf1fb 40%, #f0f5fc 70%, #e2ecf8 100%)",
       }}
     >
-      {/* Left Panel — Branding (50%) */}
+      {/* ── Left Panel — Branding (50%) ── */}
       <div className="w-full md:w-1/2 flex items-center justify-center p-6 md:p-10">
         <div
           className="w-full max-w-[480px] bg-white rounded-2xl shadow-sm p-8 sm:p-10 flex flex-col items-center relative overflow-hidden"
@@ -96,6 +110,7 @@ export function SetNewPasswordPage({ residentAccountId, otpCode, identity, onPas
             style={{ background: "rgba(41,87,161,0.04)" }}
           />
 
+          {/* Logo */}
           <img
             src={imgImage2}
             alt="Barangay Logo"
@@ -121,10 +136,49 @@ export function SetNewPasswordPage({ residentAccountId, otpCode, identity, onPas
             <MapPin className="w-3.5 h-3.5 text-[#2957a1]" />
             <p className="text-[#2957a1] text-[12px] font-semibold">Zone 14, District 2 Tondo, Manila</p>
           </div>
+
+          {/* Info cards */}
+          <div className="w-full mt-8 space-y-3 relative z-10">
+            <div
+              className="w-full rounded-xl px-5 py-4 flex items-start gap-4"
+              style={{ background: "rgba(41,87,161,0.06)", border: "1px solid rgba(41,87,161,0.1)" }}
+            >
+              <div
+                className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                style={{ background: "rgba(41,87,161,0.12)" }}
+              >
+                <KeyRound className="w-4 h-4 text-[#2957a1]" />
+              </div>
+              <div>
+                <p className="text-[#1e3f7a] text-[13px] font-bold mb-0.5">Secure Password Reset</p>
+                <p className="text-[#2957a1]/70 text-[12px] leading-relaxed">
+                  Your account security is our top priority. Use a strong, unique password.
+                </p>
+              </div>
+            </div>
+
+            <div
+              className="w-full rounded-xl px-5 py-4 flex items-start gap-4"
+              style={{ background: "rgba(41,87,161,0.06)", border: "1px solid rgba(41,87,161,0.1)" }}
+            >
+              <div
+                className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                style={{ background: "rgba(41,87,161,0.12)" }}
+              >
+                <ShieldCheck className="w-4 h-4 text-[#2957a1]" />
+              </div>
+              <div>
+                <p className="text-[#1e3f7a] text-[13px] font-bold mb-0.5">Identity Verified</p>
+                <p className="text-[#2957a1]/70 text-[12px] leading-relaxed">
+                  Your OTP has been validated. You can now safely set your new password.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Divider — vertical on desktop, horizontal on mobile */}
+      {/* ── Divider ── */}
       <div
         className="hidden md:block w-px self-stretch my-10"
         style={{ background: "rgba(41,87,161,0.12)" }}
@@ -134,25 +188,30 @@ export function SetNewPasswordPage({ residentAccountId, otpCode, identity, onPas
         style={{ background: "rgba(41,87,161,0.12)" }}
       />
 
-      {/* Right Panel — Form (50%) */}
+      {/* ── Right Panel — Form (50%) ── */}
       <div className="w-full md:w-1/2 flex items-center justify-center p-6 md:p-10">
         <div
-          className="w-full max-w-[480px] bg-white rounded-2xl shadow-md p-8 sm:p-10"
+          className="w-full max-w-[440px] bg-white rounded-2xl shadow-md p-8 sm:p-10"
           style={{ border: "1px solid rgba(41,87,161,0.08)" }}
         >
-          <h1 className="text-[#1e3f7a] text-[24px] sm:text-[28px] font-bold text-center mb-2">
+          {/* Header */}
+          <h1 className="text-[#1e3f7a] text-[26px] sm:text-[30px] font-bold text-center mb-2">
             Set New Password
           </h1>
 
-          <p className="text-center text-[13px] text-gray-500 mb-7 leading-relaxed">
-            We found your Gmail:{" "}
-            <span className="font-semibold text-[#2957a1]">{identity.email}</span>
-            <br />
-            Are you{" "}
-            <span className="font-semibold text-gray-700">{identity.firstName || "this user"}</span>{" "}
-            with the username{" "}
-            <span className="font-semibold text-gray-700">{identity.username}</span>?
-          </p>
+          {/* Identity confirmation */}
+          <div
+            className="rounded-xl px-4 py-3 mb-6 text-center"
+            style={{ background: "rgba(41,87,161,0.05)", border: "1px solid rgba(41,87,161,0.1)" }}
+          >
+            <p className="text-[12px] text-gray-500 mb-1">Resetting password for</p>
+            <p className="text-[14px] font-bold text-[#1e3f7a]">
+              {identity.firstName || "this user"}
+              <span className="font-normal text-gray-500 mx-1">·</span>
+              <span className="text-[#2957a1]">@{identity.username}</span>
+            </p>
+            <p className="text-[12px] text-gray-500 mt-1">{identity.email}</p>
+          </div>
 
           <form onSubmit={handleResetPassword} className="space-y-5">
             {/* New Password */}
@@ -163,18 +222,20 @@ export function SetNewPasswordPage({ residentAccountId, otpCode, identity, onPas
                   type={showNewPassword ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full h-[48px] border-[#2957a1] rounded-lg text-[#1e3f7a] text-[14px] px-4 pr-11 focus:ring-2 focus:ring-[#2957a1]/20"
+                  className="w-full h-[48px] bg-white border-2 border-[#2957a1]/30 focus:border-[#2957a1] rounded-xl text-[#1e3f7a] text-[15px] px-4 pr-12 transition-all"
                   placeholder="Enter new password"
                   disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#2957a1] transition-colors"
+                  className="absolute inset-y-0 right-4 flex items-center justify-center text-[#2957a1]/60 hover:text-[#2957a1] transition-colors"
+                  tabIndex={-1}
                 >
                   {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+
             </div>
 
             {/* Confirm Password */}
@@ -185,44 +246,54 @@ export function SetNewPasswordPage({ residentAccountId, otpCode, identity, onPas
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full h-[48px] border-[#2957a1] rounded-lg text-[#1e3f7a] text-[14px] px-4 pr-11 focus:ring-2 focus:ring-[#2957a1]/20"
+                  className="w-full h-[48px] bg-white border-2 border-[#2957a1]/30 focus:border-[#2957a1] rounded-xl text-[#1e3f7a] text-[15px] px-4 pr-12 transition-all"
                   placeholder="Confirm new password"
                   disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#2957a1] transition-colors"
+                  className="absolute inset-y-0 right-4 flex items-center justify-center text-[#2957a1]/60 hover:text-[#2957a1] transition-colors"
+                  tabIndex={-1}
                 >
                   {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+
+              {/* Match indicator */}
+              {confirmPassword && (
+                <div
+                  className={`flex items-center gap-2 text-[12px] font-medium pt-1 pl-1 ${
+                    passwordsMatch ? "text-green-600" : "text-red-500"
+                  }`}
+                >
+                  <div
+                    className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${
+                      passwordsMatch ? "bg-green-100" : "bg-red-100"
+                    }`}
+                  >
+                    {passwordsMatch ? <Check className="w-2.5 h-2.5" /> : <X className="w-2.5 h-2.5" />}
+                  </div>
+                  <span>Passwords {passwordsMatch ? "match" : "do not match"}</span>
+                </div>
+              )}
             </div>
 
-            {/* Password match indicator */}
-            {confirmPassword && (
-              <div
-                className={`flex items-center gap-2 text-xs font-medium ${
-                  passwordsMatch ? "text-green-600" : "text-red-500"
-                }`}
-              >
-                {passwordsMatch ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
-                <span>Passwords {passwordsMatch ? "match" : "do not match"}</span>
-              </div>
-            )}
-
-            {/* Submit button */}
+            {/* Submit */}
             <Button
               type="submit"
               disabled={isLoading || (confirmPassword.length > 0 && !passwordsMatch)}
-              className="w-full h-[48px] rounded-full text-white text-[16px] font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all mt-2"
+              className="w-full h-[50px] rounded-full text-white text-[16px] font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all mt-2 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
               style={{
                 background:
                   isLoading || (confirmPassword.length > 0 && !passwordsMatch)
                     ? "#9ca3af"
                     : "linear-gradient(90deg, #22c55e 0%, #16a34a 100%)",
                 border: "none",
-                boxShadow: "0 4px 14px rgba(34,197,94,0.35)",
+                boxShadow:
+                  isLoading || (confirmPassword.length > 0 && !passwordsMatch)
+                    ? "none"
+                    : "0 4px 14px rgba(34,197,94,0.35)",
               }}
             >
               {isLoading ? "Resetting..." : "Reset Password"}

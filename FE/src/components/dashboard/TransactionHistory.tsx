@@ -264,7 +264,7 @@ export function TransactionHistory() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-base sm:text-lg font-bold text-gray-700">Total Transactions</p>
+                <p className="text-base sm:text-lg font-bold text-gray-700">Total Activities</p>
                 <p className="text-xl sm:text-2xl leading-tight font-semibold text-gray-900">
                   {loading ? "…" : computedStats.total}
                 </p>
@@ -316,7 +316,7 @@ export function TransactionHistory() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
               <History className="w-5 h-5" />
-              All Transactions
+              All Activites
             </CardTitle>
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
