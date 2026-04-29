@@ -841,4 +841,61 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
   }
 });
 
+router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rawStatus = req.body?.status;
+    const statusValue = typeof rawStatus === "string" ? rawStatus.trim().toLowerCase() : "";
+
+    let normalizedStatus = null;
+    if (rawStatus === true || statusValue === "true" || statusValue === "active") {
+      normalizedStatus = "Active";
+    } else if (rawStatus === false || statusValue === "false" || statusValue === "inactive") {
+      normalizedStatus = "Inactive";
+    }
+
+    if (!normalizedStatus) {
+      return res.status(400).json({ error: "Status must be Active or Inactive." });
+    }
+
+    const residentResult = await pool.query(
+      `
+      UPDATE resident
+      SET "status" = $1
+      WHERE TRIM("ResidentID") = TRIM($2)
+      RETURNING "ResidentID", "ResidentAccountID", "status"
+      `,
+      [normalizedStatus, id]
+    );
+
+    if (residentResult.rowCount === 0) {
+      return res.status(404).json({ error: "Resident not found." });
+    }
+
+    const resident = residentResult.rows[0];
+
+    if (resident?.ResidentAccountID) {
+      await pool.query(
+        `
+        UPDATE residentaccount
+        SET "status" = $1
+        WHERE TRIM("ResidentAccountID") = TRIM($2)
+        `,
+        [normalizedStatus, resident.ResidentAccountID]
+      );
+    }
+
+    return res.json({
+      message: `Resident ${normalizedStatus === "Active" ? "reactivated" : "deactivated"} successfully.`,
+      resident: {
+        residentId: resident.ResidentID,
+        status: resident.status,
+      },
+    });
+  } catch (err) {
+    console.error("PATCH /residents/:id/status Error:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

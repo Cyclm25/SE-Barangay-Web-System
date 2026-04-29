@@ -498,9 +498,14 @@ export function BarangayOfficials() {
         }
       );
     } catch (err) {
-      console.error(err);
+      console.error("Failed to PATCH official status:", err);
+      const backendMessage =
+        (err as any)?.response?.data?.message ||
+        (err as any)?.response?.data?.error ||
+        (err as any)?.message ||
+        "Unknown error";
       toast.error("Failed to update status", {
-        description: "Check your backend PATCH route for status updates.",
+        description: backendMessage,
       });
     } finally {
       setLoading(false);

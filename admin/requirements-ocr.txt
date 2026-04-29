@@ -1,0 +1,5 @@
+# PaddleOCR currently requires a Python version supported by paddlepaddle.
+# Use Python 3.10, 3.11, or 3.12 for the OCR runtime.
+paddleocr
+paddlepaddle==3.2.2
+numpy<2.4,>=1.24

@@ -138,6 +138,7 @@ safeUse("/api/transactions", "./routes/transactions", "transactions");
 safeUse("/api/otp", "./routes/otp", "otp");
 safeUse("/api/stats", "./routes/stats", "stats");
 safeUse("/api/upload", "./routes/upload", "upload");
+safeUse("/api/id-ocr", "./routes/idOcr", "id-ocr");
 
 /* =============================================
    5. EXTRA ROUTES

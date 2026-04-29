@@ -103,6 +103,7 @@ router.post("/login", async (req, res) => {
         ? "barangayadmin"
         : "resident";
 
+    const tokenTtl = String(process.env.JWT_EXPIRES_IN || "7d").trim() || "7d";
     const token = jwt.sign(
       {
         accountId: ResidentAccountID,
@@ -114,7 +115,7 @@ router.post("/login", async (req, res) => {
         superAdminId: SuperAdminID,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "8h" }
+      { expiresIn: tokenTtl }
     );
 
     return res.json({

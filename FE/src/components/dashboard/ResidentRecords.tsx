@@ -51,12 +51,21 @@ import dayjs from "dayjs";
 import { cn } from "../../utils/cn";
 import { ProfileImageUpload } from "../ui/ProfileImageUpload";
 import { api } from "../../utils/api";
+import { cleanupOcrText } from "../../utils/ocrCleanup";
 
 // Helper: Get default cutoff date (30 days ago)
+const toLocalYmd = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+const fromYmdLocal = (ymd: string) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+};
+
 const getDefaultCutoffDate = () => {
   const date = new Date();
   date.setDate(date.getDate() - 30);
-  return date.toISOString().split('T')[0];
+  return toLocalYmd(date);
 };
 
 interface ResidentRecordsProps {
@@ -254,21 +263,31 @@ const calculateAge = (birthdate: any) => {
 
 const toUppercaseInput = (value: string) => value.toUpperCase();
 
+const isOcrLabelFragment = (value: string) => {
+  const cleaned = value.toUpperCase().replace(/[^A-Z\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!cleaned) return true;
+  const labelWords = [
+    "LAST NAME", "GIVEN NAMES", "MIDDLE NAME", "DATE OF BIRTH", "ADDRESS",
+    "SURNAME", "FIRST NAME", "NAME", "ID NO", "VALID UNTIL", "DATE OF ISSUE",
+  ];
+  return labelWords.some((label) => cleaned === label || cleaned.endsWith(` ${label}`));
+};
+
 const parseOcrField = (text: string, labels: string[]) => {
   for (const label of labels) {
     const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const inlineMatch = text.match(
-      new RegExp(`${escapedLabel}\\s*[:\\-]?\\s*([A-Z][A-Z\\s,'.-]{1,60})`, "i")
+      new RegExp(`${escapedLabel}\\s*[:\\-]?\\s*([^\\n]{2,90})`, "i")
     );
-    if (inlineMatch?.[1]) {
-      return inlineMatch[1].trim();
+    if (inlineMatch?.[1] && !isOcrLabelFragment(inlineMatch[1])) {
+      return inlineMatch[1].replace(/\s{2,}/g, " ").trim();
     }
 
     const nextLineMatch = text.match(
-      new RegExp(`${escapedLabel}\\s*[:\\-]?\\s*\\n\\s*([A-Z][A-Z\\s,'.-]{1,60})`, "i")
+      new RegExp(`${escapedLabel}\\s*[:\\-]?\\s*\\n\\s*([^\\n]{2,90})`, "i")
     );
-    if (nextLineMatch?.[1]) {
-      return nextLineMatch[1].trim();
+    if (nextLineMatch?.[1] && !isOcrLabelFragment(nextLineMatch[1])) {
+      return nextLineMatch[1].replace(/\s{2,}/g, " ").trim();
     }
   }
 
@@ -420,8 +439,9 @@ const parsePhilippineDriversLicense = (text: string) => {
     lastName?: string;
     houseNo?: string;
     streetAddress?: string;
-    gender?: "Male" | "Female";
+    gender?: "Male" | "Female" | "Unknown";
     birthday?: string;
+    expirationDate?: string;
   } = {};
 
   const skipNameFragments = [
@@ -518,6 +538,47 @@ const parsePhilippineDriversLicense = (text: string) => {
     result.gender = "Male";
   }
 
+  if (!result.gender) {
+    const licenseSexMatch =
+      normalizedText.match(/\bSEX\s+DATE\s+OF\s+BIRTH[\s\S]{0,120}?\b([MF])\s+\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\b/) ||
+      normalizedText.match(/\bSEX[\s:]+([MF])\b/) ||
+      normalizedText.match(/\b([MF])\s+\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\b/) ||
+      normalizedText.match(/\b([MF])\s+\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/);
+
+    if (licenseSexMatch?.[1] === "F") {
+      result.gender = "Female";
+    } else if (licenseSexMatch?.[1] === "M") {
+      result.gender = "Male";
+    }
+  }
+
+  if (!result.gender) {
+    const sexLabelIndex = lines.findIndex((line) => line.includes("SEX"));
+    const valueLine = sexLabelIndex >= 0 ? lines[sexLabelIndex + 1] || "" : "";
+    const valueTokens = valueLine.split(/\s+/).filter(Boolean);
+    const sexToken =
+      valueTokens.find((token) => token === "M" || token === "F" || token === "MALE" || token === "FEMALE") ||
+      "";
+
+    if (sexToken === "F" || sexToken === "FEMALE") {
+      result.gender = "Female";
+    } else if (sexToken === "M" || sexToken === "MALE") {
+      result.gender = "Male";
+    }
+  }
+
+  const dlExpiryMatch =
+    normalizedText.match(/\bEXPIRATION\s+DATE[\s:]*([0-9]{4}[\/\-][0-9]{1,2}[\/\-][0-9]{1,2})\b/) ||
+    normalizedText.match(/\bEXPIRY\s+DATE[\s:]*([0-9]{4}[\/\-][0-9]{1,2}[\/\-][0-9]{1,2})\b/) ||
+    normalizedText.match(/\bVALID\s+(?:UNTIL|THRU)[\s:]*([0-9]{4}[\/\-][0-9]{1,2}[\/\-][0-9]{1,2})\b/) ||
+    normalizedText.match(/\bEXPIRATION\s+DATE[\s:]*([0-9]{1,2}[\/\-][0-9]{1,2}[\/\-][0-9]{2,4})\b/) ||
+    normalizedText.match(/\bEXPIRY\s+DATE[\s:]*([0-9]{1,2}[\/\-][0-9]{1,2}[\/\-][0-9]{2,4})\b/) ||
+    normalizedText.match(/\bVALID\s+(?:UNTIL|THRU)[\s:]*([0-9]{1,2}[\/\-][0-9]{1,2}[\/\-][0-9]{2,4})\b/) ||
+    normalizedText.match(/\bEXP\.*\s*DATE[\s:]*([0-9]{1,2}[\/\-][0-9]{1,2}[\/\-][0-9]{2,4})\b/);
+  if (dlExpiryMatch?.[1]) {
+    result.expirationDate = parseDateTokenToYmd(dlExpiryMatch[1]);
+  }
+
   const addressLabelIndex = lines.findIndex(
     (line) => line.includes("ADDRESS") || line.includes("UNIT/HOUSE") || line.includes("BARANGAY")
   );
@@ -560,6 +621,1324 @@ const parsePhilippineDriversLicense = (text: string) => {
   }
 
   return result;
+};
+
+type SupportedIdType =
+  | "PHILSYS_NATIONAL_ID"
+  | "UMID"
+  | "DRIVERS_LICENSE"
+  | "PASSPORT"
+  | "POSTAL_ID"
+  | "MANILA_PWD_ID"
+  | "MANILA_SENIOR_CITIZEN_ID";
+
+type ParsedIdData = {
+  idType?: SupportedIdType;
+  fullName?: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  idNumber?: string;
+  birthday?: string;
+  gender?: "Male" | "Female" | "Unknown";
+  address?: string;
+  issueDate?: string;
+  expirationDate?: string;
+  expiryPolicy?: "required" | "optional" | "not_expected";
+  confidence?: number;
+  missingFields?: string[];
+  rawText?: string;
+};
+
+const ID_TYPE_LABEL: Record<SupportedIdType, string> = {
+  PHILSYS_NATIONAL_ID: "PhilSys National ID",
+  UMID: "UMID",
+  DRIVERS_LICENSE: "Driver's License",
+  PASSPORT: "Passport",
+  POSTAL_ID: "Postal ID",
+  MANILA_PWD_ID: "Manila PWD ID",
+  MANILA_SENIOR_CITIZEN_ID: "Manila Senior Citizen ID",
+};
+
+type IdRule = {
+  label: string;
+  keywords: string[];
+  negativeKeywords?: string[];
+  idLabels: string[];
+  birthLabels: string[];
+  nameLabels: string[];
+  addressLabels: string[];
+  issueLabels: string[];
+  expiryLabels: string[];
+  idPatterns: RegExp[];
+  expiryPolicy: "required" | "optional" | "not_expected";
+  requiredFields: Array<"name" | "idNumber" | "birthday" | "gender" | "address">;
+};
+
+const ID_RULES: Record<SupportedIdType, IdRule> = {
+  PHILSYS_NATIONAL_ID: {
+    label: ID_TYPE_LABEL.PHILSYS_NATIONAL_ID,
+    keywords: ["REPUBLIKA NG PILIPINAS", "PHILIPPINE IDENTIFICATION CARD", "PAMBANSANG PAGKAKAKILANLAN", "PHILSYS", "PSN", "PCN", "PHILID"],
+    idLabels: ["CARD NUMBER", "PCN", "PHILSYS CARD NUMBER", "PHILID CARD NUMBER", "ID NO", "ID NUMBER", "PAMBANSANG PAGKAKAKILANLAN"],
+    birthLabels: ["DATE OF BIRTH", "PETSA NG KAPANGANAKAN", "BIRTH DATE"],
+    nameLabels: ["FULL NAME", "NAME", "APELYIDO", "LAST NAME", "MGA PANGALAN", "GIVEN NAMES", "GITNANG APELYIDO", "MIDDLE NAME"],
+    addressLabels: ["ADDRESS", "TIRAHAN"],
+    issueLabels: ["DATE OF ISSUE", "ISSUED ON", "PETSA NG PAGKAKALOOB"],
+    expiryLabels: [],
+    idPatterns: [/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/, /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/],
+    expiryPolicy: "optional",
+    requiredFields: ["name", "idNumber", "birthday", "gender", "address"],
+  },
+  UMID: {
+    label: ID_TYPE_LABEL.UMID,
+    keywords: ["UNIFIED MULTI-PURPOSE ID", "UNITED MULTI-PURPOSE ID", "UMID", "CRN", "COMMON REFERENCE NUMBER", "GSIS", "SSS"],
+    idLabels: ["CRN", "COMMON REFERENCE NUMBER", "ID NO", "ID NUMBER"],
+    birthLabels: ["DATE OF BIRTH", "BIRTH DATE"],
+    nameLabels: ["NAME", "FULL NAME", "SURNAME", "GIVEN NAME"],
+    addressLabels: ["ADDRESS"],
+    issueLabels: ["DATE OF ISSUE", "ISSUED"],
+    expiryLabels: ["EXPIRATION DATE", "VALID UNTIL", "VALID THRU", "EXPIRY"],
+    idPatterns: [/\b\d{4}[-\s]?\d{7}[-\s]?\d\b/, /\b\d{11,13}\b/],
+    expiryPolicy: "optional",
+    requiredFields: ["name", "birthday", "gender", "address"],
+  },
+  DRIVERS_LICENSE: {
+    label: ID_TYPE_LABEL.DRIVERS_LICENSE,
+    keywords: ["DRIVER'S LICENSE", "DRIVER LICENSE", "LAND TRANSPORTATION OFFICE", "LTO", "NON-PROFESSIONAL DRIVER", "PROFESSIONAL DRIVER"],
+    idLabels: ["LICENSE NO", "DL NO", "DRIVER LICENSE NO", "ID NO", "NO"],
+    birthLabels: ["DATE OF BIRTH", "BIRTH DATE", "BIRTHDAY"],
+    nameLabels: ["NAME", "FULL NAME", "LAST NAME", "FIRST NAME"],
+    addressLabels: ["ADDRESS", "UNIT/HOUSE", "STREET NAME"],
+    issueLabels: ["DATE OF ISSUE", "ISSUED ON", "ISSUE DATE"],
+    expiryLabels: ["EXPIRATION DATE", "VALID UNTIL", "VALID THRU", "EXPIRY"],
+    idPatterns: [/\b[A-Z]\d{2}[-\s]?\d{2}[-\s]?\d{6}\b/, /\b[A-Z]\d{7,12}\b/],
+    expiryPolicy: "optional",
+    requiredFields: ["name", "birthday", "gender", "address"],
+  },
+  PASSPORT: {
+    label: ID_TYPE_LABEL.PASSPORT,
+    keywords: ["PASSPORT", "PASAPORTE", "DEPARTMENT OF FOREIGN AFFAIRS", "REPUBLIC OF THE PHILIPPINES", "P<PHL"],
+    idLabels: ["PASSPORT NO", "PASSPORT NUMBER", "PASSPORT", "PASAPORTE BLG", "NO"],
+    birthLabels: ["DATE OF BIRTH", "BIRTH DATE", "PETSA NG KAPANGANAKAN", "PETSANG KAPANGANAKAN"],
+    nameLabels: ["SURNAME", "GIVEN NAMES", "NAME"],
+    addressLabels: ["ADDRESS"],
+    issueLabels: ["DATE OF ISSUE", "PETSA NG PAGKAKALOOB", "ISSUED ON"],
+    expiryLabels: ["DATE OF EXPIRY", "VALID UNTIL", "PETSA NG PAGKAWALANG BISA", "EXPIRATION DATE", "VALID THRU"],
+    idPatterns: [/\b[A-Z]\d{7}\b/, /\bP[A-Z0-9]{7,8}\b/],
+    expiryPolicy: "optional",
+    requiredFields: ["name", "idNumber", "birthday", "gender", "address"],
+  },
+  POSTAL_ID: {
+    label: ID_TYPE_LABEL.POSTAL_ID,
+    keywords: ["POSTAL IDENTITY CARD", "POSTAL ID", "PHILPOST", "PHILIPPINE POSTAL CORPORATION"],
+    idLabels: ["PRN", "POSTAL REFERENCE NO", "POSTAL ID NO", "POSTAL ID NUMBER", "ID NO", "ID NUMBER"],
+    birthLabels: ["DATE OF BIRTH", "BIRTH DATE"],
+    nameLabels: ["NAME", "FULL NAME", "SURNAME", "GIVEN NAME"],
+    addressLabels: ["ADDRESS"],
+    issueLabels: ["DATE OF ISSUE", "ISSUED ON"],
+    expiryLabels: ["VALID UNTIL", "VALID THRU", "EXPIRATION DATE", "EXPIRY"],
+    idPatterns: [/\bPRN[-\s]?[A-Z0-9]{6,14}\b/, /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/, /\b\d{12,15}\b/],
+    expiryPolicy: "optional",
+    requiredFields: ["name", "idNumber", "birthday", "gender", "address"],
+  },
+  MANILA_PWD_ID: {
+    label: ID_TYPE_LABEL.MANILA_PWD_ID,
+    keywords: ["PERSON WITH DISABILITY", "PWD", "TYPE OF DISABILITY", "CITY OF MANILA", "MANILA"],
+    idLabels: ["ID NO", "PWD NO", "PWD ID NO", "CONTROL NO", "NO"],
+    birthLabels: ["DATE OF BIRTH", "BIRTH DATE"],
+    nameLabels: ["NAME", "FULL NAME"],
+    addressLabels: ["ADDRESS"],
+    issueLabels: ["DATE ISSUED", "DATE OF ISSUE", "ISSUED ON"],
+    expiryLabels: ["VALID UNTIL", "EXPIRATION DATE", "VALID THRU"],
+    idPatterns: [/\b\d{5,8}\b/, /\bPWD[-\s]?[A-Z0-9-]{5,}\b/],
+    expiryPolicy: "optional",
+    requiredFields: ["name", "birthday", "gender", "address"],
+  },
+  MANILA_SENIOR_CITIZEN_ID: {
+    label: ID_TYPE_LABEL.MANILA_SENIOR_CITIZEN_ID,
+    keywords: ["OFFICE FOR SENIOR CITIZENS AFFAIRS", "SENIOR CITIZEN", "SENIOR ID", "OSCA", "CITY OF MANILA", "MANILA"],
+    negativeKeywords: ["PERSON WITH DISABILITY", "PWD"],
+    idLabels: ["OSCA ID NO", "OSCA NO", "SENIOR CITIZEN ID NO", "SENIOR ID NO", "ID NO", "CONTROL NO", "NO"],
+    birthLabels: ["DATE OF BIRTH", "BIRTH DATE"],
+    nameLabels: ["NAME", "FULL NAME"],
+    addressLabels: ["ADDRESS"],
+    issueLabels: ["DATE ISSUED", "DATE OF ISSUE", "ISSUED ON"],
+    expiryLabels: ["VALID UNTIL", "EXPIRATION DATE", "VALID THRU"],
+    idPatterns: [/\b(?:OSCA[-\s]?)?\d{2,4}[-\s]?\d{2,4}[-\s]?\d{2,6}\b/, /\b(?:OSCA[-\s]?)?[A-Z0-9]{2,6}[-\s]?\d{4,8}\b/, /\b\d{5,8}\b/],
+    expiryPolicy: "optional",
+    requiredFields: ["name", "idNumber", "birthday", "gender", "address"],
+  },
+};
+
+const normalizeYearToken = (year: string) => {
+  if (year.length !== 2) return year;
+  const currentTwoDigitYear = new Date().getFullYear() % 100;
+  const value = Number(year);
+  return value > currentTwoDigitYear + 5 ? `19${year}` : `20${year}`;
+};
+
+const toYmd = (y: string, m: string, d: string) =>
+  `${y.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+
+const isRealYmd = (ymd: string) => {
+  const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+};
+
+const toValidYmd = (y: string, m: string, d: string) => {
+  const ymd = toYmd(y, m, d);
+  return isRealYmd(ymd) ? ymd : "";
+};
+
+const parseDateTokenToYmd = (token: string): string => {
+  const raw = token.trim().toUpperCase().replace(/\./g, "").replace(/\s+/g, " ");
+  let m = raw.match(/\b(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/);
+  if (m) return toValidYmd(m[1], m[2], m[3]);
+  // Compact YYYYMMDD
+  m = raw.match(/\b(19\d{2}|20\d{2})(\d{2})(\d{2})\b/);
+  if (m) return toValidYmd(m[1], m[2], m[3]);
+  // Compact DDMMYYYY
+  m = raw.match(/\b(\d{2})(\d{2})(19\d{2}|20\d{2})\b/);
+  if (m) return toValidYmd(m[3], m[2], m[1]);
+  m = raw.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
+  if (m) {
+    const yy = normalizeYearToken(m[3]);
+    return toValidYmd(yy, m[1], m[2]);
+  }
+  m = raw.match(/\b(\d{1,2})\s+([A-Z]{3,9})\s+(\d{2,4})\b/);
+  if (m) {
+    const months: Record<string, string> = {
+      JAN: "01", JANUARY: "01", FEB: "02", FEBRUARY: "02", MAR: "03", MARCH: "03",
+      APR: "04", APRIL: "04", MAY: "05", JUN: "06", JUNE: "06", JUL: "07", JULY: "07",
+      AUG: "08", AUGUST: "08", SEP: "09", SEPT: "09", SEPTEMBER: "09", OCT: "10",
+      OCTOBER: "10", NOV: "11", NOVEMBER: "11", DEC: "12", DECEMBER: "12",
+    };
+    const yy = normalizeYearToken(m[3]);
+    if (months[m[2]]) return toValidYmd(yy, months[m[2]], m[1]);
+  }
+  m = raw.match(/\b([A-Z]{3,9})\s+(\d{1,2}),?\s+(\d{2,4})\b/);
+  if (m) {
+    const months: Record<string, string> = {
+      JAN: "01", JANUARY: "01", FEB: "02", FEBRUARY: "02", MAR: "03", MARCH: "03",
+      APR: "04", APRIL: "04", MAY: "05", JUN: "06", JUNE: "06", JUL: "07", JULY: "07",
+      AUG: "08", AUGUST: "08", SEP: "09", SEPT: "09", SEPTEMBER: "09", OCT: "10",
+      OCTOBER: "10", NOV: "11", NOVEMBER: "11", DEC: "12", DECEMBER: "12",
+    };
+    const yy = normalizeYearToken(m[3]);
+    if (months[m[1]]) return toValidYmd(yy, months[m[1]], m[2]);
+  }
+  return "";
+};
+
+const isReasonableDob = (ymd: string) => {
+  if (!isRealYmd(ymd)) return false;
+  const [y] = ymd.split("-").map(Number);
+  const currentYear = new Date().getFullYear();
+  return y >= 1900 && y <= currentYear;
+};
+
+const parseLabeledDate = (text: string, labels: string[]) => {
+  for (const label of labels) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const inline = text.match(new RegExp(`${escaped}\\s*[:\\-]?\\s*([^\\n]{1,40})`, "i"));
+    if (inline?.[1]) {
+      const d = parseDateTokenToYmd(inline[1]);
+      if (d) return d;
+    }
+    const nextLine = text.match(new RegExp(`${escaped}\\s*[:\\-]?\\s*\\n\\s*([^\\n]{1,40})`, "i"));
+    if (nextLine?.[1]) {
+      const d = parseDateTokenToYmd(nextLine[1]);
+      if (d) return d;
+    }
+  }
+  return "";
+};
+
+const parseAllDateTokens = (text: string) => {
+  const tokens = text.match(
+    /\b(?:\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}\s+[A-Z]{3,9}\s+\d{2,4}|[A-Z]{3,9}\s+\d{1,2},?\s+\d{2,4})\b/gi
+  ) || [];
+  return tokens.map(parseDateTokenToYmd).filter(Boolean);
+};
+
+const uniqueValues = <T,>(items: T[]) => Array.from(new Set(items.filter(Boolean)));
+
+const getRuleScore = (text: string, rule: IdRule) => {
+  const keywordHits = rule.keywords.filter((keyword) => text.includes(keyword)).length;
+  const negativeHits = (rule.negativeKeywords || []).filter((keyword) => text.includes(keyword)).length;
+  const idLabelHits = rule.idLabels.filter((label) => text.includes(label)).length;
+  return keywordHits * 3 + idLabelHits - negativeHits * 4;
+};
+
+const detectIdType = (text: string): SupportedIdType | null => {
+  const t = text.toUpperCase();
+  if ((/\bOFFICE FOR SENIOR CITIZENS AFFAIRS\b|\bSENIOR CITIZEN\b|\bSENIOR ID\b|\bOSCA\b/.test(t)) && !(/\bPWD\b|PERSON WITH DISABILITY/.test(t))) {
+    return "MANILA_SENIOR_CITIZEN_ID";
+  }
+  if (/\bUMID\b|\bUNIFIED\b|\bUNITED\b|\bMULTI-?PURPOSE ID\b|\bCRN\b|\bCOMMON REFERENCE NUMBER\b|\b\d{4}-\d{7}-\d\b/.test(t)) {
+    return "UMID";
+  }
+  if (/\bP<PHL\b|\bPASSPORT\b|\bPASAPORTE\b/.test(t)) {
+    return "PASSPORT";
+  }
+  const ranked = (Object.keys(ID_RULES) as SupportedIdType[])
+    .map((idType) => ({ idType, score: getRuleScore(t, ID_RULES[idType]) }))
+    .sort((a, b) => b.score - a.score);
+
+  return ranked[0]?.score > 0 ? ranked[0].idType : null;
+};
+
+const extractByPatterns = (text: string, patterns: RegExp[]) => {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[0]) return match[0].replace(/\s+/g, "").trim();
+  }
+  return "";
+};
+
+const normalizeIdNumber = (value: string) =>
+  value
+    .toUpperCase()
+    .replace(/\b(?:LICENSE|PASSPORT|NUMBER|NO|ID|CRN|PRN|PWD|OSCA|VALID|UNTIL|DATE|BIRTH)\b/g, " ")
+    .replace(/[^A-Z0-9-]/g, "")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .trim();
+
+const isValidIdNumberForRule = (value: string, rule?: IdRule) => {
+  const normalized = normalizeIdNumber(value);
+  if (!normalized || normalized.length < 4) return false;
+  if (!rule) return /^[A-Z0-9-]{5,}$/.test(normalized);
+  return rule.idPatterns.some((pattern) => pattern.test(normalized) || pattern.test(value.toUpperCase()));
+};
+
+const parseOcrGender = (text: string): "Male" | "Female" | undefined => {
+  const normalized = text.toUpperCase();
+  const licenseSexMatch =
+    normalized.match(/\bSEX\s+DATE\s+OF\s+BIRTH[\s\S]{0,120}?\b([MF])\s+\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\b/) ||
+    normalized.match(/\bSEX[\s:]+([MF])\b/) ||
+    normalized.match(/\b([MF])\s+\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\b/) ||
+    normalized.match(/\b([MF])\s+\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/);
+
+  if (licenseSexMatch?.[1] === "F") {
+    return "Female";
+  }
+  if (licenseSexMatch?.[1] === "M") {
+    return "Male";
+  }
+
+  const labeled = parseOcrField(normalized, ["SEX", "GENDER", "KASARIAN"]);
+  const compactLabel = String(labeled || "").trim().toUpperCase();
+
+  if (compactLabel === "F" || compactLabel === "FEMALE") {
+    return "Female";
+  }
+  if (compactLabel === "M" || compactLabel === "MALE") {
+    return "Male";
+  }
+
+  if (/\b(?:SEX|GENDER|KASARIAN)\s*[:\-]?\s*F(?:\b|[^A-Z])|\bFEMALE\b/.test(normalized)) {
+    return "Female";
+  }
+  if (/\b(?:SEX|GENDER|KASARIAN)\s*[:\-]?\s*M(?:\b|[^A-Z])|\bMALE\b/.test(normalized)) {
+    return "Male";
+  }
+
+  return undefined;
+};
+
+const getDateValidationError = (label: string, ymd?: string) => {
+  if (!ymd) return "";
+  if (!isRealYmd(ymd)) return `${label} is invalid`;
+  const todayYmd = toLocalYmd(new Date());
+  if (label === "Date of Birth") {
+    if (ymd > todayYmd) return "Date of Birth is invalid";
+    const age = Number(calculateAge(ymd));
+    if (!Number.isFinite(age) || age < 0 || age > 125) return "Date of Birth is invalid";
+  }
+  if (label === "Issue Date" && ymd > todayYmd) return "Issue Date is invalid";
+  return "";
+};
+
+const pickLikelyNameLine = (text: string, rule: IdRule) => {
+  const lines = getMeaningfulOcrLines(text);
+  const blockedWords = uniqueValues([
+    ...rule.keywords,
+    ...rule.idLabels,
+    ...rule.birthLabels,
+    ...rule.addressLabels,
+    ...rule.issueLabels,
+    ...rule.expiryLabels,
+    "REPUBLIC OF THE PHILIPPINES",
+    "CITY OF MANILA",
+    "NATIONALITY",
+    "SIGNATURE",
+  ]);
+
+  return (
+    lines.find((line) => {
+      if (!looksLikePersonNameLine(line)) return false;
+      if (blockedWords.some((blocked) => line.includes(blocked))) return false;
+      const words = line.split(/\s+/).filter(Boolean);
+      return words.length >= 2 && words.length <= 6;
+    }) || ""
+  );
+};
+
+const parseNameParts = (fullName: string) => {
+  const cleaned = sanitizeNameField(fullName);
+  if (!cleaned) return { firstName: "", middleName: "", lastName: "" };
+
+  if (cleaned.includes(",")) {
+    const [lastName, firstAndMiddle, explicitMiddle] = cleaned.split(",").map(sanitizeNameField);
+    const words = (firstAndMiddle || "").split(/\s+/).filter(Boolean);
+    return {
+      firstName: explicitMiddle ? firstAndMiddle : sanitizeNameField(words.length > 2 ? words.slice(0, -1).join(" ") : firstAndMiddle),
+      middleName: explicitMiddle || sanitizeNameField(words.length > 2 ? words[words.length - 1] : ""),
+      lastName,
+    };
+  }
+
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length >= 3) {
+    return {
+      firstName: sanitizeNameField(words.slice(0, -1).join(" ")),
+      middleName: "",
+      lastName: sanitizeNameField(words[words.length - 1]),
+    };
+  }
+
+  return { firstName: cleaned, middleName: "", lastName: "" };
+};
+
+const parsePassportMrzName = (text: string) => {
+  const line = String(text || "").split(/\r?\n/).find((l) => l.includes("P<PHL"));
+  if (!line) return { firstName: "", middleName: "", lastName: "" };
+  const cleaned = line.replace(/\s+/g, "");
+  const payload = cleaned.replace(/^P<PHL/, "");
+  const [rawLast, rawGiven = ""] = payload.split("<<");
+  const lastName = sanitizeNameField(rawLast.replace(/</g, " "));
+  const givenParts = rawGiven.replace(/<+/g, " ").trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: sanitizeNameField(givenParts.join(" ")),
+    middleName: "",
+    lastName,
+  };
+};
+
+const parsePassportMrzData = (text: string) => {
+  const lines = String(text || "").toUpperCase().split(/\r?\n/).map((l) => l.replace(/\s+/g, "").trim()).filter(Boolean);
+  const mrzCandidates = lines.filter((l) => /^[A-Z0-9<]{30,}$/.test(l));
+  const l1 = mrzCandidates.find((l) => l.startsWith("P<"));
+  const l2 = mrzCandidates.find((l) => /PHL/.test(l) && /[0-9O]{6}[MF<][0-9O]{6}/.test(l));
+  console.debug("[PassportDOB] MRZ lines detected:", mrzCandidates.length);
+  console.debug("[PassportDOB] MRZ raw line1:", l1 || "none");
+  console.debug("[PassportDOB] MRZ raw line2:", l2 || "none");
+  const out: {
+    firstName: string;
+    middleName: string;
+    lastName: string;
+    birthday: string;
+    expirationDate: string;
+    gender?: "Male" | "Female";
+    idNumber: string;
+  } = { firstName: "", middleName: "", lastName: "", birthday: "", expirationDate: "", idNumber: "" };
+
+  if (l1) {
+    const payload = l1.replace(/^P<PHL/, "");
+    const [rawLast, rawGiven = ""] = payload.split("<<");
+    out.lastName = sanitizeNameField(rawLast.replace(/</g, " "));
+    const givenParts = rawGiven.replace(/<+/g, " ").trim().split(/\s+/).filter(Boolean);
+    out.firstName = sanitizeNameField(givenParts.join(" "));
+    out.middleName = "";
+  }
+
+  if (l2) {
+    const compact = l2.replace(/\s+/g, "");
+    const passMatch = compact.match(/^[A-Z0-9<]{1,10}/);
+    if (passMatch?.[0]) {
+      out.idNumber = normalizeIdNumber(passMatch[0].replace(/</g, ""));
+    }
+    const normalizedCompact = compact.replace(/O/g, "0").replace(/I/g, "1");
+    // TD3 passport line 2 fixed-field parsing:
+    // 1-9 passport number, 10 check, 11-13 nationality, 14-19 DOB, 20 sex, 21-26 expiry
+    const dobYYMMDD = normalizedCompact.slice(13, 19);
+    const sexCharByIndex = normalizedCompact.slice(20 - 1, 20);
+    const expYYMMDDByIndex = normalizedCompact.slice(21 - 1, 26);
+    console.debug("[PassportDOB] MRZ extracted DOB substring:", dobYYMMDD || "none");
+    if (/^\d{6}$/.test(dobYYMMDD)) {
+      const by = normalizeYearToken(dobYYMMDD.slice(0, 2));
+      const bm = dobYYMMDD.slice(2, 4);
+      const bd = dobYYMMDD.slice(4, 6);
+      out.birthday = toValidYmd(by, bm, bd);
+      console.debug("[PassportDOB] Parsed MRZ DOB:", out.birthday || "invalid");
+    } else {
+      console.debug("[PassportDOB] MRZ DOB parse failed: invalid substring format");
+    }
+    const expYYMMDDByPattern =
+      normalizedCompact.match(/\d{6}[MFX<](\d{6})/)?.[1] ||
+      normalizedCompact.match(/PHL\d{6}[MFX<](\d{6})/)?.[1] ||
+      "";
+    const expYYMMDD = expYYMMDDByPattern || expYYMMDDByIndex;
+    console.debug("[PassportExpiry] raw MRZ line 2:", compact || "none");
+    console.debug("[PassportExpiry] extracted expiry substring (index):", expYYMMDDByIndex || "none");
+    console.debug("[PassportExpiry] extracted expiry substring (pattern):", expYYMMDDByPattern || "none");
+    console.debug("[PassportExpiry] extracted expiry substring (final):", expYYMMDD || "none");
+    if (/^\d{6}$/.test(expYYMMDD)) {
+      const yy = Number(expYYMMDD.slice(0, 2));
+      const ey = yy <= 79 ? `20${expYYMMDD.slice(0, 2)}` : `19${expYYMMDD.slice(0, 2)}`;
+      const em = expYYMMDD.slice(2, 4);
+      const ed = expYYMMDD.slice(4, 6);
+      out.expirationDate = toValidYmd(ey, em, ed);
+      console.debug("[PassportExpiry] parsed expiration date result:", out.expirationDate || "invalid");
+      if (!out.expirationDate) {
+        console.debug("[PassportExpiry] MRZ expiry parsing failed: invalid month/day");
+      }
+    } else {
+      console.debug("[PassportExpiry] MRZ expiry parsing failed: invalid substring format");
+    }
+    // Robust MRZ parse: ... YYMMDD + SEX + YYMMDD ...
+    const sexFromPattern =
+      normalizedCompact.match(/\d{6}([MFX<])\d{6}/)?.[1] ||
+      normalizedCompact.match(/PHL\d{6}([MFX<])\d{6}/)?.[1] ||
+      "";
+    const sexChar = sexFromPattern || sexCharByIndex;
+    out.gender = sexChar === "F" ? "Female" : sexChar === "M" ? "Male" : sexChar === "X" || sexChar === "<" ? "Unknown" : undefined;
+    console.debug("[PassportGender] raw MRZ line 2:", compact || "none");
+    console.debug("[PassportGender] extracted gender character (index):", sexCharByIndex || "none");
+    console.debug("[PassportGender] extracted gender character (pattern):", sexFromPattern || "none");
+    console.debug("[PassportGender] extracted gender character (final):", sexChar || "none");
+    console.debug("[PassportGender] normalized gender result:", out.gender || "none");
+  } else {
+    console.debug("[PassportDOB] MRZ not detected: no valid line 2 candidate");
+  }
+
+  return out;
+};
+
+const parsePassportStrictFields = (text: string) => {
+  const upper = String(text || "").toUpperCase();
+  const blocked = ["REPUBLIKA", "REPUBLIC", "PASSPORT", "PASAPORTE", "NATIONALITY", "DEPARTMENT", "FOREIGN", "AFFAIRS"];
+  const clean = (v: string) => {
+    const c = sanitizeNameField(v || "");
+    if (!c) return "";
+    if (blocked.some((b) => c.includes(b))) return "";
+    return c;
+  };
+  const lastName = clean(parseOcrField(upper, ["APELYIDO/SURNAME", "SURNAME", "APELLIDO", "LAST NAME", "APELYIDO"]) || "");
+  const firstName = clean(parseOcrField(upper, ["PANGALAN/GIVEN NAMES", "GIVEN NAMES", "FIRST NAME", "PANGALAN", "GIVEN NAME"]) || "");
+  const middleName = clean(parseOcrField(upper, ["PANGGITNANG APELYIDO/MIDDLE NAME", "MIDDLE NAME", "MIDDLE NAMES", "GITNANG PANGALAN"]) || "");
+  let birthday = parseLabeledDate(upper, [
+    "PETSA NG KAPANGANAKAN/DATE OF BIRTH",
+    "DATE OF BIRTH",
+    "DATEOFBIRTH",
+    "BIRTH DATE",
+    "BIRTHDATE",
+    "PETSA NG KAPANGANAKAN",
+    "DOB",
+    "BIRTHDAY",
+  ]);
+  if (!birthday) {
+    const dobLine =
+      upper.match(/\b(?:DATE\s*OF\s*BIRTH|DATEOFBIRTH|BIRTH\s*DATE|BIRTHDATE|DOB|BIRTHDAY)\b[^\n]{0,80}/)?.[0] ||
+      upper.match(/\b(?:PETSA\s*NG\s*KAPANGANAKAN)\b[^\n]{0,80}/)?.[0] ||
+      "";
+    const extracted = dobLine.replace(/\b(?:DATE\s*OF\s*BIRTH|DATEOFBIRTH|BIRTH\s*DATE|BIRTHDATE|DOB|BIRTHDAY|PETSA\s*NG\s*KAPANGANAKAN)\b[:\-\s]*/g, "").trim();
+    const direct = parseDateTokenToYmd(extracted);
+    if (direct) {
+      birthday = direct;
+    } else {
+      const fallbackToken =
+        extracted.match(/\b(?:\d{1,2}\s+[A-Z]{3,9}\s+\d{4}|[A-Z]{3,9}\s+\d{1,2},?\s+\d{4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/)?.[0] || "";
+      birthday = parseDateTokenToYmd(fallbackToken);
+      if (!birthday) {
+        const allDates = parseAllDateTokens(extracted);
+        birthday = allDates.find(isReasonableDob) || "";
+      }
+    }
+  }
+  if (birthday && !isReasonableDob(birthday)) birthday = "";
+  const expirationDate = parseLabeledDate(upper, [
+    "PETSA NG PAGKAWALANG BISA/VALID UNTIL",
+    "PETSA NG PAGKAWALANG-BISA",
+    "DATE OF EXPIRY",
+    "EXPIRY DATE",
+    "EXPIRATION DATE",
+    "VALID UNTIL",
+    "VALID THRU",
+  ]);
+  const issueDate = parseLabeledDate(upper, ["PETSA NG PAGKAKALOOB/DATE OF ISSUE", "DATE OF ISSUE", "ISSUED ON", "ISSUE DATE"]);
+  const sexRaw = (parseOcrField(upper, ["KASARIAN/SEX", "SEX", "KASARIAN"]) || "").trim().toUpperCase();
+  const gender = sexRaw === "F" || sexRaw === "FEMALE" ? "Female" : sexRaw === "M" || sexRaw === "MALE" ? "Male" : undefined;
+  return { firstName, middleName, lastName, birthday, expirationDate, issueDate, gender };
+};
+
+const parseSeniorStrictFields = (text: string) => {
+  const upper = String(text || "").toUpperCase();
+  const name = sanitizeNameField(parseOcrField(upper, ["NAME", "FULL NAME", "COMPLETE NAME", "SENIOR CITIZEN NAME"]) || "");
+  const address = sanitizeAddressField(parseOcrField(upper, ["ADDRESS", "CITY/MUNICIPALITY", "TIRAHAN"]) || "");
+  const birthday = parseLabeledDate(upper, ["DATE OF BIRTH", "BIRTH DATE", "PETSA NG KAPANGANAKAN", "BIRTHDAY"]);
+  const idNumber = normalizeIdNumber(parseOcrField(upper, ["ID NO", "ID. NO", "OSCA ID NO", "SENIOR CITIZEN ID NO", "OSCA NO", "CONTROL NO"]) || "");
+  return { name, address, birthday, idNumber };
+};
+
+const parsePhilSysNameParts = (text: string) => {
+  const upper = String(text || "").toUpperCase();
+  const lines = upper
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const forbidden = [
+    "PAMBANSANG",
+    "PAGKAKAKILANLAN",
+    "PHILIPPINE IDENTIFICATION CARD",
+    "REPUBLIKA",
+    "REPUBLIC",
+    "CITY",
+    "MANILA",
+    "BRGY",
+    "BARANGAY",
+    "ZONE",
+    "ADDRESS",
+    "TIRAHAN",
+    "KAPANGANAKAN",
+    "BIRTH",
+  ];
+  const badLine = (value: string) =>
+    !value ||
+    forbidden.some((w) => value.includes(w)) ||
+    value.split(/\s+/).length > 4 ||
+    /[^A-Z\s.'-]/.test(value);
+
+  const pickAfterLabel = (labelPatterns: RegExp[]) => {
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (!labelPatterns.some((re) => re.test(line))) continue;
+
+      const inline = line
+        .replace(/.*(?:APELYIDO\/LAST NAME|MGA PANGALAN\/GIVEN NAMES|GITNANG APELYIDO\/MIDDLE NAME|APELYIDO|LAST NAME|MGA PANGALAN|GIVEN NAMES|GIVEN NAME|GITNANG APELYIDO|MIDDLE NAME)\s*[:\-]?\s*/i, "")
+        .trim();
+      if (inline && !badLine(inline)) return inline;
+
+      const next = (lines[i + 1] || "").trim();
+      if (next && !badLine(next)) return next;
+    }
+    return "";
+  };
+
+  const lastName = pickAfterLabel([/APELYIDO\/LAST NAME/, /\bAPELYIDO\b/, /\bLAST NAME\b/]);
+  const firstName = pickAfterLabel([/MGA PANGALAN\/GIVEN NAMES/, /\bMGA PANGALAN\b/, /\bGIVEN NAMES\b/, /\bGIVEN NAME\b/]);
+  const middleName = pickAfterLabel([/GITNANG APELYIDO\/MIDDLE NAME/, /\bGITNANG APELYIDO\b/, /\bMIDDLE NAME\b/]);
+  return {
+    firstName: sanitizeNameField(firstName),
+    middleName: sanitizeNameField(middleName),
+    lastName: sanitizeNameField(lastName),
+  };
+};
+
+const parsePhilSysNameFromBlocks = (text: string) => {
+  const src = String(text || "").toUpperCase().replace(/\r/g, "");
+  const forbidden = [
+    "PAMBANSANG",
+    "PAGKAKAKILANLAN",
+    "PHILIPPINE IDENTIFICATION CARD",
+    "REPUBLIKA",
+    "REPUBLIC",
+    "ADDRESS",
+    "TIRAHAN",
+    "BRGY",
+    "BARANGAY",
+    "ZONE",
+    "MANILA",
+    "KAPANGANAKAN",
+    "BIRTH",
+  ];
+  const clean = (v: string) =>
+    sanitizeNameField(
+      String(v || "")
+        .replace(/\n+/g, " ")
+        .replace(/\s{2,}/g, " ")
+        .replace(/[^A-Z\s.'-]/g, " ")
+        .trim()
+    );
+  const validPersonChunk = (v: string) => {
+    const t = clean(v);
+    if (!t) return "";
+    if (forbidden.some((w) => t.includes(w))) return "";
+    if (t.split(/\s+/).length > 4) return "";
+    return t;
+  };
+
+  const capture = (start: RegExp, stop: RegExp[]) => {
+    const m = src.match(start);
+    if (!m || m.index == null) return "";
+    const from = m.index + m[0].length;
+    const tail = src.slice(from);
+    let end = tail.length;
+    for (const s of stop) {
+      const sm = tail.match(s);
+      if (sm && sm.index != null) end = Math.min(end, sm.index);
+    }
+    return validPersonChunk(tail.slice(0, end));
+  };
+
+  const lastName = capture(
+    /(APELYIDO\/LAST NAME|APELYIDO|LAST NAME)\s*[:\-]?\s*/i,
+    [/(MGA PANGALAN\/GIVEN NAMES|MGA PANGALAN|GIVEN NAMES|GIVEN NAME)/i]
+  );
+  const firstName = capture(
+    /(MGA PANGALAN\/GIVEN NAMES|MGA PANGALAN|GIVEN NAMES|GIVEN NAME)\s*[:\-]?\s*/i,
+    [/(GITNANG APELYIDO\/MIDDLE NAME|GITNANG APELYIDO|MIDDLE NAME|PETSA NG KAPANGANAKAN|DATE OF BIRTH)/i]
+  );
+  const middleName = capture(
+    /(GITNANG APELYIDO\/MIDDLE NAME|GITNANG APELYIDO|MIDDLE NAME)\s*[:\-]?\s*/i,
+    [/(PETSA NG KAPANGANAKAN|DATE OF BIRTH|TIRAHAN|ADDRESS)/i]
+  );
+
+  return { firstName, middleName, lastName };
+};
+
+const parsePhilSysStrictFields = (text: string) => {
+  const upper = String(text || "").toUpperCase();
+  const lines = upper.split(/\r?\n/).map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+
+  const blockedTokens = [
+    "REPUBLIKA",
+    "REPUBLIC",
+    "PAMBANSANG",
+    "PAGKAKAKILANLAN",
+    "PHILIPPINE IDENTIFICATION CARD",
+  ];
+
+  const cleanName = (v: string) =>
+    sanitizeNameField(String(v || "").replace(/[^A-Z\s.'-]/g, " ").replace(/\s{2,}/g, " ").trim());
+
+  const cleanAddress = (v: string) =>
+    sanitizeAddressField(String(v || "").replace(/\s{2,}/g, " ").trim());
+  const looksLikeBrokenBirthLabel = (v: string) =>
+    /(KAPANGANAKAN|DATE OF BIRTH|BIRTH DATE|PETSA NG|PETSANG)/i.test(String(v || ""));
+
+  const isLabelLine = (line: string) =>
+    /(APELYIDO\/LAST NAME|MGA PANGALAN\/GIVEN NAMES|GITNANG APELYIDO\/MIDDLE NAME|PETSA NG KAPANGANAKAN\/DATE OF BIRTH|TIRAHAN\/ADDRESS|APELYIDO|LAST NAME|MGA PANGALAN|GIVEN NAMES|GITNANG APELYIDO|MIDDLE NAME|DATE OF BIRTH|PETSA NG KAPANGANAKAN|ADDRESS|TIRAHAN)/i.test(line);
+
+  const captureLabelValue = (labels: RegExp[], stopLabels: RegExp[]) => {
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (!labels.some((re) => re.test(line))) continue;
+      const parts: string[] = [];
+      for (let j = i + 1; j < lines.length; j += 1) {
+        const next = lines[j];
+        if (stopLabels.some((re) => re.test(next))) break;
+        if (isLabelLine(next)) break;
+        if (blockedTokens.some((t) => next.includes(t))) continue;
+        parts.push(next);
+      }
+      if (parts.length > 0) {
+        const merged = parts.join(" ").trim();
+        if (labels.some((re) => /KAPANGANAKAN|DATE OF BIRTH|BIRTH DATE/i.test(String(re))) && looksLikeBrokenBirthLabel(merged)) {
+          continue;
+        }
+        return merged;
+      }
+    }
+    return "";
+  };
+
+  const lastNameRaw = captureLabelValue(
+    [/APELYIDO\/LAST NAME/i, /\bAPELYIDO\b/i, /\bLAST NAME\b/i],
+    [/MGA PANGALAN\/GIVEN NAMES/i, /\bMGA PANGALAN\b/i, /\bGIVEN NAMES\b/i]
+  );
+  const firstNameRaw = captureLabelValue(
+    [/MGA PANGALAN\/GIVEN NAMES/i, /\bMGA PANGALAN\b/i, /\bGIVEN NAMES\b/i],
+    [/GITNANG APELYIDO\/MIDDLE NAME/i, /\bGITNANG APELYIDO\b/i, /\bMIDDLE NAME\b/i]
+  );
+  const middleNameRaw = captureLabelValue(
+    [/GITNANG APELYIDO\/MIDDLE NAME/i, /\bGITNANG APELYIDO\b/i, /\bMIDDLE NAME\b/i],
+    [/PETSA NG KAPANGANAKAN\/DATE OF BIRTH/i, /\bPETSA NG KAPANGANAKAN\b/i, /\bDATE OF BIRTH\b/i]
+  );
+  const birthdayRaw = captureLabelValue(
+    [/PETSA NG KAPANGANAKAN\/DATE OF BIRTH/i, /\bPETSA NG KAPANGANAKAN\b/i, /\bDATE OF BIRTH\b/i],
+    [/TIRAHAN\/ADDRESS/i, /\bTIRAHAN\b/i, /\bADDRESS\b/i]
+  );
+  const addressRaw = captureLabelValue(
+    [/TIRAHAN\/ADDRESS/i, /\bTIRAHAN\b/i, /\bADDRESS\b/i],
+    [/^\s*$/]
+  );
+
+  const lastName = cleanName(lastNameRaw);
+  const firstName = cleanName(firstNameRaw);
+  const middleName = cleanName(middleNameRaw);
+  const birthday = looksLikeBrokenBirthLabel(birthdayRaw) ? "" : parseDateTokenToYmd(birthdayRaw);
+  const address = cleanAddress(addressRaw);
+
+  const hasBlocked = (v: string) => blockedTokens.some((t) => v.includes(t));
+  return {
+    firstName: hasBlocked(firstName) ? "" : firstName,
+    middleName: hasBlocked(middleName) ? "" : middleName,
+    lastName: hasBlocked(lastName) ? "" : lastName,
+    birthday,
+    address: hasBlocked(address) ? "" : address,
+  };
+};
+
+const parseUmidStrictFields = (text: string) => {
+  const upper = String(text || "").toUpperCase();
+  const lines = upper.split(/\r?\n/).map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+  console.debug("[UMID Parser] raw OCR boxes (line flow):", lines);
+
+  const dedupe = (values: string[]) => Array.from(new Set(values.map((v) => v.trim()).filter(Boolean)));
+  const isHeaderLike = (v: string) => /\b(REPUBLIC|PHILIPPINES?|UNIFIED|UNITED|MULTI|PURPOSE|UMID|CRN|COMMON REFERENCE NUMBER)\b/.test(v);
+  const isLabelLike = (v: string) => /\b(NAME|SURNAME|GIVEN NAME|MIDDLE NAME|ADDRESS|DATE OF BIRTH|BIRTH DATE|DOB|SEX|GENDER)\b/.test(v);
+  const isNameToken = (v: string) => /^[A-Z ]{2,40}$/.test(v) && !/\d/.test(v) && !isHeaderLike(v) && !isLabelLike(v);
+
+  const n = lines.length || 1;
+  const headerEnd = Math.floor(n * 0.24);
+  const nameEnd = Math.floor(n * 0.60);
+  const detailEnd = Math.floor(n * 0.78);
+  const nameRegion = lines.slice(headerEnd, nameEnd);
+  const detailRegion = lines.slice(Math.max(headerEnd, nameEnd - 2), Math.min(n, detailEnd + 2));
+  const addressRegion = lines.slice(Math.max(0, detailEnd - 1));
+
+  const nameCandidates = dedupe(
+    nameRegion
+      .map((v) => sanitizeNameField(v))
+      .filter((v) => isNameToken(v))
+      .filter((v) => v.length >= 2 && v.length <= 20),
+  );
+  console.debug("[UMID Parser] detected name candidates:", nameCandidates);
+  const selectedNameLines = nameCandidates.slice(0, 4);
+  console.debug("[UMID Parser] selected name lines:", selectedNameLines);
+
+  let lastName = "";
+  let firstName = "";
+  let middleName = "";
+  if (selectedNameLines.length >= 3) {
+    lastName = selectedNameLines[0];
+    firstName = selectedNameLines[1];
+    middleName = selectedNameLines[2];
+  } else if (selectedNameLines.length === 2) {
+    lastName = selectedNameLines[0];
+    firstName = selectedNameLines[1];
+  }
+
+  let birthday = parseLabeledDate(upper, ["DATE OF BIRTH", "BIRTH DATE", "DOB"]);
+  if (!birthday) {
+    const dobHint = detailRegion.find((v) => /\b(DATE OF BIRTH|BIRTH DATE|DOB)\b/.test(v)) || "";
+    if (dobHint) {
+      const dobInline = parseDateTokenToYmd(dobHint);
+      if (dobInline) birthday = dobInline;
+    }
+  }
+
+  const gender = (() => {
+    const joined = detailRegion.join(" ");
+    if (/\bSEX\b|\bGENDER\b/.test(joined)) {
+      if (/\bFEMALE\b|\bF\b/.test(joined)) return "Female" as const;
+      if (/\bMALE\b|\bM\b/.test(joined)) return "Male" as const;
+    }
+    return undefined;
+  })();
+
+  const addressLines = dedupe(
+    addressRegion
+      .map((v) => sanitizeAddressField(v))
+      .filter(Boolean)
+      .filter((v) => !isHeaderLike(v))
+      .filter((v) => !isLabelLike(v))
+      .filter((v) => !/\bCRN\b|\bCOMMON REFERENCE NUMBER\b/.test(v))
+      .filter((v) => !/\d{4}[-\s]?\d{7}[-\s]?\d\b/.test(v))
+      .slice(-4),
+  );
+  console.debug("[UMID Parser] grouped address lines:", addressLines);
+
+  const address = sanitizeAddressField(addressLines.join(" "));
+  const parsed = { lastName, firstName, middleName, birthday, gender, address };
+  console.debug("[UMID Parser] detected gender:", gender || "none");
+  console.debug("[UMID Parser] final parsed object:", parsed);
+  return parsed;
+};
+
+const parsePostalStrictFields = (text: string) => {
+  const upper = String(text || "").toUpperCase()
+    .replace(/\bSUMAME\b/g, "SURNAME")
+    .replace(/\bPHILIPPNE\b/g, "PHILIPPINE")
+    .replace(/\bMIDDIE\b/g, "MIDDLE")
+    .replace(/\bNANE\b/g, "NAME")
+    .replace(/\bBIRTHOAY\b/g, "BIRTHDAY");
+  const lines = upper.split(/\r?\n/).map((v) => v.trim()).filter(Boolean);
+  const orderedLines = lines.map((textLine, idx) => ({ text: textLine, idx }));
+  const normalizeCandidate = (v: string) =>
+    String(v || "")
+      .toUpperCase()
+      .replace(/[.,;:_\-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const fingerprint = (v: string) => normalizeCandidate(v).replace(/\b(JR|SR|II|III|IV)\b/g, "").trim();
+  const blocked = /\b(PHILIPPINE|MIDDLE NAME|SURNAME|SUFFIX|GIVEN NAME|FIRST NAME|LAST NAME|POSTAL ID|POSTAL IDENTITY CARD|PHLPOST|REPUBLIC OF THE PHILIPPINES|NAME)\b/;
+  const blockedAsValue = /\b(PHILIPPINE|REPUBLIC OF THE PHILIPPINES|POSTAL ID|POSTAL IDENTITY CARD|PHLPOST|FIRST NAME|MIDDLE NAME|SURNAME|SUFFIX|NAME|DATE|ADDRESS|VALID|EXPIRY|EXPIRATION)\b/;
+  const cleanVal = (v: string) => sanitizeNameField(v.replace(/[:\-]+/g, " ").trim());
+  const splitPostalNameWithCompoundSurname = (value: string) => {
+    const tokens = normalizeCandidate(value).split(" ").filter(Boolean);
+    if (tokens.length === 0) return { firstName: "", middleName: "", lastName: "" };
+    if (tokens.length === 1) return { firstName: tokens[0], middleName: "", lastName: "" };
+    if (tokens.length === 2) return { firstName: tokens[0], middleName: "", lastName: tokens[1] };
+
+    const n = tokens.length;
+    const join = (from: number, to: number) => tokens.slice(from, to).join(" ");
+
+    // Filipino compound surnames: DELA CRUZ, DE LA ROSA, DE LOS SANTOS, DE LAS ...
+    if (n >= 3 && tokens[n - 2] === "DELA") {
+      return { firstName: tokens[0], middleName: join(1, n - 2), lastName: join(n - 2, n) };
+    }
+    if (n >= 4 && tokens[n - 3] === "DE" && (tokens[n - 2] === "LA" || tokens[n - 2] === "LOS" || tokens[n - 2] === "LAS")) {
+      return { firstName: tokens[0], middleName: join(1, n - 3), lastName: join(n - 3, n) };
+    }
+    if (n >= 3 && ["DE", "DEL", "SAN", "SANTA", "SANTO"].includes(tokens[n - 2])) {
+      return { firstName: tokens[0], middleName: join(1, n - 2), lastName: join(n - 2, n) };
+    }
+
+    // Fallback: first token as firstName, last token as surname.
+    return { firstName: tokens[0], middleName: join(1, n - 1), lastName: tokens[n - 1] };
+  };
+  const nearestValueByLabel = (re: RegExp, stopRe?: RegExp) => {
+    for (let i = 0; i < orderedLines.length; i += 1) {
+      const ln = orderedLines[i].text;
+      if (!re.test(ln)) continue;
+      const inline = cleanVal(ln.replace(re, "").replace(/^[:\s\-]+/, ""));
+      if (inline && !blocked.test(inline) && !blockedAsValue.test(inline)) return inline;
+      for (let j = i + 1; j < Math.min(orderedLines.length, i + 5); j += 1) {
+        const raw = orderedLines[j].text;
+        if (stopRe && stopRe.test(raw)) break;
+        const cand = cleanVal(raw);
+        if (!cand || blocked.test(cand) || blockedAsValue.test(cand)) continue;
+        if (/\b(ADDRESS|DATE OF BIRTH|BIRTH DATE|VALID|EXPIRY|EXPIRATION|SEX|GENDER|POSTAL REFERENCE|ID NO)\b/.test(cand)) break;
+        return cand;
+      }
+    }
+    return "";
+  };
+
+  const firstNameByLabel = nearestValueByLabel(/\b(FIRST NAME|GIVEN NAME)\b/, /\b(MIDDLE NAME|SURNAME|LAST NAME|SUFFIX|ADDRESS|DATE OF BIRTH)\b/);
+  const middleNameByLabel = nearestValueByLabel(/\bMIDDLE NAME\b/, /\b(SURNAME|LAST NAME|SUFFIX|ADDRESS|DATE OF BIRTH)\b/);
+  const lastNameByLabel = nearestValueByLabel(/\b(SURNAME|LAST NAME|APELLIDO)\b/, /\b(SUFFIX|ADDRESS|DATE OF BIRTH)\b/);
+
+  const nameCandidatesRaw: string[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const ln = lines[i];
+    if (/\b(FIRST NAME|GIVEN NAME|MIDDLE NAME|SURNAME|LAST NAME|APELLIDO)\b/.test(ln)) {
+      const inline = cleanVal(ln.replace(/\b(FIRST NAME|GIVEN NAME|MIDDLE NAME|SURNAME|LAST NAME|APELLIDO)\b/g, "").replace(/^[:\s\-]+/, ""));
+      if (inline) nameCandidatesRaw.push(inline);
+      for (let j = i + 1; j < Math.min(lines.length, i + 4); j += 1) {
+        const cand = cleanVal(lines[j]);
+        if (!cand) continue;
+        if (blocked.test(cand)) continue;
+        if (/\b(ADDRESS|DATE|VALID|EXPIRY|EXPIRATION|SEX|GENDER|PHLPOST|POSTAL)\b/.test(cand)) break;
+        nameCandidatesRaw.push(cand);
+      }
+    }
+  }
+  if (firstNameByLabel || middleNameByLabel || lastNameByLabel) {
+    nameCandidatesRaw.push([firstNameByLabel, middleNameByLabel, lastNameByLabel].filter(Boolean).join(" ").trim());
+  }
+
+  const seen = new Set<string>();
+  const deduped = nameCandidatesRaw
+    .map((c) => cleanVal(c))
+    .filter((c) => !!c && !blocked.test(c))
+    .filter((c) => {
+      const f = fingerprint(c);
+      if (!f) return false;
+      if (seen.has(f)) return false;
+      seen.add(f);
+      return true;
+    });
+
+  const best = deduped
+    .filter((c) => !/\b(POSTAL|PHILIPPINE|NAME|SURNAME|MIDDLE|SUFFIX|ADDRESS|DATE|VALID|PHLPOST)\b/.test(c))
+    .sort((a, b) => b.length - a.length)[0] || "";
+
+  const fallbackLikelyName =
+    lines
+      .map((v) => cleanVal(v))
+      .filter((v) => !!v && !blocked.test(v))
+      .filter((v) => !/\b(POSTAL|PHILIPPINE|PHLPOST|REPUBLIC|IDENTITY|CARD|ADDRESS|DATE|VALID|EXPIRY|EXPIRATION|SEX|GENDER|CRN)\b/.test(v))
+      .filter((v) => /^[A-Z][A-Z\s.'-]{2,}$/.test(v))
+      .filter((v) => !/\d/.test(v))
+      .sort((a, b) => b.length - a.length)[0] || "";
+
+  const fullName = sanitizeNameField(
+    best || fallbackLikelyName || [firstNameByLabel, middleNameByLabel, lastNameByLabel].filter(Boolean).join(" ").trim()
+  );
+  const compoundSplit = splitPostalNameWithCompoundSurname(fullName);
+  const resolvedFirstName = sanitizeNameField(firstNameByLabel || compoundSplit.firstName);
+  const resolvedMiddleName = sanitizeNameField(middleNameByLabel || compoundSplit.middleName);
+  const resolvedLastName = sanitizeNameField(lastNameByLabel || compoundSplit.lastName);
+  const resolvedFullName = sanitizeNameField(
+    [resolvedFirstName, resolvedMiddleName, resolvedLastName].filter(Boolean).join(" ").replace(/\s+/g, " ").trim()
+  );
+
+  const sexRaw = (nearestValueByLabel(/\b(SEX|GENDER)\b/, /\b(ADDRESS|DATE OF BIRTH|VALID|EXPIRY|EXPIRATION)\b/) || "").trim().toUpperCase();
+  const gender =
+    sexRaw === "F" || sexRaw === "FEMALE" ? "Female" :
+    sexRaw === "M" || sexRaw === "MALE" ? "Male" :
+    undefined;
+  const expirationRaw = nearestValueByLabel(/\b(VALID UNTIL|VALID THRU|EXPIRY DATE|EXPIRATION DATE|DATE OF EXPIRY|EXPIRY)\b/);
+  const expirationDate = parseDateTokenToYmd(expirationRaw) || parseLabeledDate(upper, ["VALID UNTIL", "VALID THRU", "EXPIRY DATE", "EXPIRATION DATE", "DATE OF EXPIRY", "EXPIRY"]);
+  const birthdayRaw = nearestValueByLabel(/\b(DATE OF BIRTH|BIRTH DATE|DOB|BIRTHDAY|PETSA NG KAPANGANAKAN)\b/);
+  const birthday = parseDateTokenToYmd(birthdayRaw) || parseLabeledDate(upper, ["DATE OF BIRTH", "BIRTH DATE", "DOB", "BIRTHDAY", "PETSA NG KAPANGANAKAN"]);
+  const addressFromLabel = (() => {
+    const chunks: string[] = [];
+    for (let i = 0; i < orderedLines.length; i += 1) {
+      const ln = orderedLines[i].text;
+      if (!/\b(ADDRESS|TIRAHAN)\b/.test(ln)) continue;
+      const inline = sanitizeAddressField(ln.replace(/.*\b(ADDRESS|TIRAHAN)\b[:\-\s]*/g, "").trim());
+      if (inline && !blockedAsValue.test(inline)) chunks.push(inline);
+      for (let j = i + 1; j < Math.min(orderedLines.length, i + 6); j += 1) {
+        const nxt = orderedLines[j].text;
+        if (/\b(DATE OF BIRTH|BIRTH DATE|DOB|SEX|GENDER|VALID|EXPIRY|EXPIRATION|POSTAL REFERENCE|ID NO)\b/.test(nxt)) break;
+        const c = sanitizeAddressField(nxt);
+        if (!c || blockedAsValue.test(c)) continue;
+        chunks.push(c);
+      }
+      break;
+    }
+    return sanitizeAddressField(Array.from(new Set(chunks)).join(" "));
+  })();
+  const addressRaw = parseOcrField(upper, ["ADDRESS", "TIRAHAN", "CITY/MUNICIPALITY", "CITY"]) || "";
+  const address = sanitizeAddressField(addressFromLabel || addressRaw.replace(/\b(ADDRESS|TIRAHAN|CITY\/MUNICIPALITY|CITY)\b[:\-\s]*/g, "").trim());
+
+  const dedupeNameString = (v: string) => {
+    const parts = String(v || "").split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length <= 1) return v;
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const p of parts) {
+      const k = p.replace(/\s+/g, " ").toUpperCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(p);
+    }
+    return out.join(", ");
+  };
+  const finalFullName = dedupeNameString(resolvedFullName);
+
+  console.debug("[PostalID] raw OCR boxes/lines", orderedLines);
+  console.debug("[PostalID] detected label-value pairs", {
+    firstNameByLabel,
+    middleNameByLabel,
+    lastNameByLabel,
+    birthdayRaw,
+    sexRaw,
+    expirationRaw,
+    addressFromLabel,
+  });
+  console.debug("[PostalID] candidate name lines", {
+    raw: nameCandidatesRaw,
+    deduped,
+    firstName,
+    middleName,
+    lastName,
+    fullName,
+    fallbackLikelyName,
+    resolvedFirstName,
+    resolvedMiddleName,
+    resolvedLastName,
+    resolvedFullName: finalFullName,
+  });
+  console.debug("[PostalID] detected gender", gender || "none");
+  console.debug("[PostalID] detected expirationDate", expirationDate || "none");
+  console.debug("[PostalID] detected address", address || "none");
+  const missingPostal = [
+    !finalFullName ? "name" : "",
+    !birthday ? "birthday" : "",
+    !address ? "address" : "",
+  ].filter(Boolean);
+  console.debug("[PostalID] missing required fields", missingPostal);
+
+  return {
+    firstName: resolvedFirstName,
+    middleName: resolvedMiddleName,
+    lastName: resolvedLastName,
+    fullName: finalFullName,
+    birthday,
+    address,
+    gender,
+    expirationDate,
+  };
+};
+
+const parseManilaPwdIdStrictFields = (text: string) => {
+  const upper = String(text || "").toUpperCase();
+  const get = (labels: string[]) => sanitizeNameField(parseOcrField(upper, labels) || "");
+  const name = get(["NAME", "FULL NAME", "COMPLETE NAME"]);
+  return {
+    name,
+    firstName: "", // PWD ID uses full name instead of separate parts
+    middleName: "",
+    lastName: "",
+    birthday: parseLabeledDate(upper, ["DATE OF BIRTH", "BIRTH DATE", "PETSA NG KAPANGANAKAN"]),
+    address: sanitizeAddressField(parseOcrField(upper, ["ADDRESS", "TIRAHAN", "CITY/MUNICIPALITY"]) || ""),
+    idNumber: normalizeIdNumber(parseOcrField(upper, ["ID NO", "ID. NO", "CONTROL NO", "PWD NO", "PWD ID NO"]) || ""),
+  };
+};
+
+const extractIdDetails = (rawText: string): ParsedIdData => {
+  // Apply OCR cleanup to fix common character misrecognitions
+  const cleanedText = cleanupOcrText(rawText);
+  const text = cleanedText.toUpperCase();
+  const idType = detectIdType(text) ?? undefined;
+  const rule = idType ? ID_RULES[idType] : undefined;
+  const dl = parsePhilippineDriversLicense(text);
+
+  const allNameLabels = uniqueValues([
+    "FIRST NAME",
+    "GIVEN NAME",
+    "MGA PANGALAN",
+    "GIVEN NAMES",
+    "MIDDLE NAME",
+    "MIDDLE INITIAL",
+    "LAST NAME",
+    "SURNAME",
+    "APELYIDO",
+    ...(rule?.nameLabels || []),
+  ]);
+
+  const ruleFullName =
+    parseOcrField(text, rule?.nameLabels || []) ||
+    parseOcrField(text, allNameLabels) ||
+    pickLikelyNameLine(text, rule || ID_RULES.DRIVERS_LICENSE);
+  const parsedName = parseNameParts(ruleFullName);
+
+  const mrzName = idType === "PASSPORT" ? parsePassportMrzName(text) : { firstName: "", middleName: "", lastName: "" };
+  const passportMrz = idType === "PASSPORT"
+    ? parsePassportMrzData(text)
+    : { firstName: "", middleName: "", lastName: "", birthday: "", expirationDate: "", gender: undefined as ("Male" | "Female" | undefined), idNumber: "" };
+  const passportStrict = idType === "PASSPORT"
+    ? parsePassportStrictFields(text)
+    : { firstName: "", middleName: "", lastName: "", birthday: "", expirationDate: "", issueDate: "", gender: undefined as ("Male" | "Female" | undefined) };
+  const umidName = idType === "UMID" ? parseUmidStrictFields(text) : { firstName: "", middleName: "", lastName: "", birthday: "", gender: undefined as ("Male" | "Female" | undefined), address: "" };
+  const postalName = idType === "POSTAL_ID" ? parsePostalStrictFields(text) : { firstName: "", middleName: "", lastName: "", fullName: "", birthday: "", address: "", gender: undefined as ("Male" | "Female" | undefined), expirationDate: "" };
+  const pwdIdStrict = idType === "MANILA_PWD_ID" ? parseManilaPwdIdStrictFields(text) : { name: "", firstName: "", middleName: "", lastName: "", address: "", birthday: "", idNumber: "" };
+  const seniorStrict = idType === "MANILA_SENIOR_CITIZEN_ID" ? parseSeniorStrictFields(text) : { name: "", address: "", birthday: "", idNumber: "" };
+  const philSysName = idType === "PHILSYS_NATIONAL_ID"
+    ? (() => {
+        const byLine = parsePhilSysNameParts(text);
+        const byBlock = parsePhilSysNameFromBlocks(text);
+        const strict = parsePhilSysStrictFields(text);
+        return {
+          firstName: strict.firstName || byBlock.firstName || byLine.firstName,
+          middleName: strict.middleName || byBlock.middleName || byLine.middleName,
+          lastName: strict.lastName || byBlock.lastName || byLine.lastName,
+          birthday: strict.birthday,
+          address: strict.address,
+        };
+      })()
+    : { firstName: "", middleName: "", lastName: "", birthday: "", address: "" };
+  const firstName = idType === "PHILSYS_NATIONAL_ID"
+    ? sanitizeNameField(philSysName.firstName || "")
+    : idType === "UMID"
+    ? sanitizeNameField(umidName.firstName || "")
+    : ((idType === "PASSPORT" ? (passportStrict.firstName || passportMrz.firstName) : "") || (idType === "POSTAL_ID" ? postalName.firstName : "") || (idType === "MANILA_PWD_ID" ? pwdIdStrict.firstName : "") || dl.firstName || parseOcrField(text, ["FIRST NAME", "GIVEN NAME", "MGA PANGALAN", "GIVEN NAMES"]) || parsedName.firstName || mrzName.firstName);
+  const middleName = idType === "PHILSYS_NATIONAL_ID"
+    ? sanitizeNameField(philSysName.middleName || "")
+    : idType === "UMID"
+    ? sanitizeNameField(umidName.middleName || "")
+    : ((idType === "PASSPORT" ? (passportStrict.middleName || passportMrz.middleName) : "") || (idType === "POSTAL_ID" ? postalName.middleName : "") || (idType === "MANILA_PWD_ID" ? pwdIdStrict.middleName : "") || dl.middleName || parseOcrField(text, ["MIDDLE NAME", "MIDDLE INITIAL", "GITNANG APELYIDO"]) || parsedName.middleName || mrzName.middleName);
+  const lastName = idType === "PHILSYS_NATIONAL_ID"
+    ? sanitizeNameField(philSysName.lastName || "")
+    : idType === "UMID"
+    ? sanitizeNameField(umidName.lastName || "")
+    : ((idType === "PASSPORT" ? (passportStrict.lastName || passportMrz.lastName) : "") || (idType === "POSTAL_ID" ? postalName.lastName : "") || (idType === "MANILA_PWD_ID" ? pwdIdStrict.lastName : "") || dl.lastName || parseOcrField(text, ["LAST NAME", "SURNAME", "APELYIDO"]) || parsedName.lastName || mrzName.lastName);
+
+  const postalCollapse = (() => {
+    if (idType !== "POSTAL_ID") return { firstName, middleName, lastName };
+    const norm = (v: string) => sanitizeNameField(v || "").replace(/\s+/g, " ").trim();
+    const f = norm(firstName);
+    const m = norm(middleName);
+    const l = norm(lastName);
+    const sameFM = !!f && !!m && f === m;
+    const sameFL = !!f && !!l && f === l;
+    const sameML = !!m && !!l && m === l;
+    if (sameFM && sameFL && sameML) {
+      return { firstName: f, middleName: "", lastName: "" };
+    }
+    return { firstName, middleName, lastName };
+  })();
+
+  const finalFirstName = postalCollapse.firstName;
+  const finalMiddleName = postalCollapse.middleName;
+  const finalLastName = postalCollapse.lastName;
+
+  const philSysStrictFullName = sanitizeNameField([finalLastName, finalFirstName, finalMiddleName].filter(Boolean).join(" ").trim());
+  const umidStrictFullName = sanitizeNameField([lastName, firstName, middleName].filter(Boolean).join(" ").trim());
+  const isUmidHeaderNoiseName = (value: string) =>
+    /\bUNIF[A-Z]*\b|\bUNIT[A-Z]*\b|\bMULTI?[A-Z-]*\b|\bPURPOSE\b|\bUMID\b|\bREPUBLIC\b|\bPHILIPPINES?\b/i.test(value || "");
+  const fullName =
+    idType === "PHILSYS_NATIONAL_ID"
+      ? philSysStrictFullName
+      : idType === "UMID"
+      ? (isUmidHeaderNoiseName(umidStrictFullName) ? "" : umidStrictFullName)
+      : idType === "MANILA_SENIOR_CITIZEN_ID"
+      ? sanitizeNameField(seniorStrict.name || [lastName, firstName, middleName].filter(Boolean).join(" ").trim())
+      : idType === "MANILA_PWD_ID"
+      ? sanitizeNameField(pwdIdStrict.name || [lastName, firstName, middleName].filter(Boolean).join(" ").trim())
+      : idType === "POSTAL_ID"
+      ? sanitizeNameField(postalName.fullName || [finalFirstName, finalMiddleName, finalLastName].filter(Boolean).join(" ").trim())
+      : [finalLastName, finalFirstName, finalMiddleName].filter(Boolean).join(", ").replace(/,\s*,/g, ",") || ruleFullName;
+
+  const address =
+    (idType === "PHILSYS_NATIONAL_ID" ? philSysName.address : "") ||
+    (idType === "UMID" ? umidName.address : "") ||
+    (idType === "POSTAL_ID" ? postalName.address : "") ||
+    (idType === "MANILA_PWD_ID" ? pwdIdStrict.address : "") ||
+    (idType === "MANILA_SENIOR_CITIZEN_ID" ? seniorStrict.address : "") ||
+    dl.streetAddress ||
+    parseOcrField(text, uniqueValues(["ADDRESS", "TIRAHAN", "CITY/MUNICIPALITY OF", "CITY/MUNICIPALITY", ...(rule?.addressLabels || [])]));
+
+  const detectedIdNumber =
+    (idType === "PASSPORT" ? passportMrz.idNumber : "") ||
+    extractByPatterns(text, rule?.idPatterns || []) ||
+    parseOcrField(text, uniqueValues(["LICENSE NO", "ID NO", "ID. NO", "PCN", "PRN", "POSTAL REFERENCE NO", "PASSPORT NO", "PASSPORT NUMBER", "CRN", "OSCA ID NO", "SENIOR CITIZEN ID NO", "NO", ...(rule?.idLabels || [])])) ||
+    (text.match(/\b(?:[A-Z]\d{7}|[A-Z]{1,3}\d{5,}|P\d{7,}[A-Z]?|\d{6,})\b/)?.[0] || "");
+  const idCandidate = idType === "MANILA_SENIOR_CITIZEN_ID" ? (seniorStrict.idNumber || detectedIdNumber) : (idType === "MANILA_PWD_ID" ? (pwdIdStrict.idNumber || detectedIdNumber) : detectedIdNumber);
+  const idNumber = isValidIdNumberForRule(idCandidate, rule) ? normalizeIdNumber(idCandidate) : "";
+
+  const birthday =
+    (idType === "PHILSYS_NATIONAL_ID" ? philSysName.birthday : "") ||
+    (idType === "POSTAL_ID" ? postalName.birthday : "") ||
+    (idType === "PASSPORT" ? (passportMrz.birthday || passportStrict.birthday) : "") ||
+    (idType === "MANILA_PWD_ID" ? pwdIdStrict.birthday : "") ||
+    (idType === "MANILA_SENIOR_CITIZEN_ID" ? seniorStrict.birthday : "") ||
+    dl.birthday ||
+    parseLabeledDate(text, uniqueValues(["DATE OF BIRTH", "BIRTH DATE", "BIRTHDAY", "PETSA NG KAPANGANAKAN", ...(rule?.birthLabels || [])]));
+
+  if (idType === "PASSPORT") {
+    console.debug("[PassportDOB] MRZ detected:", !!passportMrz.birthday);
+    console.debug("[PassportDOB] Parsed MRZ DOB:", passportMrz.birthday || "none");
+    console.debug("[PassportDOB] Fallback OCR DOB candidate:", passportStrict.birthday || "none");
+    console.debug("[PassportDOB] Final DOB result:", birthday || "none");
+  }
+
+  const issueDate = parseLabeledDate(text, uniqueValues(["DATE OF ISSUE", "PETSa NG PAGKAKALOOB", "ISSUE DATE", "DATE ISSUED", "ISSUED ON", ...(rule?.issueLabels || [])]));
+  const expirationDate =
+    (idType === "PASSPORT" ? (passportMrz.expirationDate || passportStrict.expirationDate) : "") ||
+    (idType === "POSTAL_ID" ? postalName.expirationDate : "") ||
+    dl.expirationDate ||
+    parseLabeledDate(text, uniqueValues(["EXPIRATION DATE", "DATE OF EXPIRY", "EXPIRY DATE", "VALID UNTIL", "VALID THRU", "EXPIRY", ...(rule?.expiryLabels || [])]));
+  const gender =
+    (idType === "PASSPORT" ? (passportMrz.gender || passportStrict.gender || "Unknown") : undefined) ||
+    (idType === "UMID" ? umidName.gender : undefined) ||
+    (idType === "POSTAL_ID" ? postalName.gender : undefined) ||
+    dl.gender ||
+    parseOcrGender(text) ||
+    (idType === "PHILSYS_NATIONAL_ID"
+      ? (parseOcrField(text, ["KASARIAN/SEX", "SEX", "KASARIAN"])?.trim().toUpperCase() === "F"
+          ? "Female"
+          : parseOcrField(text, ["KASARIAN/SEX", "SEX", "KASARIAN"])?.trim().toUpperCase() === "M"
+          ? "Male"
+          : undefined)
+      : undefined);
+
+  const fallbackDates = parseAllDateTokens(text);
+  const finalBirthday = (idType === "UMID" || idType === "PASSPORT") ? ((idType === "UMID" ? (umidName.birthday || birthday) : birthday) || "") : (birthday || fallbackDates[0] || "");
+  const finalIssue = issueDate || "";
+  const finalExpiry = expirationDate || "";
+
+  const hasPhilSysName = idType !== "PHILSYS_NATIONAL_ID" || !!philSysStrictFullName;
+  const confidencePieces = [
+    idType ? 35 : 0,
+    firstName || fullName ? 20 : 0,
+    finalBirthday ? 15 : 0,
+    gender ? 10 : 0,
+    address ? 15 : 0,
+  ];
+
+  return {
+    idType,
+    fullName: sanitizeNameField(fullName),
+    firstName: hasPhilSysName ? sanitizeNameField(finalFirstName) : "",
+    middleName: hasPhilSysName ? sanitizeNameField(finalMiddleName) : "",
+    lastName: hasPhilSysName ? sanitizeNameField(finalLastName) : "",
+    idNumber,
+    birthday: finalBirthday,
+    gender,
+    address: sanitizeAddressField(address),
+    issueDate: finalIssue,
+    expirationDate: finalExpiry,
+    expiryPolicy: rule?.expiryPolicy,
+    confidence: confidencePieces.reduce((sum, value) => sum + value, 0),
+    rawText,
+  };
+};
+
+const isExpiredYmd = (ymd: string) => {
+  if (!ymd) return false;
+  const today = new Date();
+  const a = new Date(`${ymd}T00:00:00`);
+  const t = new Date(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}T00:00:00`);
+  return a < t;
+};
+
+const isLikelyValidName = (value: string) => {
+  const v = sanitizeNameField(value || "");
+  if (!v || v.length < 4) return false;
+  if (/[^A-Z\s,'\.-]/i.test(v)) return false;
+  if (/(?:^|\s)(?:NOUTE|AF|HIRSTH)(?:\s|$)/i.test(v)) return false;
+  const alpha = (v.match(/[A-Z]/gi) || []).length;
+  return alpha >= 4;
+};
+
+const validateParsedId = (data: ParsedIdData) => {
+  if (!data.idType) return { ok: false, error: "Invalid or unsupported ID." };
+  const rule = ID_RULES[data.idType];
+
+  const hasAnyCore =
+    !!data.firstName || !!data.lastName || !!data.fullName || !!data.idNumber || !!data.birthday;
+  if (!hasAnyCore) return { ok: false, error: "Unable to read ID clearly. Please retake the photo." };
+
+  const missingFields = rule.requiredFields.filter((field) => {
+    if (field === "name") return !(data.firstName || data.fullName);
+    if (field === "idNumber") return !data.idNumber || !isValidIdNumberForRule(data.idNumber, rule);
+    if (field === "address") return !data.address;
+    // Gender is non-blocking for OCR apply flow.
+    if (field === "gender") return false;
+    return !data[field];
+  });
+  data.missingFields = missingFields;
+
+  const dateErrors = [
+    getDateValidationError("Date of Birth", data.birthday),
+    getDateValidationError("Issue Date", data.issueDate),
+    getDateValidationError("Expiration Date", data.expirationDate),
+  ].filter(Boolean);
+  if (dateErrors.length > 0) {
+    return { ok: false, error: "Required ID details could not be detected." };
+  }
+
+  if (!isLikelyValidName(data.fullName || `${data.lastName || ""} ${data.firstName || ""}`)) {
+    return { ok: false, error: "Invalid or unsupported ID." };
+  }
+
+  if (missingFields.length > 0 || (data.confidence || 0) < 75) {
+    return { ok: false, error: "Required ID details could not be detected." };
+  }
+
+  if (rule.expiryPolicy === "required" && !data.expirationDate) {
+    return { ok: false, error: "Required ID details could not be detected." };
+  }
+
+  if (data.expirationDate && isExpiredYmd(data.expirationDate)) {
+    return { ok: false, error: "ID is expired." };
+  }
+
+  return { ok: true as const };
 };
 
 export function ResidentRecords({
@@ -697,6 +2076,8 @@ export function ResidentRecords({
   const [pageSize, setPageSize] = useState(10);
 
   const [formData, setFormData] = useState(initialFormData);
+  const [ocrReview, setOcrReview] = useState<ParsedIdData | null>(null);
+  const [pendingOcrApply, setPendingOcrApply] = useState<ParsedIdData | null>(null);
 
   // required-field helpers
   const isBlank = (v: string) => !v || !v.trim();
@@ -916,6 +2297,8 @@ export function ResidentRecords({
 
   const resetForm = () => {
     setFormData(initialFormData);
+    setOcrReview(null);
+    setPendingOcrApply(null);
     setProfileImagePreview("");
     setPassword("");
     setConfirmPassword("");
@@ -1284,51 +2667,218 @@ export function ResidentRecords({
   const rangeStart = filteredResidents.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const rangeEnd = Math.min(currentPage * pageSize, filteredResidents.length);
 
-  const handleOcrData = (extractedText: string) => {
-    const text = extractedText.toUpperCase();
-    const lines = getMeaningfulOcrLines(text);
-    const licenseData = parsePhilippineDriversLicense(text);
-    const firstName =
-      licenseData.firstName ||
-      parseOcrField(text, ["FIRST NAME", "GIVEN NAME"]) ||
-      lines.find((line) => looksLikePersonNameLine(line) && line.split(" ").length >= 2)?.split(" ").slice(1).join(" ") ||
-      "";
-    const middleName =
-      licenseData.middleName ||
-      parseOcrField(text, ["MIDDLE NAME", "MIDDLE INITIAL"]) ||
-      "";
-    const lastName =
-      licenseData.lastName ||
-      parseOcrField(text, ["LAST NAME", "SURNAME"]) ||
-      lines.find((line) => looksLikePersonNameLine(line) && line.split(" ").length >= 2)?.split(" ")[0] ||
-      "";
-    const houseNo = licenseData.houseNo || "";
-    const streetAddress =
-      licenseData.streetAddress ||
-      parseOcrField(text, ["ADDRESS"]);
-    const genderRaw = licenseData.gender || parseOcrField(text, ["SEX", "GENDER"]);
-    const birthday = licenseData.birthday || parseOcrDate(text);
-    const normalizedNames = normalizeDetectedNameParts(firstName, middleName);
-    const normalizedHouseNo = sanitizeHouseNoField(houseNo);
-    const normalizedStreetAddress = sanitizeStreetAddressField(streetAddress);
+  const handleOcrData = async (extractedText: string) => {
+    console.debug("[IDScanner] OCR success");
+    const parsed = extractIdDetails(extractedText);
+    const validation = validateParsedId(parsed);
+    if (!validation.ok) {
+      setOcrReview(parsed);
+      setPendingOcrApply(null);
+      toast.error(validation.error);
+      return;
+    }
+    console.debug("[IDScanner] Scan validation passed");
 
+    try {
+      const backendValidation = await api.post("/api/id-ocr/validate-text", {
+        text: extractedText,
+        parsed,
+      });
+      if (!backendValidation.data?.ok) {
+        setOcrReview(parsed);
+        setPendingOcrApply(null);
+        toast.error(backendValidation.data?.error || "Required ID details could not be detected.");
+        return;
+      }
+    } catch (err: any) {
+      if (err?.response?.data?.error) {
+        setOcrReview(parsed);
+        setPendingOcrApply(null);
+        toast.error(err.response.data.error);
+        return;
+      }
+      console.warn("Backend ID OCR validation unavailable; using frontend validation.", err);
+    }
+
+    const applyParsedToForm = (parsedData: ParsedIdData) => {
+      console.debug("[IDScanner] Applying OCR data to form");
+      const text = extractedText.toUpperCase();
+      const licenseData = parsePhilippineDriversLicense(text);
+      const genderRaw = parsedData.gender || licenseData.gender || parseOcrField(text, ["SEX", "GENDER"]);
+      const splitAddress = splitLicenseAddress(parsedData.address || "");
+      const normalizedNames = normalizeDetectedNameParts(parsedData.firstName || "", parsedData.middleName || "");
+      const fallbackName = parseNameParts(parsedData.fullName || "");
+
+      setFormData((prev) => ({
+        ...prev,
+        firstName: normalizedNames.firstName || prev.firstName,
+        middleName: normalizedNames.middleName || prev.middleName,
+        lastName: sanitizeNameField(parsedData.lastName || fallbackName.lastName || "") || prev.lastName,
+        houseNo: sanitizeHouseNoField(splitAddress.houseNo || "") || prev.houseNo,
+        streetAddress: sanitizeStreetAddressField(splitAddress.streetAddress || parsedData.address || "") || prev.streetAddress,
+        gender:
+          genderRaw === "Female" || String(genderRaw).trim().toUpperCase() === "F"
+            ? "Female"
+            : genderRaw === "Male" || String(genderRaw).trim().toUpperCase() === "M"
+            ? "Male"
+            : prev.gender,
+        birthday: parsedData.birthday || prev.birthday,
+        age: parsedData.birthday ? calculateAge(parsedData.birthday) : prev.age,
+      }));
+      console.debug("[IDScanner] Form state updated");
+    };
+
+    setOcrReview(parsed);
+    // Always require explicit user confirmation before applying OCR data.
+    setPendingOcrApply(parsed);
+
+    const extractedSummary = [
+      `ID Type: ${parsed.idType ? ID_TYPE_LABEL[parsed.idType] : "N/A"}`,
+      `Name: ${[parsed.lastName, parsed.firstName, parsed.middleName].filter(Boolean).join(", ") || "N/A"}`,
+      `Date of Birth: ${parsed.birthday || "N/A"}`,
+      `Gender: ${parsed.gender || "N/A"}`,
+      `Address: ${parsed.address || "N/A"}`,
+      `Expiration Date: ${parsed.expirationDate || "N/A"}`,
+    ].join("\n");
+
+    toast.success(`ID text detected. Please confirm first, then apply to fields.\n${extractedSummary}`);
+  };
+
+  const handleOcrImageCaptured = (imageDataUrl: string) => {
+    if (!imageDataUrl) return;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        setProfileImagePreview(imageDataUrl);
+        setFormData((prev) => ({ ...prev, profileImage: imageDataUrl }));
+        return;
+      }
+
+      // ID portrait is usually on the left; crop portrait region instead of whole card.
+      const sx = Math.round(img.width * 0.03);
+      const sy = Math.round(img.height * 0.18);
+      const sw = Math.round(img.width * 0.34);
+      const sh = Math.round(img.height * 0.72);
+
+      canvas.width = 420;
+      canvas.height = 520;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      const croppedFace = canvas.toDataURL("image/jpeg", 0.95);
+
+      setProfileImagePreview(croppedFace);
+      setFormData((prev) => ({
+        ...prev,
+        profileImage: croppedFace,
+      }));
+      console.debug("[IDScanner] Photo preview updated");
+    };
+    img.onerror = () => {
+      setProfileImagePreview(imageDataUrl);
+      setFormData((prev) => ({ ...prev, profileImage: imageDataUrl }));
+    };
+    img.src = imageDataUrl;
+  };
+
+  const handleConfirmOcrApply = () => {
+    const source = pendingOcrApply || ocrReview;
+    if (!source) return;
+    const splitAddress = splitLicenseAddress(source.address || "");
+    const normalizedNames = normalizeDetectedNameParts(source.firstName || "", source.middleName || "");
     setFormData((prev) => ({
       ...prev,
       firstName: normalizedNames.firstName || prev.firstName,
       middleName: normalizedNames.middleName || prev.middleName,
-      lastName: sanitizeNameField(lastName) || prev.lastName,
-      houseNo: normalizedHouseNo || prev.houseNo,
-      streetAddress: normalizedStreetAddress || prev.streetAddress,
+      lastName: sanitizeNameField(source.lastName || "") || prev.lastName,
+      houseNo: sanitizeHouseNoField(splitAddress.houseNo || "") || prev.houseNo,
+      streetAddress: sanitizeStreetAddressField(splitAddress.streetAddress || source.address || "") || prev.streetAddress,
       gender:
-        genderRaw === "Female" || genderRaw.includes("FEMALE")
+        source.gender === "Female"
           ? "Female"
-          : genderRaw === "Male" || genderRaw.includes("MALE")
+          : source.gender === "Male"
           ? "Male"
           : prev.gender,
-      birthday: birthday || prev.birthday,
-      age: birthday ? calculateAge(birthday) : prev.age,
+      birthday: source.birthday || prev.birthday,
+      age: source.birthday ? calculateAge(source.birthday) : prev.age,
     }));
-    toast.success("ID text detected. Review the autofilled fields.");
+    setPendingOcrApply(null);
+    console.debug("[IDScanner] Form state updated");
+    toast.success("OCR details confirmed and applied to the form fields.");
+  };
+
+  const normalizeProfilePhotoForSubmit = async (imageDataUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      if (!imageDataUrl) return resolve("");
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 420;
+        canvas.height = 520;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(imageDataUrl);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        let quality = 0.9;
+        let out = canvas.toDataURL("image/jpeg", quality);
+        while (out.length > 320000 && quality > 0.55) {
+          quality = Number((quality - 0.1).toFixed(2));
+          out = canvas.toDataURL("image/jpeg", quality);
+        }
+        resolve(out);
+      };
+      img.onerror = () => resolve(imageDataUrl);
+      img.src = imageDataUrl;
+    });
+  };
+
+  const handleScanSuccess = async (payload: {
+    ocrData: string;
+    croppedPhoto: string;
+    confidence: number;
+    detectedIdType: string;
+  }) => {
+    console.debug("[IDScanner] OCR result received", payload.ocrData);
+    console.debug("[IDScanner] Face crop received", payload.croppedPhoto ? "yes" : "no");
+    if (payload.ocrData) {
+      try {
+        const parsed = extractIdDetails(payload.ocrData);
+        setOcrReview(parsed);
+        setPendingOcrApply(parsed);
+      } catch (err) {
+        console.error("[IDScanner] Failed to parse OCR payload", err);
+        setOcrReview({
+          fullName: "",
+          firstName: "",
+          middleName: "",
+          lastName: "",
+          birthday: "",
+          address: "",
+          gender: undefined,
+          confidence: payload.confidence || 0,
+          rawText: payload.ocrData,
+          missingFields: ["name", "birthday", "address"],
+        });
+      }
+    }
+    if (payload.croppedPhoto) {
+      console.debug("[IDScanner] Applying cropped photo to uploader");
+      const normalizedPhoto = await normalizeProfilePhotoForSubmit(payload.croppedPhoto);
+      setProfileImagePreview(normalizedPhoto);
+      setFormData((prev) => ({ ...prev, profileImage: normalizedPhoto }));
+      console.debug("[IDScanner] Photo preview updated");
+    }
+    try {
+      await handleOcrData(payload.ocrData);
+    } catch (err) {
+      console.error("[IDScanner] handleOcrData wiring fallback hit", err);
+    }
+    console.debug("[IDScanner] Form state updated");
   };
 
   const handleGenerateList = () => {
@@ -1461,7 +3011,11 @@ export function ResidentRecords({
               <div className="space-y-6 py-4">
                 <div className="flex flex-col items-center gap-2 mb-2">
                   <div className="flex items-center gap-2">
-                    <OcrScanner onDataExtracted={handleOcrData} />
+                    <OcrScanner
+                      onDataExtracted={handleOcrData}
+                      onImageCaptured={handleOcrImageCaptured}
+                      onScanSuccess={handleScanSuccess}
+                    />
                     <button
                       type="button"
                       onClick={() => setShowScannerInfoDialog(true)}
@@ -1471,6 +3025,52 @@ export function ResidentRecords({
                       ?
                     </button>
                   </div>
+                  {ocrReview && (
+                    <div className="w-full max-w-3xl rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-sm shadow-sm">
+                      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-[#2957a1]">Extracted ID details for review</p>
+                          <p className="text-xs text-gray-600">
+                            Please confirm these OCR details before saving the resident record.
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#2957a1]">
+                          Confidence: {ocrReview.confidence ?? 0}%
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {[
+                          ["ID Type", ocrReview.idType ? ID_TYPE_LABEL[ocrReview.idType] : "Unsupported ID type"],
+                          ["Full Name", [ocrReview.lastName, ocrReview.firstName, ocrReview.middleName].filter(Boolean).join(", ") || ocrReview.fullName || "Not detected"],
+                          ["Date of Birth", ocrReview.birthday || "Not detected"],
+                          ["Gender", ocrReview.gender || "Not detected"],
+                          ["Address", ocrReview.address || "Not detected"],
+                          [
+                            "Expiration Date",
+                            ocrReview.expirationDate ||
+                              (ocrReview.expiryPolicy === "not_expected" ? "No expiration expected" : "Not detected"),
+                          ],
+                        ].map(([label, value]) => (
+                          <div key={label} className="rounded-lg bg-white p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+                            <p className="mt-1 break-words font-medium text-gray-900">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {ocrReview.missingFields && ocrReview.missingFields.length > 0 && (
+                        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+                          Missing required details: {ocrReview.missingFields.join(", ")}
+                        </p>
+                      )}
+                      {(pendingOcrApply || ocrReview) && (
+                        <div className="mt-3 flex justify-end">
+                          <Button type="button" onClick={handleConfirmOcrApply} className="bg-[#2957a1] hover:bg-[#1f4380]">
+                            Confirm & Apply To Fields
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1496,6 +3096,8 @@ export function ResidentRecords({
                       <li>Driver's License</li>
                       <li>Passport</li>
                       <li>Postal ID</li>
+                      <li>Manila PWD ID</li>
+                      <li>Manila Senior Citizen ID</li>
                     </ul>
                   </div>
                 </DialogContent>
@@ -1503,12 +3105,20 @@ export function ResidentRecords({
 
               <div className="flex justify-center">
                 <ProfileImageUpload
-                  onImageReady={(imageUrl, previewUrl) => {
+                  onImageReady={(imageUrl, previewUrl, imageFile) => {
+                    console.debug("[ProfileImageUpload] resident form image state updated", {
+                      hasImageUrl: !!imageUrl,
+                      hasPreviewUrl: !!previewUrl,
+                      fileType: imageFile ? (imageFile as File).type || "blob" : "none",
+                      fileSize: imageFile ? (imageFile as File).size || 0 : 0,
+                    });
                     setFormData({ ...formData, profileImage: imageUrl });
                     setProfileImagePreview(previewUrl);
+                    console.debug("[ProfileImageUpload] image ready for submission");
                   }}
                   currentImage={profileImagePreview || undefined}
                   size="lg"
+                  allowTransform={!editingResident}
                 />
               </div>
 
@@ -1598,17 +3208,22 @@ export function ResidentRecords({
                           >
                             <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
                             {formData.birthday
-                              ? format(new Date(formData.birthday + "T00:00:00"), "MM/dd/yyyy")
+                              ? format(fromYmdLocal(formData.birthday), "MM/dd/yyyy")
                               : <span>Select date</span>}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
-                            selected={formData.birthday ? new Date(formData.birthday + "T00:00:00") : undefined}
+                            showOutsideDays
+                            className="rounded-md"
+                            classNames={{
+                              day_outside: "text-gray-300 opacity-60 pointer-events-none",
+                            }}
+                            selected={formData.birthday ? fromYmdLocal(formData.birthday) : undefined}
                             onSelect={(date) => {
                               if (!date) return;
-                              const ymd = date.toISOString().split("T")[0];
+                              const ymd = toLocalYmd(date);
                               setFormData({ ...formData, birthday: ymd, age: calculateAge(ymd) });
                             }}
                             disabled={(date) => date > new Date()}
@@ -1616,7 +3231,6 @@ export function ResidentRecords({
                             captionLayout="dropdown-buttons"
                             fromYear={1900}
                             toYear={new Date().getFullYear()}
-                            className="rounded-md"
                           />
                         </PopoverContent>
                       </Popover>
@@ -1712,6 +3326,7 @@ export function ResidentRecords({
                           <SelectValue placeholder="RESIDENT" />
                         </SelectTrigger>
                         <SelectContent className="uppercase">
+                          <SelectItem value="Resident" className="uppercase">RESIDENT</SelectItem>
                           <SelectItem value="Student" className="uppercase">STUDENT</SelectItem>
                           <SelectItem value="Senior Citizen">
                             SENIOR CITIZEN
@@ -2563,6 +4178,7 @@ export function ResidentRecords({
                         loadResidents();
                       }}
                       size="lg"
+                      allowTransform={false}
                     />
                   </div>
 
@@ -2767,6 +4383,7 @@ export function ResidentRecords({
                       loadResidents();
                     }}
                     size="lg"
+                    allowTransform={false}
                   />
                 </div>
 
@@ -2976,11 +4593,11 @@ export function ResidentRecords({
                 <PopoverContent className="w-auto p-0">
                   <Calendar
                     mode="single"
-                    selected={tempCutoffDate ? new Date(tempCutoffDate) : undefined}
+                    selected={tempCutoffDate ? fromYmdLocal(tempCutoffDate) : undefined}
                     onSelect={(date) => {
                       if (!date) return;
 
-                      setTempCutoffDate(date.toISOString().split("T")[0]);
+                      setTempCutoffDate(toLocalYmd(date));
                     }}
                     disabled={(date) => date > new Date()}
                     initialFocus
