@@ -170,32 +170,30 @@ function getResidentRegisteredDate(row: DashboardResidentRow) {
   return parsed;
 }
 
-function buildWeeklyTrendFromResidents(rows: DashboardResidentRow[]) {
-  const startOfCurrentWeek = dayjs().startOf('week');
+function buildWeeklyTrendFromResidents(rows: DashboardResidentRow[], cutoffDate: string) {
+  const now = dayjs().endOf('day');
+  const cutoff = dayjs(cutoffDate).startOf('day');
+  const start = cutoff.isValid() && cutoff.isBefore(now) ? cutoff : now.subtract(27, 'day').startOf('day');
+  const totalDays = Math.max(now.diff(start, 'day') + 1, 1);
+  const bucketSize = Math.max(Math.ceil(totalDays / 4), 1);
 
   return Array.from({ length: 4 }, (_, index) => {
-    const weekStart = startOfCurrentWeek.subtract(3 - index, 'week');
-    const weekEnd = weekStart.add(1, 'week');
+    const bucketStart = start.add(index * bucketSize, 'day').startOf('day');
+    const rawBucketEnd = bucketStart.add(bucketSize - 1, 'day').endOf('day');
+    const bucketEnd = rawBucketEnd.isAfter(now) ? now : rawBucketEnd;
 
     const count = rows.filter((row) => {
       const residentStatus = String(row?.status ?? 'Active').trim();
-      if (residentStatus && residentStatus !== 'Active') {
-        return false;
-      }
+      if (residentStatus && residentStatus !== 'Active') return false;
 
       const registeredDate = getResidentRegisteredDate(row);
-      if (!registeredDate) {
-        return false;
-      }
+      if (!registeredDate) return false;
 
       const d = dayjs(registeredDate);
-      return d.isAfter(weekStart.subtract(1, 'millisecond')) && d.isBefore(weekEnd);
+      return d.isAfter(bucketStart.subtract(1, 'millisecond')) && d.isBefore(bucketEnd.add(1, 'millisecond'));
     }).length;
 
-    return {
-      week: `Week ${index + 1}`,
-      count,
-    };
+    return { week: `Week ${index + 1}`, count };
   });
 }
 
@@ -359,7 +357,10 @@ export function DashboardHome({
           const registeredDate = getResidentRegisteredDate(row);
           return registeredDate ? dayjs(registeredDate).isAfter(cutoffDate.subtract(1, 'millisecond')) : false;
         }).length;
-        const frontendWeeklyTrend = buildWeeklyTrendFromResidents(activeResidentRows);
+        const frontendWeeklyTrend = buildWeeklyTrendFromResidents(
+          activeResidentRows,
+          registrationCutoffDate
+        );
 
         if (!isMounted) return;
 
