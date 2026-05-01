@@ -51,7 +51,6 @@ import {
 import { toast } from "sonner";
 import { api } from "../../utils/api";
 import imgBarangayLogo from "../../assets/barangaylogo.png";
-import { getStoredAdminViewOnly, isSkKagawadRole } from "../../utils/adminAccess";
 import { validateAnnouncementForm, type ValidationErrors } from "../../utils/validation";
 
 interface Announcement {
@@ -234,7 +233,7 @@ interface AnnouncementManagementProps {
 export function AnnouncementManagement({
   userRole,
 }: AnnouncementManagementProps) {
-  const isReadOnly = isSkKagawadRole(userRole) || getStoredAdminViewOnly();
+  const isReadOnly = false;
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [customTargetAudiences, setCustomTargetAudiences] = useState<string[]>([]);
