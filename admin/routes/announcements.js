@@ -1,7 +1,6 @@
 const router = require("express").Router();
 const pool = require("../db");
 const verifyToken = require("../middleware/verifyToken");
-const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
 const { validateAnnouncementPayload } = require("../utils/validation");
 
 async function generateNextAnnouncementId(db = pool) {
@@ -162,7 +161,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.post("/", verifyToken, requireNonSkWriteAccess, async (req, res) => {
+router.post("/", verifyToken, async (req, res) => {
   try {
     const {
       title, body, postedByRole, postedById, status, targetAudience,
@@ -228,7 +227,7 @@ router.post("/", verifyToken, requireNonSkWriteAccess, async (req, res) => {
 });
 
 // THE FIX: Added Explicit Logging to track the 404 issue
-router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
+router.put("/:id", verifyToken, async (req, res) => {
   console.log(`\n[Announcements] ---> Attempting to EDIT Announcement ID: ${req.params.id}`);
   try {
     const { id } = req.params;
@@ -299,7 +298,7 @@ router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
   }
 });
 
-router.patch("/:id/archive", verifyToken, requireNonSkWriteAccess, async (req, res) => {
+router.patch("/:id/archive", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(

@@ -30,7 +30,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
-import { User, Lock, Eye, EyeOff, Calendar } from "lucide-react";
+import { User, Lock, Eye, EyeOff, Calendar, Search } from "lucide-react";
 import { ProfileImageUpload } from "../ui/ProfileImageUpload";
 import { OfficialForgotPasswordPage } from "./OfficialForgotPasswordPage";
 import { toast } from "sonner";
@@ -225,6 +225,7 @@ export function BarangayOfficials() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [formData, setFormData] = useState<{
     profileImage: string;
@@ -250,6 +251,7 @@ export function BarangayOfficials() {
     setPassword("");
     setConfirmPassword("");
     setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   const hasUnsavedOfficialForm =
@@ -657,12 +659,18 @@ export function BarangayOfficials() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search name / position / ID…"
-            className="w-full sm:w-64"
-          />
+          <div className="relative w-full sm:w-64">
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search name / position / ID…"
+              className="w-full pr-9"
+            />
+
+            <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+              <Search className="w-4 h-4 text-gray-400" />
+            </div>
+          </div>
 
           <Dialog
             open={isDialogOpen}
@@ -978,7 +986,7 @@ export function BarangayOfficials() {
           }
         }}
       >
-        <AlertDialogContent className="max-w-2xl">
+        <AlertDialogContent className="w-[95vw] sm:max-w-3xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Data Privacy Agreement</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1092,17 +1100,26 @@ export function BarangayOfficials() {
               <Label className="text-sm font-bold text-gray-700">
                 Confirm Password *
               </Label>
-              <Input
-                type={showPassword ? "text" : "password"}
-                maxLength={50}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-type password"
-                className={`h-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1] ${confirmPassword && password !== confirmPassword
-                    ? "border-red-500 ring-red-500"
-                    : ""
-                  }`}
-              />
+              <div className="relative">
+                <Input
+                  type={showConfirmPassword ? "text" : "password"}
+                  maxLength={50}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-type password"
+                  className={`h-10 pr-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1] ${confirmPassword && password !== confirmPassword
+                      ? "border-red-500 ring-red-500"
+                      : ""
+                    }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute inset-y-0 right-3 flex items-center justify-center text-gray-400 hover:text-[#2957a1]"
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
               {confirmPassword && password !== confirmPassword && (
                 <p className="text-[10px] text-red-500 mt-1">
                   Passwords do not match
@@ -1177,8 +1194,9 @@ export function BarangayOfficials() {
 
           {viewingOfficial && editingOfficial && (
             <div className="space-y-6 py-4">
+              {/* Header: photo + name + badges — mirrors Resident Details */}
               <div className="flex flex-col items-center gap-4 text-center md:flex-row md:items-start md:text-left">
-                <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#2957a1] bg-[#2957a1]">
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#2957a1] bg-[#2957a1]">
                   {editingOfficial.profileimage ? (
                     <img
                       src={
@@ -1190,168 +1208,155 @@ export function BarangayOfficials() {
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <User className="h-12 w-12 text-white" />
+                    <User className="h-10 w-10 text-white" />
                   )}
                 </div>
 
                 <div className="space-y-2">
+                  <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
+                    {viewingOfficial.adminname}
+                  </h2>
                   <div className="flex flex-wrap justify-center gap-2 md:justify-start">
-                    <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+                    <span className="rounded-full border border-gray-300 bg-gray-50 px-3 py-0.5 text-xs font-medium text-gray-600">
                       Username: {viewingOfficial.barangayadminid}
                     </span>
+                    <span className="rounded-full border border-gray-300 bg-gray-50 px-3 py-0.5 text-xs font-medium text-gray-600">
+                      {editingOfficial.position || "—"}
+                    </span>
                     <span
-                      className={`rounded-full px-3 py-1 text-sm font-medium ${
-                        viewingOfficial.status
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-200 text-gray-700"
+                      className={`rounded-full px-3 py-0.5 text-xs font-medium border ${
+                        editingOfficial.status
+                          ? "bg-green-50 text-green-700 border-green-200"
+                          : "bg-gray-100 text-gray-600 border-gray-300"
                       }`}
                     >
-                      {formatStatusLabel(viewingOfficial.status)}
+                      {editingOfficial.status ? "Active" : "Inactive"}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="grid gap-8 lg:grid-cols-[1.45fr_1.1fr]">
-                <Card className="bg-gray-50">
-                  <CardContent className="space-y-4 p-9">
-                    <h4 className="text-base font-semibold text-[#2957a1]">
-                      Account Information
-                    </h4>
-                    <div className="space-y-4 rounded-xl bg-gray-100 p-4 text-sm">
-                      <div>
-                        <Label className="text-xs uppercase tracking-wide text-gray-500">
-                          Full Name
-                        </Label>
-                        <Input
-                          value={editingOfficial.adminname}
-                          readOnly
-                          disabled
-                          className="mt-1 bg-white text-black disabled:opacity-100 disabled:text-black disabled:bg-white cursor-default"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs uppercase tracking-wide text-gray-500">
-                          Position
-                        </Label>
-                        <Input
-                          value={editingOfficial.position}
-                          readOnly
-                          disabled
-                          className="mt-1 bg-white text-black disabled:opacity-100 disabled:text-black disabled:bg-white cursor-default"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs uppercase tracking-wide text-gray-500">
-                          Email
-                        </Label>
-                        <Input
-                          type="email"
-                          value={editingOfficial.email}
-                          onChange={(e) =>
-                            setEditingOfficial((prev) =>
-                              prev ? { ...prev, email: e.target.value } : prev
-                            )
-                          }
-                          onFocus={(e) => {
-                            const end = e.target.value.length;
-                            e.target.setSelectionRange(end, end);
-                          }}
-                          className="mt-1 bg-white focus-visible:ring-0 focus-visible:ring-offset-0"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs uppercase tracking-wide text-gray-500">
-                          Contact Number
-                        </Label>
-                        <Input
-                          value={editingOfficial.contactnumber}
-                          inputMode="numeric"
-                          maxLength={11}
-                          onChange={(e) =>
-                            setEditingOfficial((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    contactnumber: e.target.value.replace(/\D/g, ""),
-                                  }
-                                : prev
-                            )
-                          }
-                          className="mt-1 bg-white"
-                        />
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-gray-500">
-                          Date Created
-                        </p>
-                        <p className="font-medium text-gray-900">
-                          {formatDisplayDate(viewingOfficial.datecreated) || "Not available"}
-                        </p>
-                      </div>
+              {/* Two-column info panels */}
+              <div className="grid gap-5 lg:grid-cols-2">
+                {/* Account Information */}
+                <div className="rounded-xl border border-gray-200 bg-white p-5">
+                  <p className="mb-1 text-sm font-semibold text-[#2957a1]">Account Information</p>
+                  <p className="mb-4 text-xs text-gray-400">Personal and contact details</p>
+                  <div className="space-y-4 text-sm">
+                    <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                      <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Full Name</span>
+                      <Input
+                        value={editingOfficial.adminname}
+                        readOnly
+                        disabled
+                        className="h-8 bg-gray-50 text-gray-800 disabled:opacity-100 disabled:cursor-default border-gray-200"
+                      />
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                      <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Position</span>
+                      <Input
+                        value={editingOfficial.position}
+                        readOnly
+                        disabled
+                        className="h-8 bg-gray-50 text-gray-800 disabled:opacity-100 disabled:cursor-default border-gray-200"
+                      />
+                    </div>
+                    <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                      <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Email</span>
+                      <Input
+                        type="email"
+                        value={editingOfficial.email}
+                        onChange={(e) =>
+                          setEditingOfficial((prev) =>
+                            prev ? { ...prev, email: e.target.value } : prev
+                          )
+                        }
+                        onFocus={(e) => {
+                          const end = e.target.value.length;
+                          e.target.setSelectionRange(end, end);
+                        }}
+                        className="h-8 border-gray-200 bg-white focus-visible:ring-1 focus-visible:ring-[#2957a1] focus-visible:ring-offset-0"
+                      />
+                    </div>
+                    <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                      <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Contact No.</span>
+                      <Input
+                        value={editingOfficial.contactnumber}
+                        inputMode="numeric"
+                        maxLength={11}
+                        onChange={(e) =>
+                          setEditingOfficial((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  contactnumber: e.target.value.replace(/\D/g, ""),
+                                }
+                              : prev
+                          )
+                        }
+                        className="h-8 border-gray-200 bg-white focus-visible:ring-1 focus-visible:ring-[#2957a1] focus-visible:ring-offset-0"
+                      />
+                    </div>
+                    <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                      <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Date Created</span>
+                      <span className="font-medium text-gray-800">
+                        {formatDisplayDate(viewingOfficial.datecreated) || "Not available"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-                <Card className="bg-gray-50">
-                  <CardContent className="space-y-4 p-5">
-                    <h4 className="text-base font-semibold text-[#2957a1]">
-                      Term Information
-                    </h4>
-                    <div className="space-y-4 rounded-xl bg-gray-100 p-4 text-sm">
-                      <div>
-                        <Label className="text-xs uppercase tracking-wide text-gray-500">
-                          Status
-                        </Label>
-                        <Select
-                          value={editingOfficial.status ? "Active" : "Inactive"}
-                          onValueChange={(value) =>
-                            setEditingOfficial((prev) =>
-                              prev ? { ...prev, status: value === "Active" } : prev
-                            )
-                          }
-                        >
-                          <SelectTrigger className="mt-1 bg-white">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Active">Active</SelectItem>
-                            <SelectItem value="Inactive">Inactive</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-xs uppercase tracking-wide text-gray-500">
-                          Term Start
-                        </Label>
-                        <Input
-                          type="date"
-                          value={editingOfficial.termstart}
-                          readOnly
-                          disabled
-                          className="mt-1 bg-white text-black disabled:opacity-100 disabled:text-black disabled:bg-white cursor-default"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs uppercase tracking-wide text-gray-500">
-                          Term End
-                        </Label>
-                        <Input
-                          type="date"
-                          value={editingOfficial.termend}
-                          readOnly
-                          disabled
-                          className="mt-1 bg-white text-black disabled:opacity-100 disabled:text-black disabled:bg-white cursor-default"
-                        />
-                      </div>
+                {/* Term & Status */}
+                <div className="rounded-xl border border-gray-200 bg-white p-5">
+                  <p className="mb-1 text-sm font-semibold text-[#2957a1]">Term & Status</p>
+                  <p className="mb-4 text-xs text-gray-400">Term dates and account status</p>
+                  <div className="space-y-4 text-sm">
+                    <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                      <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Status</span>
+                      <Select
+                        value={editingOfficial.status ? "Active" : "Inactive"}
+                        onValueChange={(value) =>
+                          setEditingOfficial((prev) =>
+                            prev ? { ...prev, status: value === "Active" } : prev
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-8 border-gray-200 bg-white focus:ring-1 focus:ring-[#2957a1]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Active">Active</SelectItem>
+                          <SelectItem value="Inactive">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                      <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Term Start</span>
+                      <Input
+                        type="date"
+                        value={editingOfficial.termstart}
+                        readOnly
+                        disabled
+                        className="h-8 bg-gray-50 text-gray-800 disabled:opacity-100 disabled:cursor-default border-gray-200"
+                      />
+                    </div>
+                    <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                      <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Term End</span>
+                      <Input
+                        type="date"
+                        value={editingOfficial.termend}
+                        readOnly
+                        disabled
+                        className="h-8 bg-gray-50 text-gray-800 disabled:opacity-100 disabled:cursor-default border-gray-200"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          <DialogFooter className="-mx-6 -mb-6 mt-100 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
+          <DialogFooter className="-mx-6 -mb-6 mt-6 border-t bg-gray-50 px-6 py-4 rounded-b-[inherit]">
             <Button
               variant="outline"
               onClick={handleCancelEdit}
@@ -1472,11 +1477,12 @@ export function BarangayOfficials() {
             return (
               <Card
                 key={official.barangayadminid}
-                className="hover:shadow-lg transition-shadow bg-white"
+                className="hover:shadow-lg transition-shadow bg-white flex flex-col"
               >
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#2957a1] bg-[#2957a1] flex items-center justify-center">
+                <CardContent className="p-6 flex flex-col flex-1">
+                  {/* Top: Avatar + core info */}
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#2957a1] bg-[#2957a1] flex items-center justify-center shrink-0">
                       {official.profileimage ? (
                         <img
                           src={
@@ -1492,7 +1498,52 @@ export function BarangayOfficials() {
                       )}
                     </div>
 
-                    <div className="flex gap-2">
+                    {/* Name + position + status badge */}
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <h3 className="font-bold text-base text-gray-900 leading-tight">
+                        {official.adminname}
+                      </h3>
+                      <p className="text-sm font-semibold text-[#2957a1]">
+                        {official.position ?? "-"}
+                      </p>
+                      <span
+                        className={`inline-block px-2 py-0.5 text-xs rounded-full font-medium ${
+                          statusText === "Active"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {statusText}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Details block */}
+                  <div className="space-y-1.5 text-sm text-gray-600 mb-4 flex-1">
+                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
+                      Username:{" "}
+                      <span className="normal-case font-semibold text-gray-600">
+                        {official.barangayadminid}
+                      </span>
+                    </p>
+                    {official.email && (
+                      <p className="truncate">📧 {official.email}</p>
+                    )}
+                    {(official.termstart || official.termend) && (
+                      <div className="space-y-0.5">
+                        {official.termstart && (
+                          <p>Term Start: {formatDisplayDate(official.termstart)}</p>
+                        )}
+                        {official.termend && (
+                          <p>Term End: {formatDisplayDate(official.termend)}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action buttons — always at the bottom */}
+                  <div className="border-t border-gray-100 pt-3 mt-auto">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1600,49 +1651,6 @@ export function BarangayOfficials() {
                           </AlertDialogContent>
                         </AlertDialog>
                       )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h3 className="font-bold text-lg text-gray-900">
-                      {official.adminname}
-                    </h3>
-                    <p className="text-sm font-semibold text-[#2957a1]">
-                      {official.position ?? "-"}
-                    </p>
-                    <p className="font - semibold text-sm text-gray-500">
-                      Username: {official.barangayadminid}
-                    </p>
-                    {(official.termstart || official.termend) && (
-                      <div className="space-y-1">
-                        {official.termstart && (
-                          <p className="text-sm text-gray-600">
-                            Term Start: {formatDisplayDate(official.termstart)}
-                          </p>
-                        )}
-                        {official.termend && (
-                          <p className="text-sm text-gray-600">
-                            Term End: {formatDisplayDate(official.termend)}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="pt-2 space-y-1">
-                      {official.email ? (
-                        <p className="text-sm text-gray-600">📧 {official.email}</p>
-                      ) : null}
-                    </div>
-
-                    <div className="pt-2">
-                      <span
-                        className={`inline-block px-2 py-1 text-xs rounded-full ${statusText === "Active"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-gray-100 text-gray-700"
-                          }`}
-                      >
-                        {statusText}
-                      </span>
                     </div>
                   </div>
                 </CardContent>

@@ -38,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X, FileText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X, FileText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { validatePassword, validateResidentForm } from "../../utils/validation";
 import { formatId } from "../../utils/formatId";
@@ -164,15 +164,6 @@ type ResidentRow = {
   Religion?: string | null;
   religion?: string | null;
 };
-
-type SortMenuValue =
-  | "dir:asc"
-  | "dir:desc"
-  | "field:residentNo:asc"
-  | "field:residentNo:desc"
-  | "field:lastName"
-  | "field:residentType"
-  | "field:status";
 
 const API_BASE = "http://localhost:5001";
 
@@ -2008,60 +1999,18 @@ export function ResidentRecords({
     | "dateRegistered";
   type SortDirection = "asc" | "desc";
 
-  type SortMenuValue =
-    | "dir:asc"
-    | "dir:desc"
-    | "field:residentNo:asc"
-    | "field:residentNo:desc"
-    | "field:firstName"
-    | "field:lastName"
-    | "field:residentType"
-    | "field:status"
-    | "field:dateRegistered";
-
   const [sortBy, setSortBy] = useState<SortField>("residentNo");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
-  // single source of truth for the dropdown selection
-  const [sortMenuValue, setSortMenuValue] = useState<SortMenuValue>(
-    "field:residentNo:asc"
-  );
-
-  const handleSortMenuChange = (v: SortMenuValue) => {
-    setSortMenuValue(v);
-
-    // Aâ€“Z / Zâ€“A must ALWAYS sort by First Name
-    if (v === "dir:asc") {
-      setSortBy("firstName");
-      setSortDirection("asc");
-      return;
-    }
-    if (v === "dir:desc") {
-      setSortBy("firstName");
-      setSortDirection("desc");
-      return;
-    }
-
-    // Resident No needs explicit Asc/Desc
-    if (v === "field:residentNo:asc") {
-      setSortBy("residentNo");
-      setSortDirection("asc");
-      return;
-    }
-    if (v === "field:residentNo:desc") {
-      setSortBy("residentNo");
-      setSortDirection("desc");
-      return;
-    }
-
-    // Other fields: default to Asc when selected
-    if (v.startsWith("field:")) {
-      const field = v.replace("field:", "") as SortField;
+  const handleColumnSort = (field: SortField) => {
+    if (sortBy === field) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
       setSortBy(field);
       setSortDirection("asc");
-      return;
     }
   };
+
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'new'>(initialFilter);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
@@ -2620,11 +2569,21 @@ export function ResidentRecords({
 
   const filteredResidents = residents
     .filter((resident) => {
+      const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+      const normalizedVoterSearchTerm = normalizedSearchTerm.replace(/[\s-]/g, "");
+      const matchesVoterStatus =
+        normalizedVoterSearchTerm === "voter"
+          ? resident.voterStatus === "Voter"
+          : normalizedVoterSearchTerm === "nonvoter"
+            ? resident.voterStatus === "Non-Voter"
+            : false;
+
       const matchesSearch =
-        resident.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resident.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resident.residentNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (resident.residentType && resident.residentType.toLowerCase().includes(searchTerm.toLowerCase()));
+        resident.firstName.toLowerCase().includes(normalizedSearchTerm) ||
+        resident.lastName.toLowerCase().includes(normalizedSearchTerm) ||
+        resident.residentNo.toLowerCase().includes(normalizedSearchTerm) ||
+        (resident.residentType && resident.residentType.toLowerCase().includes(normalizedSearchTerm)) ||
+        matchesVoterStatus;
 
       // ADDED LOGIC: FILTER BY DATE CUTOFF
       if (activeFilter === 'new') {
@@ -3729,38 +3688,21 @@ export function ResidentRecords({
       {/* TABLE */}
       <Card className="border border-gray-300 shadow-sm">
         <CardContent className="p-4">
-          <div className="p-3 sm:p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 border-b bg-gray-50 -m-4 mb-4">
-            <div className="flex items-center gap-2">
-              <Label className="font-semibold text-sm">Sort by:</Label>
-              <Select value={sortMenuValue} onValueChange={(v) => handleSortMenuChange(v as SortMenuValue)}>
-                <SelectTrigger className="w-[205px] h-9">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-
-                <SelectContent className="min-w-[205px]">
-                  <SelectItem value="field:dateRegistered">Newly Added Resident</SelectItem>
-                  <SelectItem value="field:status">Status</SelectItem>
-                  <SelectItem value="field:residentNo:asc">Resident No (Ascending)</SelectItem>
-                  <SelectItem value="field:residentNo:desc">Resident No (Descending)</SelectItem>
-                  <SelectItem value="dir:asc">First Name (A-Z)</SelectItem>
-                  <SelectItem value="dir:desc">First Name (Z-A)</SelectItem>
-                  <SelectItem value="field:lastName">Last Name</SelectItem>
-                  <SelectItem value="field:residentType">Resident Type</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
+          <div className="p-3 sm:p-4 flex flex-col sm:flex-row sm:justify-end sm:items-center gap-3 border-b bg-gray-50 -m-4 mb-4">
             <div className="flex items-center gap-2">
               <Label className="font-semibold text-sm">Search:</Label>
               <div className="relative w-full sm:w-48">
-                <Input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search..."
-                  className="pr-8 h-9"
-                />
-                <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search..."
+                className="pr-8 h-9"
+              />
+
+              <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
+                <Search className="w-4 h-4 text-gray-400" />
               </div>
+            </div>
             </div>
           </div>
 
@@ -3771,15 +3713,54 @@ export function ResidentRecords({
           <Table>
             <TableHeader className="bg-[#2957a1]">
               <TableRow className="hover:bg-[#2957a1] border-b-0">
-                <TableHead className="text-white font-bold text-xs h-10">RESIDENT NO / USERNAME</TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">FIRST NAME</TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">MIDDLE NAME</TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">LAST NAME</TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">RESIDENT TYPE</TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">GENDER</TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">VOTER STATUS</TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">STATUS</TableHead>
-                <TableHead className="text-white font-bold text-xs h-10">ACTION</TableHead>
+                {(
+                  [
+                    { label: "RESIDENT NO / USERNAME", field: "residentNo" as const },
+                    { label: "FIRST NAME", field: "firstName" as const },
+                    { label: "MIDDLE NAME", field: null },
+                    { label: "LAST NAME", field: "lastName" as const },
+                    { label: "RESIDENT TYPE", field: "residentType" as const },
+                    { label: "GENDER", field: null },
+                    { label: "VOTER STATUS", field: null },
+                    { label: "STATUS", field: "status" as const },
+                  ] as { label: string; field: SortField | null }[]
+                ).map(({ label, field }) =>
+                  field ? (
+                    <TableHead
+                      key={label}
+                      className="h-11 cursor-pointer select-none px-3"
+                      onClick={() => handleColumnSort(field)}
+                    >
+                      <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md transition-all duration-150 ${
+                        sortBy === field
+                          ? "bg-white/20 text-white font-bold"
+                          : "text-white/80 font-bold hover:bg-white/10 hover:text-white"
+                      } text-xs`}>
+                        {label}
+                        <span className={`flex items-center justify-center w-4 h-4 rounded-sm transition-all ${
+                          sortBy === field
+                            ? "bg-white/30 text-white"
+                            : "text-white/50"
+                        }`}>
+                          {sortBy === field ? (
+                            sortDirection === "asc" ? (
+                              <ChevronUp className="w-3 h-3" />
+                            ) : (
+                              <ChevronDown className="w-3 h-3" />
+                            )
+                          ) : (
+                            <ChevronsUpDown className="w-3 h-3" />
+                          )}
+                        </span>
+                      </div>
+                    </TableHead>
+                  ) : (
+                    <TableHead key={label} className="text-white/80 font-bold text-xs h-11 px-3">
+                      {label}
+                    </TableHead>
+                  )
+                )}
+                <TableHead className="text-white/80 font-bold text-xs h-11 px-3">ACTION</TableHead>
               </TableRow>
             </TableHeader>
 

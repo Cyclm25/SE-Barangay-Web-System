@@ -127,7 +127,7 @@ router.post(
    Accepts field name: "image"
    Max: 5MB, JPEG/PNG/WebP only
 ========================= */
-router.post("/announcement-image", verifyToken, requireNonSkWriteAccess, (req, res) => {
+router.post("/announcement-image", verifyToken, (req, res) => {
   uploadAnnouncement.single("image")(req, res, (err) => {
     try {
       if (err instanceof multer.MulterError) {
