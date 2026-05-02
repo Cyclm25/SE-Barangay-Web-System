@@ -30,7 +30,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
-import { User, Lock, Eye, EyeOff, Calendar } from "lucide-react";
+import { User, Lock, Eye, EyeOff, Calendar, Search } from "lucide-react";
 import { ProfileImageUpload } from "../ui/ProfileImageUpload";
 import { OfficialForgotPasswordPage } from "./OfficialForgotPasswordPage";
 import { toast } from "sonner";
@@ -652,12 +652,18 @@ export function BarangayOfficials() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search name / position / ID…"
-            className="w-full sm:w-64"
-          />
+          <div className="relative w-full sm:w-64">
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search name / position / ID…"
+              className="w-full pr-9"
+            />
+
+            <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+              <Search className="w-4 h-4 text-gray-400" />
+            </div>
+          </div>
 
           <Dialog
             open={isDialogOpen}

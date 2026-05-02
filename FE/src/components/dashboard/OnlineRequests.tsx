@@ -904,14 +904,18 @@ export function OnlineRequests({
 
           <div className="flex items-center gap-2 flex-1 sm:flex-none">
             <Label className="text-sm shrink-0">Search:</Label>
+
             <div className="relative flex-1 sm:w-80">
               <Input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by request no., name, ID, doc type, purpose..."
-                className="pr-8"
+                placeholder="Search by request no., name, ID, doc..."
+                className="pr-9"
               />
-              <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+
+              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                <Search className="w-4 h-4 text-gray-400" />
+              </div>
             </div>
           </div>
         </div>
@@ -1393,7 +1397,7 @@ export function OnlineRequests({
                       <button
                         type="button"
                         onClick={() => { setShowDatePicker((v) => !v); setShowTimePicker(false); }}
-                        className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-white transition-colors ${
+                        className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-gray-50 transition-colors ${
                           appointmentAttempted && !appointmentDetails.date
                             ? 'border-red-400 ring-1 ring-red-400'
                             : showDatePicker
@@ -1488,12 +1492,13 @@ export function OnlineRequests({
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold uppercase tracking-widest text-gray-500">
                       Appointment Time <span className="text-red-500">*</span>
+                      <span className="ml-2 normal-case tracking-normal font-normal text-[#2957a1]/70">(8:00 AM – 5:00 PM)</span>
                     </Label>
                     <div className="relative" ref={timePickerRef}>
                       <button
                         type="button"
                         onClick={() => { setShowTimePicker((v) => !v); setShowDatePicker(false); }}
-                        className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-white transition-colors ${
+                        className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-gray-50 transition-colors ${
                           appointmentAttempted && !appointmentDetails.time
                             ? 'border-red-400 ring-1 ring-red-400'
                             : showTimePicker
@@ -1530,7 +1535,11 @@ export function OnlineRequests({
                                 onChange={e => setTpHour(e.target.value)}
                                 className="appearance-none h-9 pl-3 pr-7 rounded-lg border border-gray-200 text-sm font-semibold text-gray-800 bg-white focus:outline-none focus:border-[#2957a1] focus:ring-1 focus:ring-[#2957a1]/30 cursor-pointer"
                               >
-                                {['01','02','03','04','05','06','07','08','09','10','11','12'].map(h => (
+                                {/* Office hours: 8:00 AM – 5:00 PM */}
+                                {(tpPeriod === 'AM'
+                                  ? ['08','09','10','11']
+                                  : ['12','01','02','03','04','05']
+                                ).map(h => (
                                   <option key={h} value={h}>{h}</option>
                                 ))}
                               </select>
@@ -1556,7 +1565,12 @@ export function OnlineRequests({
                                 <button
                                   key={p}
                                   type="button"
-                                  onClick={() => setTpPeriod(p)}
+                                  onClick={() => {
+                                    setTpPeriod(p);
+                                    // Reset hour to a valid office-hours value for the new period
+                                    if (p === 'AM') setTpHour('08');
+                                    else setTpHour('12');
+                                  }}
                                   className={`px-2.5 py-1 rounded-md text-sm font-semibold transition-colors ${
                                     tpPeriod === p ? 'text-[#2957a1] font-bold' : 'text-gray-400 hover:text-gray-600'
                                   }`}
@@ -1575,7 +1589,10 @@ export function OnlineRequests({
                               type="button"
                               onClick={() => {
                                 const hNum = parseInt(tpHour, 10);
-                                const h24 = tpPeriod === 'AM' ? (hNum === 12 ? 0 : hNum) : (hNum === 12 ? 12 : hNum + 12);
+                                // Convert 12-hour office-hours format to 24-hour
+                                // AM: 08→8, 09→9, 10→10, 11→11
+                                // PM: 12→12, 01→13, 02→14, 03→15, 04→16, 05→17
+                                const h24 = tpPeriod === 'AM' ? hNum : (hNum === 12 ? 12 : hNum + 12);
                                 setAppointmentDetails({ ...appointmentDetails, time: `${String(h24).padStart(2,'0')}:${tpMinute}` });
                                 setShowTimePicker(false);
                               }}

@@ -46,7 +46,9 @@ import {
   ImageIcon,
   Upload,
   X,
-  Trash2
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../utils/api";
@@ -251,6 +253,30 @@ export function AnnouncementManagement({
   const previousDraftIdsRef = useRef<string[]>([]);
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
 
+  // ── Custom Date/Time Picker state ──────────────────────────────────────────
+  // Scheduled date picker
+  const [showSchDatePicker, setShowSchDatePicker] = useState(false);
+  const schDatePickerRef = useRef<HTMLDivElement | null>(null);
+  const [schCalYear, setSchCalYear] = useState(new Date().getFullYear());
+  const [schCalMonth, setSchCalMonth] = useState(new Date().getMonth());
+  // Scheduled time picker
+  const [showSchTimePicker, setShowSchTimePicker] = useState(false);
+  const schTimePickerRef = useRef<HTMLDivElement | null>(null);
+  const [schTpHour, setSchTpHour] = useState('08');
+  const [schTpMinute, setSchTpMinute] = useState('00');
+  const [schTpPeriod, setSchTpPeriod] = useState<'AM' | 'PM'>('AM');
+  // Expiration date picker
+  const [showExpDatePicker, setShowExpDatePicker] = useState(false);
+  const expDatePickerRef = useRef<HTMLDivElement | null>(null);
+  const [expCalYear, setExpCalYear] = useState(new Date().getFullYear());
+  const [expCalMonth, setExpCalMonth] = useState(new Date().getMonth());
+  // Expiration time picker
+  const [showExpTimePicker, setShowExpTimePicker] = useState(false);
+  const expTimePickerRef = useRef<HTMLDivElement | null>(null);
+  const [expTpHour, setExpTpHour] = useState('11');
+  const [expTpMinute, setExpTpMinute] = useState('59');
+  const [expTpPeriod, setExpTpPeriod] = useState<'AM' | 'PM'>('PM');
+
   const [formData, setFormData] = useState(createEmptyAnnouncementForm);
 
   const [newCustomAudience, setNewCustomAudience] = useState("");
@@ -261,6 +287,9 @@ export function AnnouncementManagement({
     setNewCustomAudience("");
     setImageUploadSizes({});
     setValidationErrors({});
+    // Reset picker knobs to defaults
+    setSchTpHour('08'); setSchTpMinute('00'); setSchTpPeriod('AM');
+    setExpTpHour('11'); setExpTpMinute('59'); setExpTpPeriod('PM');
   };
 
   const closeFullScreenImage = () => {
@@ -354,6 +383,22 @@ export function AnnouncementManagement({
     fetchAnnouncements();
     const interval = setInterval(fetchAnnouncements, 15000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Close any open picker when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (schDatePickerRef.current && !schDatePickerRef.current.contains(e.target as Node))
+        setShowSchDatePicker(false);
+      if (schTimePickerRef.current && !schTimePickerRef.current.contains(e.target as Node))
+        setShowSchTimePicker(false);
+      if (expDatePickerRef.current && !expDatePickerRef.current.contains(e.target as Node))
+        setShowExpDatePicker(false);
+      if (expTimePickerRef.current && !expTimePickerRef.current.contains(e.target as Node))
+        setShowExpTimePicker(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   useEffect(() => {
@@ -581,7 +626,33 @@ export function AnnouncementManagement({
       return;
     }
     setEditingAnnouncement(announcement);
-    setFormData(buildAnnouncementFormState(announcement));
+    const fs = buildAnnouncementFormState(announcement);
+    setFormData(fs);
+
+    // Sync scheduled time picker knobs
+    if (fs.scheduledTime) {
+      const [sh, sm] = fs.scheduledTime.split(':').map(Number);
+      const sPeriod = sh >= 12 ? 'PM' : 'AM';
+      const sH12 = sh % 12 === 0 ? 12 : sh % 12;
+      setSchTpHour(String(sH12).padStart(2, '0'));
+      setSchTpMinute(String(sm).padStart(2, '0'));
+      setSchTpPeriod(sPeriod);
+    } else {
+      setSchTpHour('08'); setSchTpMinute('00'); setSchTpPeriod('AM');
+    }
+
+    // Sync expiration time picker knobs
+    if (fs.expirationTime) {
+      const [eh, em] = fs.expirationTime.split(':').map(Number);
+      const ePeriod = eh >= 12 ? 'PM' : 'AM';
+      const eH12 = eh % 12 === 0 ? 12 : eh % 12;
+      setExpTpHour(String(eH12).padStart(2, '0'));
+      setExpTpMinute(String(em).padStart(2, '0'));
+      setExpTpPeriod(ePeriod);
+    } else {
+      setExpTpHour('11'); setExpTpMinute('59'); setExpTpPeriod('PM');
+    }
+
     setIsDialogOpen(true);
   };
 
@@ -1567,45 +1638,160 @@ export function AnnouncementManagement({
                   {formData.isScheduled && (
                     <div className="space-y-3 mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="scheduledDate">Date *</Label>
-                          <Input
-                            id="scheduledDate"
-                            type="date"
-                            value={formData.scheduledDate}
-                            onChange={(e) =>
-                              {
-                                setValidationErrors((prev) => {
-                                  const next = { ...prev };
-                                  delete next.scheduledDate;
-                                  return next;
-                                });
-                                setFormData({
-                                  ...formData,
-                                  scheduledDate: e.target.value,
-                                });
-                              }
-                            }
-                            className={validationErrors.scheduledDate ? "border-red-500 focus-visible:ring-red-500" : ""}
-                          />
+
+                        {/* ── Custom Scheduled Date Picker ── */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                            Date <span className="text-red-500">*</span>
+                          </Label>
+                          <div className="relative" ref={schDatePickerRef}>
+                            <button
+                              type="button"
+                              onClick={() => { setShowSchDatePicker(v => !v); setShowSchTimePicker(false); }}
+                              className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-gray-50 transition-colors ${
+                                validationErrors.scheduledDate
+                                  ? 'border-red-400 ring-1 ring-red-400'
+                                  : showSchDatePicker
+                                  ? 'border-[#2957a1] ring-1 ring-[#2957a1]/40'
+                                  : 'border-input hover:border-[#2957a1]/50'
+                              }`}
+                            >
+                              <span className={formData.scheduledDate ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+                                {formData.scheduledDate
+                                  ? new Date(formData.scheduledDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                  : 'Select date'}
+                              </span>
+                              <Calendar className="h-4 w-4 text-gray-400" />
+                            </button>
+
+                            {showSchDatePicker && (
+                              <div className="absolute left-0 z-50 mt-1.5 w-72 rounded-2xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+                                <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                                  <button type="button" onClick={() => { if (schCalMonth === 0) { setSchCalMonth(11); setSchCalYear(y => y - 1); } else setSchCalMonth(m => m - 1); }} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                                    <ChevronLeft className="w-4 h-4" />
+                                  </button>
+                                  <span className="text-sm font-semibold text-gray-800">
+                                    {new Date(schCalYear, schCalMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                  </span>
+                                  <button type="button" onClick={() => { if (schCalMonth === 11) { setSchCalMonth(0); setSchCalYear(y => y + 1); } else setSchCalMonth(m => m + 1); }} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                                    <ChevronRight className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-7 px-3 pb-1">
+                                  {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+                                    <p key={d} className="text-center text-[11px] font-medium text-gray-400 py-1">{d}</p>
+                                  ))}
+                                </div>
+                                <div className="px-3 pb-3">
+                                  {(() => {
+                                    const today = new Date(); today.setHours(0,0,0,0);
+                                    const firstDay = new Date(schCalYear, schCalMonth, 1).getDay();
+                                    const daysInMonth = new Date(schCalYear, schCalMonth + 1, 0).getDate();
+                                    const cells: React.ReactNode[] = [];
+                                    for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} />);
+                                    for (let d = 1; d <= daysInMonth; d++) {
+                                      const dateObj = new Date(schCalYear, schCalMonth, d);
+                                      const isPast = dateObj < today;
+                                      const iso = `${schCalYear}-${String(schCalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                                      const isSelected = formData.scheduledDate === iso;
+                                      const isToday = dateObj.getTime() === today.getTime();
+                                      cells.push(
+                                        <button key={d} type="button" disabled={isPast}
+                                          onClick={() => { setFormData(prev => ({ ...prev, scheduledDate: iso })); setShowSchDatePicker(false); setValidationErrors(prev => { const n = {...prev}; delete n.scheduledDate; return n; }); }}
+                                          className={`w-full aspect-square flex items-center justify-center rounded-full text-sm transition-colors ${isPast ? 'text-gray-300 cursor-not-allowed' : isSelected ? 'bg-[#2957a1] text-white font-semibold' : isToday ? 'text-[#2957a1] font-semibold hover:bg-gray-100' : 'text-gray-700 hover:bg-gray-100'}`}
+                                        >{d}</button>
+                                      );
+                                    }
+                                    return <div className="grid grid-cols-7 gap-0.5">{cells}</div>;
+                                  })()}
+                                </div>
+                                <div className="border-t border-gray-100 px-5 py-3 flex justify-end">
+                                  <button type="button" onClick={() => { setFormData(prev => ({ ...prev, scheduledDate: '' })); setShowSchDatePicker(false); }} className="text-sm text-gray-400 hover:text-gray-600 font-medium transition-colors">Clear</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {validationErrors.scheduledDate && <p className="text-xs font-medium text-red-600">{validationErrors.scheduledDate}</p>}
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="scheduledTime">Time</Label>
-                          <Input
-                            id="scheduledTime"
-                            type="time"
-                            value={formData.scheduledTime}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                scheduledTime: e.target.value,
-                              })
-                            }
-                          />
+
+                        {/* ── Custom Scheduled Time Picker ── */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                            Time
+                          </Label>
+                          <div className="relative" ref={schTimePickerRef}>
+                            <button
+                              type="button"
+                              onClick={() => { setShowSchTimePicker(v => !v); setShowSchDatePicker(false); }}
+                              className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-gray-50 transition-colors ${
+                                showSchTimePicker
+                                  ? 'border-[#2957a1] ring-1 ring-[#2957a1]/40'
+                                  : 'border-input hover:border-[#2957a1]/50'
+                              }`}
+                            >
+                              <span className={formData.scheduledTime ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+                                {formData.scheduledTime
+                                  ? (() => {
+                                      const [h, m] = formData.scheduledTime.split(':');
+                                      const hNum = parseInt(h, 10);
+                                      const period = hNum >= 12 ? 'PM' : 'AM';
+                                      const h12 = hNum % 12 === 0 ? 12 : hNum % 12;
+                                      return `${String(h12).padStart(2,'0')}:${m} ${period}`;
+                                    })()
+                                  : 'Select time'}
+                              </span>
+                              <Clock className="h-4 w-4 text-gray-400" />
+                            </button>
+
+                            {showSchTimePicker && (
+                              <div className="absolute left-0 right-0 z-50 mt-1.5 rounded-2xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+                                <div className="px-5 pt-5 pb-4 border-b border-gray-100">
+                                  <p className="text-sm font-semibold text-gray-800">Select Time</p>
+                                </div>
+                                <div className="flex items-center gap-2 px-5 py-4">
+                                  <div className="relative">
+                                    <select value={schTpHour} onChange={e => setSchTpHour(e.target.value)}
+                                      className="appearance-none h-9 pl-3 pr-7 rounded-lg border border-gray-200 text-sm font-semibold text-gray-800 bg-white focus:outline-none focus:border-[#2957a1] focus:ring-1 focus:ring-[#2957a1]/30 cursor-pointer">
+                                      {(schTpPeriod === 'AM'
+                                        ? ['01','02','03','04','05','06','07','08','09','10','11','12']
+                                        : ['12','01','02','03','04','05','06','07','08','09','10','11']
+                                      ).map(h => <option key={h} value={h}>{h}</option>)}
+                                    </select>
+                                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400 text-xs">▾</span>
+                                  </div>
+                                  <span className="text-lg font-bold text-gray-500">:</span>
+                                  <div className="relative">
+                                    <select value={schTpMinute} onChange={e => setSchTpMinute(e.target.value)}
+                                      className="appearance-none h-9 pl-3 pr-7 rounded-lg border border-gray-200 text-sm font-semibold text-gray-800 bg-white focus:outline-none focus:border-[#2957a1] focus:ring-1 focus:ring-[#2957a1]/30 cursor-pointer">
+                                      {['00','05','10','15','20','25','30','35','40','45','50','55'].map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400 text-xs">▾</span>
+                                  </div>
+                                  <div className="ml-1 flex items-center gap-1">
+                                    {(['AM','PM'] as const).map(p => (
+                                      <button key={p} type="button" onClick={() => { setSchTpPeriod(p); setSchTpHour(p === 'AM' ? '08' : '12'); }}
+                                        className={`px-2.5 py-1 rounded-md text-sm font-semibold transition-colors ${schTpPeriod === p ? 'text-[#2957a1] font-bold' : 'text-gray-400 hover:text-gray-600'}`}>{p}</button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="border-t border-gray-100 px-5 py-3 flex items-center justify-end gap-3">
+                                  <button type="button" onClick={() => setShowSchTimePicker(false)} className="text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors">Cancel</button>
+                                  <button type="button"
+                                    onClick={() => {
+                                      const hNum = parseInt(schTpHour, 10);
+                                      const h24 = schTpPeriod === 'AM' ? (hNum === 12 ? 0 : hNum) : (hNum === 12 ? 12 : hNum + 12);
+                                      setFormData(prev => ({ ...prev, scheduledTime: `${String(h24).padStart(2,'0')}:${schTpMinute}` }));
+                                      setShowSchTimePicker(false);
+                                    }}
+                                    className="px-5 py-1.5 rounded-full bg-[#2957a1] text-sm font-semibold text-white hover:bg-[#1e4080] active:scale-[0.98] transition-all">Apply</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <p className="text-sm text-gray-600">
-                        📅 Will be published on{" "}
+                        Will be published on{" "}
                         {formData.scheduledDate
                           ? new Date(
                             `${formData.scheduledDate}T${formData.scheduledTime || "00:00"
@@ -1619,9 +1805,6 @@ export function AnnouncementManagement({
                           ` at ${new Date(`2000-01-01T${formData.scheduledTime || "00:00"}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
                           : "the selected date"}
                       </p>
-                      {validationErrors.scheduledDate && (
-                        <p className="text-xs font-medium text-red-600">{validationErrors.scheduledDate}</p>
-                      )}
                     </div>
                   )}
                 </div>
@@ -1658,37 +1841,157 @@ export function AnnouncementManagement({
                   {formData.hasExpiration && (
                     <div className="space-y-3 mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="expirationDate">Date *</Label>
-                          <Input
-                            id="expirationDate"
-                            type="date"
-                            value={formData.expirationDate}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                expirationDate: e.target.value,
-                              })
-                            }
-                          />
+
+                        {/* ── Custom Expiration Date Picker ── */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                            Date <span className="text-red-500">*</span>
+                          </Label>
+                          <div className="relative" ref={expDatePickerRef}>
+                            <button
+                              type="button"
+                              onClick={() => { setShowExpDatePicker(v => !v); setShowExpTimePicker(false); }}
+                              className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-gray-50 transition-colors ${
+                                showExpDatePicker
+                                  ? 'border-[#2957a1] ring-1 ring-[#2957a1]/40'
+                                  : 'border-input hover:border-[#2957a1]/50'
+                              }`}
+                            >
+                              <span className={formData.expirationDate ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+                                {formData.expirationDate
+                                  ? new Date(formData.expirationDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                  : 'Select date'}
+                              </span>
+                              <Calendar className="h-4 w-4 text-gray-400" />
+                            </button>
+
+                            {showExpDatePicker && (
+                              <div className="absolute left-0 z-50 mt-1.5 w-72 rounded-2xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+                                <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                                  <button type="button" onClick={() => { if (expCalMonth === 0) { setExpCalMonth(11); setExpCalYear(y => y - 1); } else setExpCalMonth(m => m - 1); }} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                                    <ChevronLeft className="w-4 h-4" />
+                                  </button>
+                                  <span className="text-sm font-semibold text-gray-800">
+                                    {new Date(expCalYear, expCalMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                  </span>
+                                  <button type="button" onClick={() => { if (expCalMonth === 11) { setExpCalMonth(0); setExpCalYear(y => y + 1); } else setExpCalMonth(m => m + 1); }} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                                    <ChevronRight className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-7 px-3 pb-1">
+                                  {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+                                    <p key={d} className="text-center text-[11px] font-medium text-gray-400 py-1">{d}</p>
+                                  ))}
+                                </div>
+                                <div className="px-3 pb-3">
+                                  {(() => {
+                                    const today = new Date(); today.setHours(0,0,0,0);
+                                    const firstDay = new Date(expCalYear, expCalMonth, 1).getDay();
+                                    const daysInMonth = new Date(expCalYear, expCalMonth + 1, 0).getDate();
+                                    const cells: React.ReactNode[] = [];
+                                    for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} />);
+                                    for (let d = 1; d <= daysInMonth; d++) {
+                                      const dateObj = new Date(expCalYear, expCalMonth, d);
+                                      const isPast = dateObj < today;
+                                      const iso = `${expCalYear}-${String(expCalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                                      const isSelected = formData.expirationDate === iso;
+                                      const isToday = dateObj.getTime() === today.getTime();
+                                      cells.push(
+                                        <button key={d} type="button" disabled={isPast}
+                                          onClick={() => { setFormData(prev => ({ ...prev, expirationDate: iso })); setShowExpDatePicker(false); }}
+                                          className={`w-full aspect-square flex items-center justify-center rounded-full text-sm transition-colors ${isPast ? 'text-gray-300 cursor-not-allowed' : isSelected ? 'bg-[#2957a1] text-white font-semibold' : isToday ? 'text-[#2957a1] font-semibold hover:bg-gray-100' : 'text-gray-700 hover:bg-gray-100'}`}
+                                        >{d}</button>
+                                      );
+                                    }
+                                    return <div className="grid grid-cols-7 gap-0.5">{cells}</div>;
+                                  })()}
+                                </div>
+                                <div className="border-t border-gray-100 px-5 py-3 flex justify-end">
+                                  <button type="button" onClick={() => { setFormData(prev => ({ ...prev, expirationDate: '' })); setShowExpDatePicker(false); }} className="text-sm text-gray-400 hover:text-gray-600 font-medium transition-colors">Clear</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="expirationTime">Time</Label>
-                          <Input
-                            id="expirationTime"
-                            type="time"
-                            value={formData.expirationTime}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                expirationTime: e.target.value,
-                              })
-                            }
-                          />
+
+                        {/* ── Custom Expiration Time Picker ── */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                            Time
+                          </Label>
+                          <div className="relative" ref={expTimePickerRef}>
+                            <button
+                              type="button"
+                              onClick={() => { setShowExpTimePicker(v => !v); setShowExpDatePicker(false); }}
+                              className={`flex h-10 w-full items-center justify-between rounded-md border px-3 text-sm bg-gray-50 transition-colors ${
+                                showExpTimePicker
+                                  ? 'border-[#2957a1] ring-1 ring-[#2957a1]/40'
+                                  : 'border-input hover:border-[#2957a1]/50'
+                              }`}
+                            >
+                              <span className={formData.expirationTime ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+                                {formData.expirationTime
+                                  ? (() => {
+                                      const [h, m] = formData.expirationTime.split(':');
+                                      const hNum = parseInt(h, 10);
+                                      const period = hNum >= 12 ? 'PM' : 'AM';
+                                      const h12 = hNum % 12 === 0 ? 12 : hNum % 12;
+                                      return `${String(h12).padStart(2,'0')}:${m} ${period}`;
+                                    })()
+                                  : 'Select time'}
+                              </span>
+                              <Clock className="h-4 w-4 text-gray-400" />
+                            </button>
+
+                            {showExpTimePicker && (
+                              <div className="absolute left-0 right-0 z-50 mt-1.5 rounded-2xl bg-white shadow-xl border border-gray-100 overflow-hidden">
+                                <div className="px-5 pt-5 pb-4 border-b border-gray-100">
+                                  <p className="text-sm font-semibold text-gray-800">Select Time</p>
+                                </div>
+                                <div className="flex items-center gap-2 px-5 py-4">
+                                  <div className="relative">
+                                    <select value={expTpHour} onChange={e => setExpTpHour(e.target.value)}
+                                      className="appearance-none h-9 pl-3 pr-7 rounded-lg border border-gray-200 text-sm font-semibold text-gray-800 bg-white focus:outline-none focus:border-[#2957a1] focus:ring-1 focus:ring-[#2957a1]/30 cursor-pointer">
+                                      {(expTpPeriod === 'AM'
+                                        ? ['01','02','03','04','05','06','07','08','09','10','11','12']
+                                        : ['12','01','02','03','04','05','06','07','08','09','10','11']
+                                      ).map(h => <option key={h} value={h}>{h}</option>)}
+                                    </select>
+                                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400 text-xs">▾</span>
+                                  </div>
+                                  <span className="text-lg font-bold text-gray-500">:</span>
+                                  <div className="relative">
+                                    <select value={expTpMinute} onChange={e => setExpTpMinute(e.target.value)}
+                                      className="appearance-none h-9 pl-3 pr-7 rounded-lg border border-gray-200 text-sm font-semibold text-gray-800 bg-white focus:outline-none focus:border-[#2957a1] focus:ring-1 focus:ring-[#2957a1]/30 cursor-pointer">
+                                      {['00','05','10','15','20','25','30','35','40','45','50','55'].map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400 text-xs">▾</span>
+                                  </div>
+                                  <div className="ml-1 flex items-center gap-1">
+                                    {(['AM','PM'] as const).map(p => (
+                                      <button key={p} type="button" onClick={() => { setExpTpPeriod(p); setExpTpHour(p === 'AM' ? '08' : '12'); }}
+                                        className={`px-2.5 py-1 rounded-md text-sm font-semibold transition-colors ${expTpPeriod === p ? 'text-[#2957a1] font-bold' : 'text-gray-400 hover:text-gray-600'}`}>{p}</button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="border-t border-gray-100 px-5 py-3 flex items-center justify-end gap-3">
+                                  <button type="button" onClick={() => setShowExpTimePicker(false)} className="text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors">Cancel</button>
+                                  <button type="button"
+                                    onClick={() => {
+                                      const hNum = parseInt(expTpHour, 10);
+                                      const h24 = expTpPeriod === 'AM' ? (hNum === 12 ? 0 : hNum) : (hNum === 12 ? 12 : hNum + 12);
+                                      setFormData(prev => ({ ...prev, expirationTime: `${String(h24).padStart(2,'0')}:${expTpMinute}` }));
+                                      setShowExpTimePicker(false);
+                                    }}
+                                    className="px-5 py-1.5 rounded-full bg-[#2957a1] text-sm font-semibold text-white hover:bg-[#1e4080] active:scale-[0.98] transition-all">Apply</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <p className="text-sm text-gray-600">
-                        🗂️ Will be archived on{" "}
+                        Will be archived on{" "}
                         {formData.expirationDate
                           ? new Date(
                             `${formData.expirationDate}T${formData.expirationTime || "23:59"

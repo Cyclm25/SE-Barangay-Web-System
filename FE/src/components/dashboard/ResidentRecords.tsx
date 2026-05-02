@@ -616,6 +616,7 @@ export function ResidentRecords({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [pendingResident, setPendingResident] = useState<Resident | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string>("");
   const [saveAttempted, setSaveAttempted] = useState(false);
@@ -919,6 +920,8 @@ export function ResidentRecords({
     setProfileImagePreview("");
     setPassword("");
     setConfirmPassword("");
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setEditingResident(null);
     setResidentPrivacyAccepted(false);
     setSaveAttempted(false);
@@ -972,7 +975,7 @@ export function ResidentRecords({
       streetAddress: formData.streetAddress,
       city: formData.city,
       postalCode: formData.postalCode,
-      country: formData.country,
+      country: "PHILIPPINES",
       contactNumber: formData.contactNumber,
       email: formData.email,
       fatherName: formData.fatherName,
@@ -1237,11 +1240,22 @@ export function ResidentRecords({
 
   const filteredResidents = residents
     .filter((resident) => {
+      const normalizedSearchTerm = searchTerm.toLowerCase().trim();
+      const normalizedSearchTermWords = normalizedSearchTerm.replace(/-/g, " ");
+      const normalizedVoterStatus = resident.voterStatus.toLowerCase();
+      const normalizedVoterStatusWords = normalizedVoterStatus.replace(/-/g, " ");
+      const matchesVoterStatus =
+        normalizedSearchTerm === "voter"
+          ? normalizedVoterStatus === "voter"
+          : normalizedVoterStatus.includes(normalizedSearchTerm) ||
+            normalizedVoterStatusWords.includes(normalizedSearchTermWords);
+
       const matchesSearch =
-        resident.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resident.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resident.residentNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (resident.residentType && resident.residentType.toLowerCase().includes(searchTerm.toLowerCase()));
+        resident.firstName.toLowerCase().includes(normalizedSearchTerm) ||
+        resident.lastName.toLowerCase().includes(normalizedSearchTerm) ||
+        resident.residentNo.toLowerCase().includes(normalizedSearchTerm) ||
+        (resident.residentType && resident.residentType.toLowerCase().includes(normalizedSearchTerm)) ||
+        matchesVoterStatus;
 
       // ADDED LOGIC: FILTER BY DATE CUTOFF
       if (activeFilter === 'new') {
@@ -1811,13 +1825,9 @@ export function ResidentRecords({
                     <div className="space-y-2">
                       <Label>Country</Label>
                       <Input
-                        value={formData.country}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            country: toUppercaseInput(e.target.value),
-                          })
-                        }
+                        value="PHILIPPINES"
+                        readOnly
+                        className="bg-gray-100 text-gray-700"
                       />
                     </div>
                   </div>
@@ -2144,7 +2154,10 @@ export function ResidentRecords({
                   placeholder="Search..."
                   className="pr-8 h-9"
                 />
-                <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+
+                <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
+                  <Search className="w-4 h-4 text-gray-400" />
+                </div>
               </div>
             </div>
           </div>
@@ -2466,20 +2479,20 @@ export function ResidentRecords({
               </Label>
               <div className="relative">
                 <Input
-                  type={showPassword ? "text" : "password"}
+                  type={showConfirmPassword ? "text" : "password"}
                   maxLength={50}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm password"
                   className="h-10 pr-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1]"
                 />
-                {/* <button
+                <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute inset-y-0 right-0 flex h-full items-center justify-center px-3 text-gray-400 transition-colors hover:text-[#2957a1]"
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button> */}
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
@@ -2489,6 +2502,7 @@ export function ResidentRecords({
                 onClick={() => {
                   setShowPasswordDialog(false);
                   setConfirmPassword("");
+                  setShowConfirmPassword(false);
                   setShowDiscardResidentDialog(false);
                   setIsAddDialogOpen(true);
                 }}

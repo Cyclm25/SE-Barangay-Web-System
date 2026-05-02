@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@mui/x-date-pickers": "^8.27.2",
+    "bcrypt": "^6.0.0",
     "dayjs": "^1.11.19"
   }
 }
