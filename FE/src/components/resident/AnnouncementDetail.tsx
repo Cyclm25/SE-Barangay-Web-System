@@ -77,6 +77,7 @@ export function AnnouncementDetail({
   const source = liveData || a;
 
   const title = source.Title || source.title || a.title || "Untitled Announcement";
+  const announcementId = source.AnnouncementID || source.announcementid || a.id || a.AnnouncementID || a.announcementid || null;
   const body =
     source.Body ||
     source.body ||
@@ -433,7 +434,7 @@ export function AnnouncementDetail({
             </div>
           </div>
 
-          <InquiryForm announcementTitle={title} inline={true} />
+          <InquiryForm announcementTitle={title} announcementId={announcementId} inline={true} />
         </div>
       </div>
 

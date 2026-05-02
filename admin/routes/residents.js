@@ -10,6 +10,7 @@ const {
   validateResidentPayload,
   validateResidentSelfProfilePayload,
 } = require("../utils/validation");
+const { buildThemedEmail } = require("../utils/emailTheme");
 
 
 function calculateAge(birthday) {
@@ -40,15 +41,22 @@ async function sendResidentAccountCreatedEmail({ to, firstName, lastName, reside
   await transporter.sendMail({
     from: `"Barangay Office" <${process.env.EMAIL_USER}>`,
     to,
-    subject: "Resident Account Created Successfully",
-    html: `
-      <p>Good day, ${firstName || ""} ${lastName || ""},</p>
-      <p>Your resident account has been successfully created.</p>
-      <p><strong>Resident Number:</strong> ${residentId}</p>
-      <p>Please keep this resident number for login and verification purposes.</p>
-      <p>Thank you.</p>
-      <p>Barangay Office</p>
-    `,
+    subject: "Your Barangay 160 Account Credentials",
+    html: buildThemedEmail({
+      title: "Resident Account Created",
+      subtitle: "Barangay 160 Account Portal",
+      keyValues: [
+        { label: "Resident Name", value: `${firstName || ""} ${lastName || ""}`.trim() },
+        { label: "Username (Resident ID)", value: residentId },
+        { label: "Email", value: to },
+        { label: "Account Type", value: "Resident" },
+      ],
+      lines: [
+        "Your resident account has been successfully created.",
+        "For security reasons, your password is not included in this email.",
+        "If you forgot your password, use the Forgot Password feature on the login page.",
+      ],
+    }),
   });
 }
 

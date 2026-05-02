@@ -4,6 +4,7 @@ const bcrypt = require("bcrypt");
 const nodemailer = require("nodemailer");
 const jwt = require("jsonwebtoken");
 const verifyToken = require("../middleware/verifyToken");
+const { buildThemedEmail } = require("../utils/emailTheme");
 
 
 /* =========================
@@ -239,6 +240,18 @@ router.post("/forgot-password", async (req, res) => {
       to: row.Email,
       subject: "Barangay 160 Password Reset",
       text: `Your OTP code is ${otpCode}. Do not share this code with anyone.`,
+      html: buildThemedEmail({
+        title: "Password Reset OTP",
+        subtitle: "Barangay 160 Account Security",
+        keyValues: [
+          { label: "OTP Code", value: otpCode },
+          { label: "Valid For", value: "10 minutes" },
+        ],
+        lines: [
+          "Use this one-time code to reset your password.",
+          "Do not share this code with anyone.",
+        ],
+      }),
     });
 
     // Identity for UI

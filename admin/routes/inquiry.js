@@ -41,10 +41,27 @@ router.get("/me", async (req, res) => {
 
 router.post("/send", async (req, res) => {
   try {
-    const { residentName, email, subject, message, announcementTitle } = req.body;
+    const { residentName, email, subject, message, announcementTitle, announcementId } = req.body;
 
     if (!email || !message) {
       return res.status(400).json({ error: "Email and message are required." });
+    }
+
+    let receiverEmail = null;
+    if (announcementId !== null && announcementId !== undefined && String(announcementId).trim() !== "") {
+      const targetQ = await pool.query(
+        `
+        SELECT
+          ba."Email" AS "ReceiverEmail"
+        FROM announcement a
+        LEFT JOIN barangayadmin ba
+          ON a."PostedByID"::text = ba."BarangayAdminID"::text
+        WHERE a."AnnouncementID" = $1
+        LIMIT 1
+        `,
+        [announcementId]
+      );
+      receiverEmail = targetQ.rows?.[0]?.ReceiverEmail || null;
     }
 
     await sendInquiryEmail({
@@ -53,6 +70,7 @@ router.post("/send", async (req, res) => {
       subject: subject || "No Subject",
       message,
       announcementTitle: announcementTitle || "General Announcement",
+      receiverEmail,
     });
 
     res.status(200).json({ message: "Inquiry sent successfully!" });

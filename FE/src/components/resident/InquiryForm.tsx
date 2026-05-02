@@ -4,10 +4,11 @@ import { toast } from 'sonner';
 
 interface InquiryFormProps {
   announcementTitle?: string;
+  announcementId?: string | number | null;
   inline?: boolean;
 }
 
-export function InquiryForm({ announcementTitle, inline = false }: InquiryFormProps) {
+export function InquiryForm({ announcementTitle, announcementId = null, inline = false }: InquiryFormProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -106,6 +107,7 @@ export function InquiryForm({ announcementTitle, inline = false }: InquiryFormPr
           subject: form.subject,
           message: form.message,
           announcementTitle: announcementTitle || null,
+          announcementId,
         }),
       });
 

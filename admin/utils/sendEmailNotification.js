@@ -1,5 +1,6 @@
 const pool = require("../db");
 const nodemailer = require("nodemailer");
+const { buildThemedEmail } = require("./emailTheme");
 
 const EMAIL_LOG_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS email_notification_log (
@@ -50,6 +51,19 @@ Please bring a valid ID when claiming your document.
 
 Thank you,
 Barangay 160`,
+    html: buildThemedEmail({
+      title: "Document Ready for Pickup",
+      subtitle: "Barangay 160 Request Update",
+      keyValues: [
+        { label: "Resident Name", value: residentName },
+        { label: "Document Type", value: documentType },
+        { label: "Status", value: "Ready for Pickup" },
+      ],
+      lines: [
+        "Your requested document is now ready for pickup at Barangay 160.",
+        "Please bring a valid ID when claiming your document.",
+      ],
+    }),
   };
 }
 
@@ -67,6 +81,20 @@ Please review the concern and submit a new request if needed.
 
 Thank you,
 Barangay 160`,
+    html: buildThemedEmail({
+      title: "Document Request Denied",
+      subtitle: "Barangay 160 Request Update",
+      keyValues: [
+        { label: "Resident Name", value: residentName },
+        { label: "Document Type", value: documentType },
+        { label: "Status", value: "Denied" },
+        { label: "Reason", value: reason },
+      ],
+      lines: [
+        "Your request was denied by Barangay 160.",
+        "Please review the concern and submit a new request if needed.",
+      ],
+    }),
   };
 }
 
@@ -84,6 +112,20 @@ Please complete the missing requirements and coordinate with Barangay 160 for th
 
 Thank you,
 Barangay 160`,
+    html: buildThemedEmail({
+      title: "Request Needs Completion",
+      subtitle: "Barangay 160 Request Update",
+      keyValues: [
+        { label: "Resident Name", value: residentName },
+        { label: "Document Type", value: documentType },
+        { label: "Status", value: "Processing Completion" },
+        { label: "Missing Requirement(s)", value: reason },
+      ],
+      lines: [
+        "Your request needs completion before processing can continue.",
+        "Please complete the missing requirements and coordinate with Barangay 160.",
+      ],
+    }),
   };
 }
 
@@ -114,7 +156,7 @@ async function sendReadyForPickupEmail({
   emailAddress,
 }) {
   const normalizedEmail = String(emailAddress || "").trim().toLowerCase();
-  const { subject, text } = buildReadyForPickupEmail({ residentName, documentType });
+  const { subject, text, html } = buildReadyForPickupEmail({ residentName, documentType });
 
   if (!normalizedEmail) {
     const error = "Missing resident email address.";
@@ -151,6 +193,7 @@ async function sendReadyForPickupEmail({
       to: normalizedEmail,
       subject,
       text,
+      html,
     });
 
     await logEmailAttempt({
@@ -188,7 +231,7 @@ async function sendRequestRejectedEmail({
 }) {
   const normalizedEmail = String(emailAddress || "").trim().toLowerCase();
   const cleanReason = String(reason || "").trim();
-  const { subject, text } = buildRequestRejectedEmail({
+  const { subject, text, html } = buildRequestRejectedEmail({
     residentName,
     documentType,
     reason: cleanReason,
@@ -229,6 +272,7 @@ async function sendRequestRejectedEmail({
       to: normalizedEmail,
       subject,
       text,
+      html,
     });
 
     await logEmailAttempt({
@@ -266,7 +310,7 @@ async function sendReturnForCompletionEmail({
 }) {
   const normalizedEmail = String(emailAddress || "").trim().toLowerCase();
   const cleanReason = String(reason || "").trim();
-  const { subject, text } = buildReturnForCompletionEmail({
+  const { subject, text, html } = buildReturnForCompletionEmail({
     residentName,
     documentType,
     reason: cleanReason,
@@ -307,6 +351,7 @@ async function sendReturnForCompletionEmail({
       to: normalizedEmail,
       subject,
       text,
+      html,
     });
 
     await logEmailAttempt({
