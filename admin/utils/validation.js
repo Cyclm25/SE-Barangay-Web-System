@@ -6,6 +6,7 @@ const ADDRESS_TEXT_REGEX = /^[A-Za-z0-9\s.,#-]+$/;
 const RESIDENT_TYPES = new Set(["Student", "Senior Citizen", "PWD", "Indigenous", "Resident"]);
 const CIVIL_STATUSES = new Set(["Single", "Married", "Widowed", "Separated"]);
 const SEX_OPTIONS = new Set(["Male", "Female"]);
+const MAX_NUMBER_OF_CHILDREN = 69;
 
 function cleanString(value) {
   return String(value ?? "").trim();
@@ -129,11 +130,13 @@ function validateResidentPayload(payload, { requirePassword = false } = {}) {
   // Validate number of children
   const numberOfChildren = payload.numberOfChildren;
   if (numberOfChildren !== undefined && numberOfChildren !== null && numberOfChildren !== "") {
-    const numChildren = parseInt(cleanString(numberOfChildren), 10);
-    if (!Number.isInteger(numChildren) || numChildren < 0) {
-      addError(errors, "numberOfChildren", "Number of children must be a non-negative integer");
-    } else if (numChildren > 40) {
-      addError(errors, "numberOfChildren", "Number of children cannot exceed 40");
+    const rawNumberOfChildren = cleanString(numberOfChildren);
+    if (/^-/.test(rawNumberOfChildren)) {
+      addError(errors, "numberOfChildren", "Number of children cannot be negative");
+    } else if (!/^\d+$/.test(rawNumberOfChildren)) {
+      addError(errors, "numberOfChildren", "Number of children must be a whole number");
+    } else if (Number(rawNumberOfChildren) > MAX_NUMBER_OF_CHILDREN) {
+      addError(errors, "numberOfChildren", `Number of children cannot exceed ${MAX_NUMBER_OF_CHILDREN}`);
     }
   }
 

@@ -40,7 +40,7 @@ import {
 } from "../ui/table";
 import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X, FileText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
-import { validatePassword, validateResidentForm } from "../../utils/validation";
+import { validateNumberOfChildren, validatePassword, validateResidentForm } from "../../utils/validation";
 import { formatId } from "../../utils/formatId";
 import OcrScanner from "../../OcrScanner";
 import { Calendar } from "../ui/calendar";
@@ -2060,6 +2060,7 @@ export function ResidentRecords({
   const emergencyNameError = saveAttempted && isBlank(formData.emergencyContactName);
   const emergencyNumberError = saveAttempted && invalidContact(formData.emergencyContactNumber);
   const emergencyAddressError = saveAttempted && isBlank(formData.emergencyContactAddress);
+  const numberOfChildrenError = validateNumberOfChildren(formData.numberOfChildren);
 
   // ADDED FEATURE: SETTINGS HANDLER
   const handleSaveSettings = () => {
@@ -2350,7 +2351,10 @@ export function ResidentRecords({
       fatherName: resident.fatherName || "",
       motherName: resident.motherName || "",
       spouseName: resident.spouseName || "",
-      numberOfChildren: resident.numberOfChildren ? String(resident.numberOfChildren) : "",
+      numberOfChildren:
+        resident.numberOfChildren !== undefined && resident.numberOfChildren !== null
+          ? String(resident.numberOfChildren)
+          : "",
       emergencyContactName: resident.emergencyContactName || "",
       emergencyContactNumber: resident.emergencyContactNumber || "",
       emergencyContactAddress: resident.emergencyContactAddress || "",
@@ -2453,6 +2457,11 @@ export function ResidentRecords({
     if (!editingResident) return;
 
     setSaveAttempted(true);
+
+    if (numberOfChildrenError) {
+      toast.error(numberOfChildrenError);
+      return;
+    }
 
     if (
       isBlank(formData.firstName) ||
@@ -3554,7 +3563,8 @@ export function ResidentRecords({
                       <Input
                         type="number"
                         min="0"
-                        max="17"
+                        max="69"
+                        step="1"
                         value={formData.numberOfChildren}
                         onChange={(e) =>
                           setFormData({
@@ -3562,8 +3572,14 @@ export function ResidentRecords({
                             numberOfChildren: e.target.value,
                           })
                         }
+                        className={numberOfChildrenError ? "border-red-500 ring-red-500" : ""}
                         placeholder="0"
                       />
+                      {numberOfChildrenError && (
+                        <p className="text-xs text-red-500 mt-1">
+                          {numberOfChildrenError}.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

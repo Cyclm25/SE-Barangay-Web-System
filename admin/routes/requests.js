@@ -88,6 +88,28 @@ function normalizeRequestStatus(status) {
   }
 }
 
+function getStatusUpdateActorId(user, fallbackResidentId) {
+  return (
+    user?.superAdminId ||
+    user?.barangayAdminId ||
+    user?.residentId ||
+    user?.accountId ||
+    fallbackResidentId ||
+    null
+  );
+}
+
+function buildStatusUpdatePurpose({ requestType, requestPurpose, status, reason }) {
+  const base = [requestType, requestPurpose].filter(Boolean).join(" - ");
+  const reasonText = String(reason || "").trim();
+
+  if (status === "Rejected" && reasonText) {
+    return `${base || "Document request"} - Reason: ${reasonText}`;
+  }
+
+  return base || "Document request";
+}
+
 /* ==============================
    CREATE REQUEST (Resident)
 ============================== */
@@ -231,7 +253,7 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
     await client.query("BEGIN");
 
     const current = await client.query(
-      `SELECT "RequestStatus", "ResidentID", "RequestType"
+      `SELECT "RequestStatus", "ResidentID", "RequestType", "RequestPurpose"
        FROM request
        WHERE "RequestID" = $1`,
       [id]
@@ -244,6 +266,7 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
     const prevStatus = current.rows[0].RequestStatus;
     const residentId = current.rows[0].ResidentID;
     const requestType = current.rows[0].RequestType;
+    const requestPurpose = current.rows[0].RequestPurpose;
 
     let updateQuery = `UPDATE request SET "RequestStatus" = $1`;
     const params = [status];
@@ -292,6 +315,25 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
           ("RequestID","RecipientRole","RecipientID","NotificationType","NotificationDate","Message")
          VALUES ($1,'Resident',$2,'Appointment',NOW(),$3)`,
         [id, residentId, appointmentMessage]
+      );
+    }
+
+    if (status !== prevStatus) {
+      await client.query(
+        `
+        INSERT INTO transaction_history
+          ("RequestID","ResidentID","Action","RequestStatus","RequestType","RequestPurpose","CreatedAt")
+        VALUES
+          ($1,$2,$3,$4,$5,$6,NOW())
+        `,
+        [
+          id,
+          getStatusUpdateActorId(req.user, residentId),
+          status === "Rejected" ? "Denied Document Request" : "Updated Document Request",
+          status,
+          "Online Requests",
+          buildStatusUpdatePurpose({ requestType, requestPurpose, status, reason }),
+        ]
       );
     }
 

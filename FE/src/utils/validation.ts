@@ -10,6 +10,7 @@ const RESIDENT_TYPES = new Set(["Student", "Senior Citizen", "PWD", "Indigenous"
 const CIVIL_STATUSES = new Set(["Single", "Married", "Widowed", "Separated"]);
 const SEX_OPTIONS = new Set(["Male", "Female"]);
 const VOTER_STATUSES = new Set(["Voter", "Non-Voter"]);
+const MAX_NUMBER_OF_CHILDREN = 69;
 
 function clean(value: unknown) {
   return String(value ?? "").trim();
@@ -19,6 +20,21 @@ function addError(errors: ValidationErrors, field: string, message: string) {
   if (!errors[field]) {
     errors[field] = message;
   }
+}
+
+export function validateNumberOfChildren(value: unknown) {
+  const rawValue = clean(value);
+
+  if (!rawValue) return "";
+  if (/^-/.test(rawValue)) return "Number of children cannot be negative";
+  if (!/^\d+$/.test(rawValue)) return "Number of children must be a whole number";
+
+  const numberOfChildren = Number(rawValue);
+  if (numberOfChildren > MAX_NUMBER_OF_CHILDREN) {
+    return `Number of children cannot exceed ${MAX_NUMBER_OF_CHILDREN}`;
+  }
+
+  return "";
 }
 
 function normalizePhMobile(value: unknown) {
@@ -61,6 +77,7 @@ export function validateResidentForm(payload: Record<string, unknown>) {
   const emergencyContactName = clean(payload.emergencyContactName);
   const emergencyContactNumber = normalizePhMobile(payload.emergencyContactNumber);
   const emergencyContactAddress = clean(payload.emergencyContactAddress);
+  const numberOfChildrenError = validateNumberOfChildren(payload.numberOfChildren);
 
   if (!firstName) addError(errors, "firstName", "First Name is required");
   else {
@@ -136,6 +153,7 @@ export function validateResidentForm(payload: Record<string, unknown>) {
     if (emergencyContactAddress.length > 150) addError(errors, "emergencyContactAddress", "Emergency Contact Address must not exceed 150 characters");
     if (!ADDRESS_TEXT_REGEX.test(emergencyContactAddress)) addError(errors, "emergencyContactAddress", "Emergency Contact Address contains invalid characters");
   }
+  if (numberOfChildrenError) addError(errors, "numberOfChildren", numberOfChildrenError);
 
   return errors;
 }
