@@ -71,6 +71,57 @@ setInterval(async () => {
 }, 60000);
 
 /* =============================================
+   1.5 OFFICIALS AUTOMATION
+============================================= */
+let inactivateExpiredOfficials = null;
+
+try {
+  const officialsModule = require("./routes/officials");
+
+  // supports either:
+  // module.exports = router
+  // or module.exports = { router, inactivateExpiredOfficials }
+  inactivateExpiredOfficials =
+    officialsModule.inactivateExpiredOfficials || null;
+} catch (err) {
+  console.error("[AUTO] Failed to load officials automation:", err.message);
+}
+
+async function runOfficialsScheduler(label = "interval") {
+  try {
+    if (typeof inactivateExpiredOfficials === "function") {
+      const result = await inactivateExpiredOfficials();
+      if (result?.rowCount > 0) {
+        console.log(
+          `[Scheduler][${label}] Inactivated ${result.rowCount} official(s) with expired term(s)`
+        );
+      }
+    }
+  } catch (err) {
+    console.error(`[Scheduler][${label}] Error:`, err.message);
+  }
+}
+
+// Run once on startup
+(async () => {
+  try {
+    console.log("[AUTO] Running initial officials check...");
+    await runOfficialsScheduler("startup");
+  } catch (err) {
+    console.error("[AUTO] Officials Startup Check Error:", err.message);
+  }
+})();
+
+// Run every 1 minute
+setInterval(async () => {
+  try {
+    await runOfficialsScheduler("interval");
+  } catch (err) {
+    console.error("[AUTO] Officials Background Check Error:", err.message);
+  }
+}, 60000);
+
+/* =============================================
    2. MIDDLEWARE
 ============================================= */
 app.use(

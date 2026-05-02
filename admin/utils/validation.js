@@ -126,6 +126,17 @@ function validateResidentPayload(payload, { requirePassword = false } = {}) {
     }
   }
 
+  // Validate number of children
+  const numberOfChildren = payload.numberOfChildren;
+  if (numberOfChildren !== undefined && numberOfChildren !== null && numberOfChildren !== "") {
+    const numChildren = parseInt(cleanString(numberOfChildren), 10);
+    if (!Number.isInteger(numChildren) || numChildren < 0) {
+      addError(errors, "numberOfChildren", "Number of children must be a non-negative integer");
+    } else if (numChildren > 40) {
+      addError(errors, "numberOfChildren", "Number of children cannot exceed 40");
+    }
+  }
+
   return buildResult(errors);
 }
 
@@ -160,7 +171,7 @@ function validateOfficialPayload(payload, { requirePassword = false, allowedPosi
   if (!adminName) addError(errors, "adminname", "Admin Name is required");
   else {
     if (adminName.length < 2) addError(errors, "adminname", "Admin Name must be at least 2 characters");
-    if (adminName.length > 100) addError(errors, "adminname", "Admin Name must not exceed 100 characters");
+    if (adminName.length > 50) addError(errors, "adminname", "Admin Name must not exceed 50 characters");
     if (!NAME_REGEX.test(adminName)) addError(errors, "adminname", "Admin Name must contain letters and spaces only");
   }
 

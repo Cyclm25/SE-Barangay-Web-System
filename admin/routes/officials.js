@@ -4,6 +4,7 @@ const pool = require("../db");
 const bcrypt = require("bcrypt");
 const verifyToken = require("../middleware/verifyToken");
 const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
+const inactivateExpiredOfficials = require("../utils/inactivateExpiredOfficials");
 const {
     cleanString,
     normalizeDigits,
@@ -186,6 +187,10 @@ router.post("/", verifyToken, requireNonSkWriteAccess, async (req, res) => {
 });
 
 // PUT update official
+// This endpoint allows updating all official details including:
+// - Position and term dates when reactivating a deactivated official
+// - Status (to reactivate or deactivate)
+// - Any other official information
 router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
     try {
         const { id } = req.params;
@@ -314,4 +319,7 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
     }
 });
 
-module.exports = router;
+module.exports = {
+    router,
+    inactivateExpiredOfficials,
+};
