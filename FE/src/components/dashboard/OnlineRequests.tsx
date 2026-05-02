@@ -613,15 +613,25 @@ export function OnlineRequests({
     return base.filter(r => r.status === statusFilter);
   };
 
+  const getRequestPriority = (request: Request) => {
+    const idNumber = Number(request.id);
+    if (!Number.isNaN(idNumber)) return idNumber;
+
+    const requestNoNumber = Number(request.requestNo.replace(/\D/g, ''));
+    return Number.isNaN(requestNoNumber) ? Number.MAX_SAFE_INTEGER : requestNoNumber;
+  };
+
   const currentRequests = getCurrentTabRequests();
 
-  const filteredRequests = currentRequests.filter(req =>
-    req.requestNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.residentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.residentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.documentType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.purpose.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRequests = currentRequests
+    .filter(req =>
+      req.requestNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.residentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.residentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.documentType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.purpose.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => getRequestPriority(a) - getRequestPriority(b));
 
   const totalPages = Math.max(1, Math.ceil(filteredRequests.length / pageSize));
   const paginatedRequests = filteredRequests.slice((currentPage - 1) * pageSize, currentPage * pageSize);
