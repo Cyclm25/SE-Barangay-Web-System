@@ -3335,11 +3335,14 @@ export function ResidentRecords({
                     <div className="space-y-2">
                       <Label>House No. *</Label>
                       <Input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={5}
                         value={formData.houseNo}
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            houseNo: toUppercaseInput(e.target.value),
+                            houseNo: e.target.value.replace(/\D/g, "").slice(0, 5),
                           })
                         }
                         placeholder="House number"

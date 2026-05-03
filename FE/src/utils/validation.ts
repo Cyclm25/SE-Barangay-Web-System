@@ -4,8 +4,8 @@ const NAME_REGEX = /^[A-Za-z\s]+$/;
 const USERNAME_REGEX = /^[A-Za-z0-9_]+$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PH_MOBILE_REGEX = /^(09\d{9}|639\d{9})$/;
-const HOUSE_NO_REGEX = /^[A-Za-z0-9\s#-]+$/;
-const ADDRESS_TEXT_REGEX = /^[A-Za-z0-9\s.,#-]+$/;
+const HOUSE_NO_REGEX = /^\d{1,5}$/;
+const ADDRESS_TEXT_REGEX = /^[A-Za-z0-9Ññ\s.,#-]+$/;
 const RESIDENT_TYPES = new Set(["Student", "Senior Citizen", "PWD", "Indigenous", "Resident"]);
 const CIVIL_STATUSES = new Set(["Single", "Married", "Widowed", "Separated"]);
 const SEX_OPTIONS = new Set(["Male", "Female"]);
@@ -121,7 +121,7 @@ export function validateResidentForm(payload: Record<string, unknown>) {
   else if (!RESIDENT_TYPES.has(residentType)) addError(errors, "residentType", "Resident Type must be one of the available options");
 
   if (!houseNo) addError(errors, "houseNo", "House No. is required");
-  else if (!HOUSE_NO_REGEX.test(houseNo)) addError(errors, "houseNo", "House No. must only contain letters, numbers, spaces, #, and -");
+  else if (!HOUSE_NO_REGEX.test(houseNo)) addError(errors, "houseNo", "House No. must be digits only and must not exceed 5 digits");
   if (!streetAddress) addError(errors, "streetAddress", "Address is required");
   else {
     if (`${houseNo} ${streetAddress}`.trim().length < 5) addError(errors, "streetAddress", "Address must be at least 5 characters");
