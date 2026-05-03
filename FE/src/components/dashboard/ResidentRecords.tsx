@@ -38,9 +38,21 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X, FileText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { Search, Eye, EyeOff, Upload, User, Lock, Settings, X, FileText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { validateNumberOfChildren, validatePassword, validateResidentForm } from "../../utils/validation";
+import {
+  MAX_HOUSE_NO_LENGTH,
+  MAX_RESIDENT_AGE,
+  MIN_RESIDENT_AGE,
+  NAME_FIELD_ERROR,
+  hasInvalidNameValue,
+  normalizeNameInput,
+  normalizeNameValue,
+  validateNumberOfChildren,
+  validatePassword,
+  validateResidentAge,
+  validateResidentForm,
+} from "../../utils/validation";
 import { formatId } from "../../utils/formatId";
 import OcrScanner from "../../OcrScanner";
 import { Calendar } from "../ui/calendar";
@@ -110,6 +122,15 @@ interface Resident {
   religion?: string | null;
 
 }
+
+type ResidentNameField =
+  | "firstName"
+  | "middleName"
+  | "lastName"
+  | "fatherName"
+  | "motherName"
+  | "spouseName"
+  | "emergencyContactName";
 
 const dataPrivacyHighlights = [
   "The information provided is true and correct to the best of your knowledge.",
@@ -203,13 +224,13 @@ function mapRowToResident(r: ResidentRow): Resident {
     birthday: (r.Birthday as any) ?? "",
     gender: (r.Gender as any) ?? "Male",
     civilStatus: r.CivilStatus ?? "",
-    residentType: r.ResidentType ?? "",
+    residentType: r.ResidentType ?? "Resident",
     voterStatus: normalizeVoterStatus(r.VoterStatus),
-    houseNo: r.HouseNumber ?? "",
+    houseNo: String(r.HouseNumber ?? "").replace(/\D/g, "").slice(0, MAX_HOUSE_NO_LENGTH),
     streetAddress: r.StreetAddress ?? "",
     city: ((r as any).City ?? (r as any).city ?? "Manila City") as string,
     postalCode: ((r as any).ZipCode ?? (r as any).zipcode ?? (r as any).PostalCode ?? "1013") as string,
-    country: "Philippines",
+    country: "PHILIPPINES",
     contactNumber: r.ContactNumber ?? "",
     email: r.Email ?? "",
     fatherName: r.FatherName ?? "",
@@ -250,6 +271,11 @@ const calculateAge = (birthdate: any) => {
     age--;
   }
   return age < 0 ? "" : String(age);
+};
+
+const getLatestAllowedBirthDate = () => {
+  const today = new Date();
+  return new Date(today.getFullYear() - MIN_RESIDENT_AGE, today.getMonth(), today.getDate(), 23, 59, 59, 999);
 };
 
 const toUppercaseInput = (value: string) => value.toUpperCase();
@@ -350,7 +376,7 @@ const sanitizeAddressField = (value: string) =>
     .trim();
 
 const sanitizeHouseNoField = (value: string) =>
-  (normalizeOcrValue(value).match(/\d+/)?.[0] || "").trim();
+  (normalizeOcrValue(value).match(/\d+/)?.[0] || "").trim().slice(0, MAX_HOUSE_NO_LENGTH);
 
 const sanitizeStreetAddressField = (value: string) =>
   sanitizeAddressField(value)
@@ -951,7 +977,7 @@ const getDateValidationError = (label: string, ymd?: string) => {
   if (label === "Date of Birth") {
     if (ymd > todayYmd) return "Date of Birth is invalid";
     const age = Number(calculateAge(ymd));
-    if (!Number.isFinite(age) || age < 0 || age > 125) return "Date of Birth is invalid";
+    if (!Number.isFinite(age) || age < MIN_RESIDENT_AGE || age > MAX_RESIDENT_AGE) return "Date of Birth is invalid";
   }
   if (label === "Issue Date" && ymd > todayYmd) return "Issue Date is invalid";
   return "";
@@ -1956,7 +1982,7 @@ export function ResidentRecords({
     gender: "Male" as "Male" | "Female",
     civilStatus: "Single",
     religion: "",
-    residentType: "",
+    residentType: "Resident",
     voterStatus: "Non-Voter" as "Voter" | "Non-Voter",
     houseNo: "",
     streetAddress: "",
@@ -1987,6 +2013,7 @@ export function ResidentRecords({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [pendingResident, setPendingResident] = useState<Resident | null>(null);
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [profileImagePreview, setProfileImagePreview] = useState<string>("");
   const [saveAttempted, setSaveAttempted] = useState(false);
 
@@ -2033,6 +2060,39 @@ export function ResidentRecords({
   const invalidEmail = (v: string) =>
     isBlank(v) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
   const invalidContact = (v: string) => isBlank(v) || v.length !== 11;
+  const normalizeResidentFormNameFields = (data: typeof formData) => ({
+    ...data,
+    firstName: normalizeNameValue(data.firstName),
+    middleName: normalizeNameValue(data.middleName),
+    lastName: normalizeNameValue(data.lastName),
+    fatherName: normalizeNameValue(data.fatherName),
+    motherName: normalizeNameValue(data.motherName),
+    spouseName: normalizeNameValue(data.spouseName),
+    emergencyContactName: normalizeNameValue(data.emergencyContactName),
+  });
+  const handleNameFieldChange = (field: ResidentNameField, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: normalizeNameInput(toUppercaseInput(value)),
+    }));
+  };
+  const handleNameFieldBlur = (field: ResidentNameField) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: normalizeNameValue(prev[field]),
+    }));
+  };
+  const handleHouseNoChange = (value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      houseNo: value.replace(/\D/g, "").slice(0, MAX_HOUSE_NO_LENGTH),
+    }));
+  };
+  const getNameFieldError = (field: ResidentNameField, requiredMessage = "") => {
+    if (hasInvalidNameValue(formData[field])) return NAME_FIELD_ERROR;
+    if (requiredMessage && saveAttempted && isBlank(formData[field])) return requiredMessage;
+    return "";
+  };
 
   const contactTooLong = formData.contactNumber.length > 11;
   const contactComplete = formData.contactNumber.length === 11;
@@ -2045,19 +2105,29 @@ export function ResidentRecords({
   const emailValidFormat =
     formData.email.trim().length > 0 && gmailRegex.test(formData.email.trim());
 
-  const firstNameError = saveAttempted && isBlank(formData.firstName);
-  const lastNameError = saveAttempted && isBlank(formData.lastName);
+  const firstNameError = getNameFieldError("firstName", "First name is required.");
+  const middleNameError = getNameFieldError("middleName");
+  const lastNameError = getNameFieldError("lastName", "Last name is required.");
+  const fatherNameError = getNameFieldError("fatherName");
+  const motherNameError = getNameFieldError("motherName");
+  const spouseNameError = getNameFieldError("spouseName");
   const birthdayError = saveAttempted && isBlank(formData.birthday);
+  const ageError = saveAttempted && formData.birthday ? validateResidentAge(formData.age) : "";
   const contactError =
     saveAttempted &&
     (invalidContact(formData.contactNumber) || contactNumberAlreadyExists);
   const emailError =
     saveAttempted && (invalidEmail(formData.email) || emailAlreadyExists);
   // Address & Contact required fields
-  const houseNoError = saveAttempted && isBlank(formData.houseNo);
+  const houseNoError =
+    saveAttempted &&
+    (isBlank(formData.houseNo) || formData.houseNo.length > MAX_HOUSE_NO_LENGTH);
+  const houseNoErrorMessage = isBlank(formData.houseNo)
+    ? "House number is required."
+    : `House number must not exceed ${MAX_HOUSE_NO_LENGTH} digits.`;
   const streetAddressError = saveAttempted && isBlank(formData.streetAddress);
   // Emergency contact required fields
-  const emergencyNameError = saveAttempted && isBlank(formData.emergencyContactName);
+  const emergencyNameError = getNameFieldError("emergencyContactName", "Emergency contact name is required.");
   const emergencyNumberError = saveAttempted && invalidContact(formData.emergencyContactNumber);
   const emergencyAddressError = saveAttempted && isBlank(formData.emergencyContactAddress);
   const numberOfChildrenError = validateNumberOfChildren(formData.numberOfChildren);
@@ -2085,7 +2155,7 @@ export function ResidentRecords({
       return;
     }
 
-    if (showDataPrivacyDialog || showPasswordDialog) {
+    if (showDataPrivacyDialog || showPasswordDialog || isCreatingAccount) {
       setIsAddDialogOpen(true);
       return;
     }
@@ -2254,6 +2324,7 @@ export function ResidentRecords({
     setConfirmPassword("");
     setEditingResident(null);
     setResidentPrivacyAccepted(false);
+    setIsCreatingAccount(false);
     setSaveAttempted(false);
     setIsCheckingContactNumber(false);
     setContactNumberAlreadyExists(false);
@@ -2277,7 +2348,10 @@ export function ResidentRecords({
   const handleSaveResident = () => {
     setSaveAttempted(true);
 
-    const errors = validateResidentForm(formData);
+    const preparedFormData = normalizeResidentFormNameFields(formData);
+    setFormData(preparedFormData);
+
+    const errors = validateResidentForm(preparedFormData);
     if (
       Object.keys(errors).length > 0 ||
       contactNumberAlreadyExists ||
@@ -2290,33 +2364,33 @@ export function ResidentRecords({
     const newResident: Resident = {
       id: `TMP_${Date.now()}`,
       residentNo: `TMP_${Date.now()}`,
-      profileImage: formData.profileImage || undefined,
-      firstName: formData.firstName,
-      middleName: formData.middleName,
-      lastName: formData.lastName,
-      age: parseInt(formData.age) || 0,
-      birthday: formData.birthday,
-      gender: formData.gender,
-      civilStatus: formData.civilStatus,
-      religion: formData.religion || undefined,
-      residentType: formData.residentType || "Resident",
-      voterStatus: formData.voterStatus,
-      houseNo: formData.houseNo,
-      streetAddress: formData.streetAddress,
-      city: formData.city,
-      postalCode: formData.postalCode,
-      country: formData.country,
-      contactNumber: formData.contactNumber,
-      email: formData.email,
-      fatherName: formData.fatherName,
-      motherName: formData.motherName,
-      spouseName: formData.spouseName || undefined,
-      numberOfChildren: formData.numberOfChildren
-        ? parseInt(formData.numberOfChildren)
+      profileImage: preparedFormData.profileImage || undefined,
+      firstName: preparedFormData.firstName,
+      middleName: preparedFormData.middleName,
+      lastName: preparedFormData.lastName,
+      age: parseInt(preparedFormData.age) || 0,
+      birthday: preparedFormData.birthday,
+      gender: preparedFormData.gender,
+      civilStatus: preparedFormData.civilStatus,
+      religion: preparedFormData.religion || undefined,
+      residentType: preparedFormData.residentType || "Resident",
+      voterStatus: preparedFormData.voterStatus,
+      houseNo: preparedFormData.houseNo,
+      streetAddress: preparedFormData.streetAddress,
+      city: preparedFormData.city,
+      postalCode: preparedFormData.postalCode,
+      country: preparedFormData.country,
+      contactNumber: preparedFormData.contactNumber,
+      email: preparedFormData.email,
+      fatherName: preparedFormData.fatherName,
+      motherName: preparedFormData.motherName,
+      spouseName: preparedFormData.spouseName || undefined,
+      numberOfChildren: preparedFormData.numberOfChildren
+        ? parseInt(preparedFormData.numberOfChildren)
         : undefined,
-      emergencyContactName: formData.emergencyContactName,
-      emergencyContactNumber: formData.emergencyContactNumber,
-      emergencyContactAddress: formData.emergencyContactAddress,
+      emergencyContactName: preparedFormData.emergencyContactName,
+      emergencyContactNumber: preparedFormData.emergencyContactNumber,
+      emergencyContactAddress: preparedFormData.emergencyContactAddress,
       dateRegistered: new Date().toISOString().split("T")[0],
       status: "Active",
       barangayCard: ""
@@ -2339,7 +2413,7 @@ export function ResidentRecords({
       gender: resident.gender || "Male",
       civilStatus: resident.civilStatus || "Single",
       religion: resident.religion || "",
-      residentType: resident.residentType || "",
+      residentType: resident.residentType || "Resident",
       voterStatus: resident.voterStatus || "Non-Voter",
       houseNo: resident.houseNo || "",
       streetAddress: resident.streetAddress || "",
@@ -2376,6 +2450,8 @@ export function ResidentRecords({
   };
 
   const handleFinalSubmit = async () => {
+    if (isCreatingAccount) return;
+
     const passwordErrors = validatePassword(password, confirmPassword);
     if (Object.keys(passwordErrors).length > 0) {
       toast.error(Object.values(passwordErrors)[0]);
@@ -2384,6 +2460,8 @@ export function ResidentRecords({
     if (!pendingResident) return;
 
     try {
+      setIsCreatingAccount(true);
+
       const nextNo = `RS${new Date().getFullYear()}${String(
         Math.floor(Math.random() * 9999)
       ).padStart(4, "0")}`;
@@ -2450,6 +2528,8 @@ export function ResidentRecords({
       }
       toast.error(data?.error || "Could not reach backend server.");
       console.error(err);
+    } finally {
+      setIsCreatingAccount(false);
     }
   };
 
@@ -2458,50 +2538,48 @@ export function ResidentRecords({
 
     setSaveAttempted(true);
 
-    if (numberOfChildrenError) {
-      toast.error(numberOfChildrenError);
-      return;
-    }
+    const preparedFormData = normalizeResidentFormNameFields({
+      ...formData,
+      residentType: formData.residentType || "Resident",
+    });
+    setFormData(preparedFormData);
 
+    const errors = validateResidentForm(preparedFormData);
     if (
-      isBlank(formData.firstName) ||
-      isBlank(formData.lastName) ||
-      isBlank(formData.birthday) ||
-      invalidContact(formData.contactNumber) ||
+      Object.keys(errors).length > 0 ||
       contactNumberAlreadyExists ||
-      invalidEmail(formData.email) ||
       emailAlreadyExists
     ) {
-      toast.error("Please fill in all required fields correctly.");
+      toast.error(errors.contactNumber || errors.email || Object.values(errors)[0] || "Please fill in all required fields correctly.");
       return;
     }
 
     try {
       const response = await api.put(`/residents/${editingResident.residentNo}`, {
-          profileImage: formData.profileImage,
-          firstName: formData.firstName,
-          middleName: formData.middleName,
-          lastName: formData.lastName,
-          age: formData.age,
-          birthday: formData.birthday,
-          gender: formData.gender,
-          civilStatus: formData.civilStatus,
-          religion: formData.religion,
-          residentType: formData.residentType || "Resident",
-          voterStatus: formData.voterStatus,
-          houseNo: formData.houseNo,
-          streetAddress: formData.streetAddress,
-          city: formData.city,
-          zipCode: formData.postalCode,
-          contactNumber: formData.contactNumber,
-          email: formData.email,
-          fatherName: formData.fatherName,
-          motherName: formData.motherName,
-          spouseName: formData.spouseName,
-          numberOfChildren: formData.numberOfChildren,
-          emergencyContactName: formData.emergencyContactName,
-          emergencyContactNumber: formData.emergencyContactNumber,
-          emergencyContactAddress: formData.emergencyContactAddress,
+          profileImage: preparedFormData.profileImage,
+          firstName: preparedFormData.firstName,
+          middleName: preparedFormData.middleName,
+          lastName: preparedFormData.lastName,
+          age: preparedFormData.age,
+          birthday: preparedFormData.birthday,
+          gender: preparedFormData.gender,
+          civilStatus: preparedFormData.civilStatus,
+          religion: preparedFormData.religion,
+          residentType: preparedFormData.residentType || "Resident",
+          voterStatus: preparedFormData.voterStatus,
+          houseNo: preparedFormData.houseNo,
+          streetAddress: preparedFormData.streetAddress,
+          city: preparedFormData.city,
+          zipCode: preparedFormData.postalCode,
+          contactNumber: preparedFormData.contactNumber,
+          email: preparedFormData.email,
+          fatherName: preparedFormData.fatherName,
+          motherName: preparedFormData.motherName,
+          spouseName: preparedFormData.spouseName,
+          numberOfChildren: preparedFormData.numberOfChildren,
+          emergencyContactName: preparedFormData.emergencyContactName,
+          emergencyContactNumber: preparedFormData.emergencyContactNumber,
+          emergencyContactAddress: preparedFormData.emergencyContactAddress,
       });
       const data = response.data;
 
@@ -3101,12 +3179,8 @@ export function ResidentRecords({
                     <Label>First Name *</Label>
                     <Input
                       value={formData.firstName}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          firstName: toUppercaseInput(e.target.value),
-                        })
-                      }
+                      onChange={(e) => handleNameFieldChange("firstName", e.target.value)}
+                      onBlur={() => handleNameFieldBlur("firstName")}
                       placeholder="Enter first name"
                       className={
                         firstNameError ? "border-red-500 ring-red-500" : ""
@@ -3114,7 +3188,7 @@ export function ResidentRecords({
                     />
                     {firstNameError && (
                       <p className="text-xs text-red-500 mt-1">
-                        First name is required.
+                        {firstNameError}
                       </p>
                     )}
                   </div>
@@ -3123,26 +3197,24 @@ export function ResidentRecords({
                     <Label>Middle Name</Label>
                     <Input
                       value={formData.middleName}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          middleName: toUppercaseInput(e.target.value),
-                        })
-                      }
+                      onChange={(e) => handleNameFieldChange("middleName", e.target.value)}
+                      onBlur={() => handleNameFieldBlur("middleName")}
                       placeholder="Enter middle name"
+                      className={middleNameError ? "border-red-500 ring-red-500" : ""}
                     />
+                    {middleNameError && (
+                      <p className="text-xs text-red-500 mt-1">
+                        {middleNameError}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
                     <Label>Last Name *</Label>
                     <Input
                       value={formData.lastName}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          lastName: toUppercaseInput(e.target.value),
-                        })
-                      }
+                      onChange={(e) => handleNameFieldChange("lastName", e.target.value)}
+                      onBlur={() => handleNameFieldBlur("lastName")}
                       placeholder="Enter last name"
                       className={
                         lastNameError ? "border-red-500 ring-red-500" : ""
@@ -3150,7 +3222,7 @@ export function ResidentRecords({
                     />
                     {lastNameError && (
                       <p className="text-xs text-red-500 mt-1">
-                        Last name is required.
+                        {lastNameError}
                       </p>
                     )}
                   </div>
@@ -3194,7 +3266,7 @@ export function ResidentRecords({
                               const ymd = toLocalYmd(date);
                               setFormData({ ...formData, birthday: ymd, age: calculateAge(ymd) });
                             }}
-                            disabled={(date) => date > new Date()}
+                            disabled={(date) => date > getLatestAllowedBirthDate()}
                             initialFocus
                             captionLayout="dropdown-buttons"
                             fromYear={1900}
@@ -3214,8 +3286,14 @@ export function ResidentRecords({
                         value={formData.age}
                         readOnly
                         placeholder="—"
-                        className="w-24 text-center bg-gray-100"
+                        className={cn(
+                          "w-24 text-center bg-gray-100",
+                          ageError && "border-red-500 ring-red-500"
+                        )}
                       />
+                      {ageError && (
+                        <p className="text-xs text-red-500 mt-1">{ageError}</p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -3285,7 +3363,7 @@ export function ResidentRecords({
                     <div className="space-y-2">
                       <Label>Resident Type</Label>
                       <Select
-                        value={formData.residentType}
+                        value={formData.residentType || "Resident"}
                         onValueChange={(v) =>
                           setFormData({ ...formData, residentType: v })
                         }
@@ -3335,18 +3413,17 @@ export function ResidentRecords({
                     <div className="space-y-2">
                       <Label>House No. *</Label>
                       <Input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={formData.houseNo}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            houseNo: toUppercaseInput(e.target.value),
-                          })
-                        }
+                        onChange={(e) => handleHouseNoChange(e.target.value)}
+                        maxLength={MAX_HOUSE_NO_LENGTH}
                         placeholder="House number"
                         className={houseNoError ? "border-red-500 ring-red-500" : ""}
                       />
                       {houseNoError && (
-                        <p className="text-xs text-red-500 mt-1">House number is required.</p>
+                        <p className="text-xs text-red-500 mt-1">{houseNoErrorMessage}</p>
                       )}
                     </div>
                     <div className="space-y-2">
@@ -3386,21 +3463,16 @@ export function ResidentRecords({
                       <Label>Postal Code</Label>
                       <Input
                         value={formData.postalCode}
-                        onChange={(e) =>
-                          setFormData({ ...formData, postalCode: e.target.value })
-                        }
+                        disabled
+                        className="bg-gray-100 text-gray-500 cursor-not-allowed"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Country</Label>
                       <Input
+                        className="uppercase bg-gray-100 text-gray-500 cursor-not-allowed"
                         value={formData.country}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            country: toUppercaseInput(e.target.value),
-                          })
-                        }
+                        disabled
                       />
                     </div>
                   </div>
@@ -3520,27 +3592,27 @@ export function ResidentRecords({
                       <Label>Father's Name</Label>
                       <Input
                         value={formData.fatherName}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            fatherName: toUppercaseInput(e.target.value),
-                          })
-                        }
+                        onChange={(e) => handleNameFieldChange("fatherName", e.target.value)}
+                        onBlur={() => handleNameFieldBlur("fatherName")}
                         placeholder="Father's full name"
+                        className={fatherNameError ? "border-red-500 ring-red-500" : ""}
                       />
+                      {fatherNameError && (
+                        <p className="text-xs text-red-500 mt-1">{fatherNameError}</p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label>Mother's Name</Label>
                       <Input
                         value={formData.motherName}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            motherName: toUppercaseInput(e.target.value),
-                          })
-                        }
+                        onChange={(e) => handleNameFieldChange("motherName", e.target.value)}
+                        onBlur={() => handleNameFieldBlur("motherName")}
                         placeholder="Mother's full name"
+                        className={motherNameError ? "border-red-500 ring-red-500" : ""}
                       />
+                      {motherNameError && (
+                        <p className="text-xs text-red-500 mt-1">{motherNameError}</p>
+                      )}
                     </div>
                   </div>
 
@@ -3549,14 +3621,14 @@ export function ResidentRecords({
                       <Label>Spouse's Name</Label>
                       <Input
                         value={formData.spouseName}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            spouseName: toUppercaseInput(e.target.value),
-                          })
-                        }
+                        onChange={(e) => handleNameFieldChange("spouseName", e.target.value)}
+                        onBlur={() => handleNameFieldBlur("spouseName")}
                         placeholder="Spouse's full name"
+                        className={spouseNameError ? "border-red-500 ring-red-500" : ""}
                       />
+                      {spouseNameError && (
+                        <p className="text-xs text-red-500 mt-1">{spouseNameError}</p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label>No. of Children</Label>
@@ -3594,19 +3666,13 @@ export function ResidentRecords({
                       <Label>Name *</Label>
                       <Input
                         value={formData.emergencyContactName}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            emergencyContactName: toUppercaseInput(
-                              e.target.value
-                            ),
-                          })
-                        }
+                        onChange={(e) => handleNameFieldChange("emergencyContactName", e.target.value)}
+                        onBlur={() => handleNameFieldBlur("emergencyContactName")}
                         placeholder="Emergency contact name"
                         className={emergencyNameError ? "border-red-500 ring-red-500" : ""}
                       />
                       {emergencyNameError && (
-                        <p className="text-xs text-red-500 mt-1">Emergency contact name is required.</p>
+                        <p className="text-xs text-red-500 mt-1">{emergencyNameError}</p>
                       )}
                     </div>
                     <div className="space-y-2">
@@ -4032,7 +4098,12 @@ export function ResidentRecords({
       </AlertDialog>
 
       {/* STEP 3: PASSWORD POP-UP */}
-      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+      <Dialog
+        open={showPasswordDialog}
+        onOpenChange={(open) => {
+          if (!isCreatingAccount) setShowPasswordDialog(open);
+        }}
+      >
         <DialogContent className="max-w-[400px] p-6 bg-white rounded-lg shadow-xl border-none">
           <DialogHeader className="text-left mb-4">
             <div className="flex items-center gap-2 mb-1">
@@ -4060,11 +4131,13 @@ export function ResidentRecords({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
+                  disabled={isCreatingAccount}
                   className="h-10 pr-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  disabled={isCreatingAccount}
                   className="absolute inset-y-0 right-0 flex h-full items-center justify-center px-3 text-gray-400 transition-colors hover:text-[#2957a1]"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -4083,6 +4156,7 @@ export function ResidentRecords({
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm password"
+                  disabled={isCreatingAccount}
                   className="h-10 pr-10 border-gray-200 focus:ring-1 focus:ring-[#2957a1]"
                 />
                 {/* <button
@@ -4104,20 +4178,36 @@ export function ResidentRecords({
                   setShowDiscardResidentDialog(false);
                   setIsAddDialogOpen(true);
                 }}
+                disabled={isCreatingAccount}
                 className="h-9 px-4 text-xs font-semibold text-gray-600"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleFinalSubmit}
+                disabled={isCreatingAccount}
                 className="h-9 px-4 bg-[#2957a1] text-white text-xs font-bold rounded-md hover:bg-[#1e3f7a]"
               >
-                Create Account & Save
+                {isCreatingAccount ? "Creating..." : "Create Account & Save"}
               </Button>
             </DialogFooter>
           </div>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={isCreatingAccount}>
+          <AlertDialogContent className="w-[95vw] max-w-sm">
+            <div className="flex flex-col items-center gap-4 py-4 text-center">
+              <Loader2 className="h-10 w-10 animate-spin text-[#2957a1]" />
+              <AlertDialogHeader className="items-center text-center">
+                <AlertDialogTitle>Creating Account</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Please wait while the resident account is being saved.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog
           open={showDiscardResidentDialog}
