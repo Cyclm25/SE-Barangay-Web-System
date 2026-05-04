@@ -667,6 +667,13 @@ type ParsedIdData = {
   rawText?: string;
 };
 
+type IdGender = NonNullable<ParsedIdData["gender"]>;
+
+const normalizeIdGender = (value: unknown): IdGender | undefined => {
+  if (value === "Male" || value === "Female" || value === "Unknown") return value;
+  return undefined;
+};
+
 const ID_TYPE_LABEL: Record<SupportedIdType, string> = {
   PHILSYS_NATIONAL_ID: "PhilSys National ID",
   UMID: "UMID",
@@ -1063,7 +1070,7 @@ const parsePassportMrzData = (text: string) => {
     lastName: string;
     birthday: string;
     expirationDate: string;
-    gender?: "Male" | "Female";
+    gender?: IdGender;
     idNumber: string;
   } = { firstName: "", middleName: "", lastName: "", birthday: "", expirationDate: "", idNumber: "" };
 
@@ -1659,9 +1666,9 @@ const parsePostalStrictFields = (text: string) => {
   console.debug("[PostalID] candidate name lines", {
     raw: nameCandidatesRaw,
     deduped,
-    firstName,
-    middleName,
-    lastName,
+    firstName: resolvedFirstName,
+    middleName: resolvedMiddleName,
+    lastName: resolvedLastName,
     fullName,
     fallbackLikelyName,
     resolvedFirstName,
@@ -1849,19 +1856,20 @@ const extractIdDetails = (rawText: string): ParsedIdData => {
     (idType === "POSTAL_ID" ? postalName.expirationDate : "") ||
     dl.expirationDate ||
     parseLabeledDate(text, uniqueValues(["EXPIRATION DATE", "DATE OF EXPIRY", "EXPIRY DATE", "VALID UNTIL", "VALID THRU", "EXPIRY", ...(rule?.expiryLabels || [])]));
-  const gender =
+  const gender = normalizeIdGender(
     (idType === "PASSPORT" ? (passportMrz.gender || passportStrict.gender || "Unknown") : undefined) ||
-    (idType === "UMID" ? umidName.gender : undefined) ||
-    (idType === "POSTAL_ID" ? postalName.gender : undefined) ||
-    dl.gender ||
-    parseOcrGender(text) ||
-    (idType === "PHILSYS_NATIONAL_ID"
-      ? (parseOcrField(text, ["KASARIAN/SEX", "SEX", "KASARIAN"])?.trim().toUpperCase() === "F"
-          ? "Female"
-          : parseOcrField(text, ["KASARIAN/SEX", "SEX", "KASARIAN"])?.trim().toUpperCase() === "M"
-          ? "Male"
-          : undefined)
-      : undefined);
+      (idType === "UMID" ? umidName.gender : undefined) ||
+      (idType === "POSTAL_ID" ? postalName.gender : undefined) ||
+      dl.gender ||
+      parseOcrGender(text) ||
+      (idType === "PHILSYS_NATIONAL_ID"
+        ? (parseOcrField(text, ["KASARIAN/SEX", "SEX", "KASARIAN"])?.trim().toUpperCase() === "F"
+            ? "Female"
+            : parseOcrField(text, ["KASARIAN/SEX", "SEX", "KASARIAN"])?.trim().toUpperCase() === "M"
+            ? "Male"
+            : undefined)
+        : undefined)
+  );
 
   const fallbackDates = parseAllDateTokens(text);
   const finalBirthday = (idType === "UMID" || idType === "PASSPORT") ? ((idType === "UMID" ? (umidName.birthday || birthday) : birthday) || "") : (birthday || fallbackDates[0] || "");
@@ -3415,10 +3423,14 @@ export function ResidentRecords({
                       <Input
                         type="text"
                         inputMode="numeric"
-                        pattern="[0-9]*"
+                        maxLength={5}
                         value={formData.houseNo}
-                        onChange={(e) => handleHouseNoChange(e.target.value)}
-                        maxLength={MAX_HOUSE_NO_LENGTH}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            houseNo: e.target.value.replace(/\D/g, "").slice(0, 5),
+                          })
+                        }
                         placeholder="House number"
                         className={houseNoError ? "border-red-500 ring-red-500" : ""}
                       />
@@ -3444,19 +3456,13 @@ export function ResidentRecords({
                       )}
                     </div>
                   </div>
-
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div className="space-y-2">
                       <Label>City</Label>
                       <Input
-                        className="uppercase"
                         value={formData.city}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            city: toUppercaseInput(e.target.value),
-                          })
-                        }
+                        disabled
+                        className="bg-gray-100 text-gray-500 cursor-not-allowed"
                       />
                     </div>
                     <div className="space-y-2">
