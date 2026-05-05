@@ -2068,6 +2068,25 @@ export function ResidentRecords({
   const invalidEmail = (v: string) =>
     isBlank(v) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
   const invalidContact = (v: string) => isBlank(v) || v.length !== 11;
+  const phPhoneRegex = /^09\d{9}$/;
+  const isValidPhPhone = (v: string) => phPhoneRegex.test(v);
+  // Live invalid-format flags (shown as user types, before save attempt)
+  const contactInvalidFormat =
+    formData.contactNumber.length > 0 &&
+    formData.contactNumber.length === 11 &&
+    !isValidPhPhone(formData.contactNumber);
+  const contactPartialInvalid =
+    formData.contactNumber.length > 0 &&
+    formData.contactNumber.length < 11 &&
+    !formData.contactNumber.startsWith("09");
+  const emergencyContactInvalidFormat =
+    formData.emergencyContactNumber.length > 0 &&
+    formData.emergencyContactNumber.length === 11 &&
+    !isValidPhPhone(formData.emergencyContactNumber);
+  const emergencyContactPartialInvalid =
+    formData.emergencyContactNumber.length > 0 &&
+    formData.emergencyContactNumber.length < 11 &&
+    !formData.emergencyContactNumber.startsWith("09");
   const normalizeResidentFormNameFields = (data: typeof formData) => ({
     ...data,
     firstName: normalizeNameValue(data.firstName),
@@ -3063,24 +3082,60 @@ export function ResidentRecords({
               </DialogHeader>
 
               <div className="space-y-6 py-4">
-                <div className="flex flex-col items-center gap-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <OcrScanner
-                      onDataExtracted={handleOcrData}
-                      onImageCaptured={handleOcrImageCaptured}
-                      onScanSuccess={handleScanSuccess}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowScannerInfoDialog(true)}
-                      className="w-6 h-6 rounded-full border-2 border-[#2957a1] text-[#2957a1] text-xs font-bold flex items-center justify-center hover:bg-blue-50 transition-colors flex-shrink-0"
-                      title="What's Camera Scanner?"
-                    >
-                      ?
-                    </button>
+                {/* SCAN ID + UPLOAD PHOTO — side by side */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {/* Scan ID card */}
+                  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <p className="text-sm font-semibold text-[#2957a1] text-center">Scan ID</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowScannerInfoDialog(true)}
+                        className="w-5 h-5 rounded-full border-2 border-[#2957a1] text-[#2957a1] text-[10px] font-bold flex items-center justify-center hover:bg-blue-50 transition-colors flex-shrink-0"
+                        title="What's Camera Scanner?"
+                      >
+                        ?
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 text-center mb-4">
+                      Use camera to scan a government-issued ID and auto-fill the form
+                    </p>
+                    <div className="flex items-center justify-center gap-3">
+                      <OcrScanner
+                        onDataExtracted={handleOcrData}
+                        onImageCaptured={handleOcrImageCaptured}
+                        onScanSuccess={handleScanSuccess}
+                      />
+                    </div>
                   </div>
+
+                  {/* Upload Photo card */}
+                  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col items-center">
+                    <p className="text-sm font-semibold text-[#2957a1] text-center mb-1">Upload Photo</p>
+                    <p className="text-xs text-gray-500 text-center mb-4">
+                      Upload or capture the resident's profile photo
+                    </p>
+                    <ProfileImageUpload
+                      onImageReady={(imageUrl, previewUrl, imageFile) => {
+                        console.debug("[ProfileImageUpload] resident form image state updated", {
+                          hasImageUrl: !!imageUrl,
+                          hasPreviewUrl: !!previewUrl,
+                          fileType: imageFile ? (imageFile as File).type || "blob" : "none",
+                          fileSize: imageFile ? (imageFile as File).size || 0 : 0,
+                        });
+                        setFormData({ ...formData, profileImage: imageUrl });
+                        setProfileImagePreview(previewUrl);
+                        console.debug("[ProfileImageUpload] image ready for submission");
+                      }}
+                      currentImage={profileImagePreview || undefined}
+                      size="lg"
+                      allowTransform={!editingResident}
+                    />
+                  </div>
+                </div>
+
                   {ocrReview && (
-                    <div className="w-full max-w-3xl rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-sm shadow-sm">
+                    <div className="w-full rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-sm shadow-sm">
                       <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="font-semibold text-[#2957a1]">Extracted ID details for review</p>
@@ -3125,7 +3180,6 @@ export function ResidentRecords({
                       )}
                     </div>
                   )}
-                </div>
               </div>
 
               <Dialog
@@ -3141,7 +3195,6 @@ export function ResidentRecords({
                       faster.
                     </DialogDescription>
                   </DialogHeader>
-
                   <div className="space-y-3 text-sm text-gray-700">
                     <p>Common government IDs in the Philippines include:</p>
                     <ul className="list-disc space-y-1 pl-5">
@@ -3156,25 +3209,6 @@ export function ResidentRecords({
                   </div>
                 </DialogContent>
               </Dialog>
-
-              <div className="flex justify-center">
-                <ProfileImageUpload
-                  onImageReady={(imageUrl, previewUrl, imageFile) => {
-                    console.debug("[ProfileImageUpload] resident form image state updated", {
-                      hasImageUrl: !!imageUrl,
-                      hasPreviewUrl: !!previewUrl,
-                      fileType: imageFile ? (imageFile as File).type || "blob" : "none",
-                      fileSize: imageFile ? (imageFile as File).size || 0 : 0,
-                    });
-                    setFormData({ ...formData, profileImage: imageUrl });
-                    setProfileImagePreview(previewUrl);
-                    console.debug("[ProfileImageUpload] image ready for submission");
-                  }}
-                  currentImage={profileImagePreview || undefined}
-                  size="lg"
-                  allowTransform={!editingResident}
-                />
-              </div>
 
               {/* PERSONAL INFO */}
               <div className="space-y-4">
@@ -3499,11 +3533,9 @@ export function ResidentRecords({
                         className={
                           contactNumberAlreadyExists
                             ? "border-yellow-400 ring-yellow-400"
-                            : contactError || contactTooLong
+                            : contactError || contactTooLong || contactInvalidFormat || contactPartialInvalid
                               ? "border-red-500 ring-red-500"
-                              : contactComplete
-                                ? "border-green-500 ring-green-500"
-                                : ""
+                              : ""
                         }
                         placeholder="09XX XXX XXXX"
                       />
@@ -3520,13 +3552,19 @@ export function ResidentRecords({
                         </p>
                       )}
 
-                      {contactComplete && !contactTooLong && !isCheckingContactNumber && !contactNumberAlreadyExists && (
-                        <p className="text-xs text-green-600 mt-1">
-                          Contact number complete (11 digits)
+                      {(contactInvalidFormat || contactPartialInvalid) && !contactNumberAlreadyExists && (
+                        <p className="text-xs text-red-500 mt-1">
+                          Must be a valid Philippine number (e.g. 09XX XXX XXXX).
                         </p>
                       )}
 
-                      {contactError && !contactNumberAlreadyExists && (
+                      {contactComplete && !contactTooLong && !isCheckingContactNumber && !contactNumberAlreadyExists && !contactInvalidFormat && (
+                        <p className="text-xs text-green-600 mt-1">
+                          Valid phone number
+                        </p>
+                      )}
+
+                      {contactError && !contactNumberAlreadyExists && !contactInvalidFormat && !contactPartialInvalid && (
                         <p className="text-xs text-red-500 mt-1">
                           Contact number must be exactly 11 digits.
                         </p>
@@ -3575,7 +3613,7 @@ export function ResidentRecords({
 
                       {emailValidFormat && !emailInvalidFormat && !isCheckingEmail && !emailAlreadyExists && (
                         <p className="text-xs text-green-600 mt-1">
-                          Valid and available Gmail address
+                          Valid Gmail address
                         </p>
                       )}
 
@@ -3641,21 +3679,29 @@ export function ResidentRecords({
                       <Input
                         type="number"
                         min="0"
-                        max="69"
+                        max="20"
                         step="1"
                         value={formData.numberOfChildren}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            numberOfChildren: e.target.value,
-                          })
-                        }
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (raw === "") {
+                            setFormData({ ...formData, numberOfChildren: "" });
+                            return;
+                          }
+                          const num = parseInt(raw, 10);
+                          if (!isNaN(num)) {
+                            setFormData({
+                              ...formData,
+                              numberOfChildren: String(Math.max(0, Math.min(20, num))),
+                            });
+                          }
+                        }}
                         className={numberOfChildrenError ? "border-red-500 ring-red-500" : ""}
                         placeholder="0"
                       />
                       {numberOfChildrenError && (
                         <p className="text-xs text-red-500 mt-1">
-                          {numberOfChildrenError}.
+                          Number of children cannot exceed 20.
                         </p>
                       )}
                     </div>
@@ -3696,11 +3742,9 @@ export function ResidentRecords({
                           });
                         }}
                         className={
-                          formData.emergencyContactNumber.length > 11 || emergencyNumberError
+                          formData.emergencyContactNumber.length > 11 || emergencyNumberError || emergencyContactInvalidFormat || emergencyContactPartialInvalid
                             ? "border-red-500 ring-red-500"
-                            : formData.emergencyContactNumber.length === 11
-                              ? "border-green-500 ring-green-500"
-                              : ""
+                            : ""
                         }
                         placeholder="09XX XXX XXXX"
                       />
@@ -3709,13 +3753,18 @@ export function ResidentRecords({
                           Contact number must not exceed 11 digits.
                         </p>
                       )}
-                      {emergencyNumberError && formData.emergencyContactNumber.length <= 11 && (
+                      {(emergencyContactInvalidFormat || emergencyContactPartialInvalid) && (
+                        <p className="text-xs text-red-500 mt-1">
+                          Must be a valid Philippine number (e.g. 09XX XXX XXXX).
+                        </p>
+                      )}
+                      {formData.emergencyContactNumber.length === 11 && !emergencyContactInvalidFormat && (
+                        <p className="text-xs text-green-600 mt-1">Valid phone number</p>
+                      )}
+                      {emergencyNumberError && formData.emergencyContactNumber.length <= 11 && !emergencyContactInvalidFormat && !emergencyContactPartialInvalid && (
                         <p className="text-xs text-red-500 mt-1">
                           Emergency contact number must be 11 digits.
                         </p>
-                      )}
-                      {formData.emergencyContactNumber.length === 11 && (
-                        <p className="text-xs text-green-600 mt-1">Contact number complete (11 digits)</p>
                       )}
                     </div>
                   </div>
