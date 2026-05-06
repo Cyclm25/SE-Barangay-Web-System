@@ -1,15 +1,11 @@
 const { buildThemedEmail } = require('./emailTheme');
-const { createTransporter } = require("./mailer");
+const { sendMailWithFallback } = require("./mailer");
 
 const sendInquiryEmail = async (inquiryData) => {
   const { residentName, email, subject, message, announcementTitle, receiverEmail } = inquiryData;
 
-  const { transporter, fromUser } = createTransporter();
-
-  await transporter.verify();
-
-  const mailOptions = {
-    from: `"Barangay 160 Inquiry System" <${fromUser}>`,
+    const mailOptions = {
+    from: `"Barangay 160 Inquiry System" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
     replyTo: `"${residentName}" <${email}>`,
     to: receiverEmail || process.env.BARANGAY_EMAIL || 'mabutascarlaaa@gmail.com',
     subject: `[BARANGAY INQUIRY] ${announcementTitle}: ${subject}`,
@@ -27,7 +23,7 @@ const sendInquiryEmail = async (inquiryData) => {
     }),
   };
 
-  return await transporter.sendMail(mailOptions);
+  return await sendMailWithFallback(mailOptions);
 };
 
 module.exports = { sendInquiryEmail };

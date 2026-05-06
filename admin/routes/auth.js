@@ -1,7 +1,7 @@
 const router = require("express").Router();
 const pool = require("../db");
 const bcrypt = require("bcrypt");
-const { createTransporter } = require("../utils/mailer");
+const { sendMailWithFallback } = require("../utils/mailer");
 const jwt = require("jsonwebtoken");
 const verifyToken = require("../middleware/verifyToken");
 const { buildThemedEmail } = require("../utils/emailTheme");
@@ -230,10 +230,8 @@ router.post("/forgot-password", async (req, res) => {
       [otpCode, expiry, row.ResidentAccountID]
     );
 
-    const { transporter, fromUser } = createTransporter();
-
-    await transporter.sendMail({
-      from: `"Barangay 160" <${fromUser}>`,
+    await sendMailWithFallback({
+      from: `"Barangay 160" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
       to: row.Email,
       subject: "Barangay 160 Password Reset",
       text: `Your OTP code is ${otpCode}. Do not share this code with anyone.`,

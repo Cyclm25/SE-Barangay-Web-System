@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const bcrypt = require("bcrypt");
-const { createTransporter } = require("../utils/mailer");
+const { sendMailWithFallback } = require("../utils/mailer");
 const verifyToken = require("../middleware/verifyToken");
 const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
 const inactivateExpiredOfficials = require("../utils/inactivateExpiredOfficials");
@@ -24,10 +24,8 @@ const OFFICIAL_POSITIONS = new Set([
 
 async function sendAdminAccountCreatedEmail({ to, adminName, adminId, position }) {
     if (!to) return;
-    const { transporter, fromUser } = createTransporter();
-
-    await transporter.sendMail({
-        from: `"Barangay Office" <${fromUser}>`,
+    await sendMailWithFallback({
+        from: `"Barangay Office" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
         to,
         subject: "Your Barangay 160 Admin Account",
         html: buildThemedEmail({

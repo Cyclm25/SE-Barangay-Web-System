@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const bcrypt = require("bcrypt");
-const { createTransporter } = require("../utils/mailer");
+const { sendMailWithFallback } = require("../utils/mailer");
 const { buildThemedEmail } = require("../utils/emailTheme");
 
 function generateOtp() {
@@ -72,9 +72,8 @@ router.post("/send", async (req, res) => {
         );
 
         // 7️ Send email
-        const { transporter, fromUser } = createTransporter();
-        await transporter.sendMail({
-            from: fromUser,
+        await sendMailWithFallback({
+            from: process.env.SMTP_USER || process.env.EMAIL_USER,
             to: trimmedEmail,
             subject: "Barangay 160 Password Reset",
             text: `Your OTP is ${otp}. Do not share this code with anyone. If you didn’t request this, please ignore this message.`,

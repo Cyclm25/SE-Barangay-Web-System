@@ -1,5 +1,5 @@
 const pool = require("../db");
-const { createTransporter } = require("./mailer");
+const { sendMailWithFallback } = require("./mailer");
 const { buildThemedEmail } = require("./emailTheme");
 
 const EMAIL_LOG_TABLE_SQL = `
@@ -175,9 +175,8 @@ async function sendReadyForPickupEmail({
   }
 
   try {
-    const { transporter, fromUser } = createTransporter();
-    await transporter.sendMail({
-      from: `"Barangay 160" <${fromUser}>`,
+    await sendMailWithFallback({
+      from: `"Barangay 160" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
       to: normalizedEmail,
       subject,
       text,
@@ -254,9 +253,8 @@ async function sendRequestRejectedEmail({
   }
 
   try {
-    const { transporter, fromUser } = createTransporter();
-    await transporter.sendMail({
-      from: `"Barangay 160" <${fromUser}>`,
+    await sendMailWithFallback({
+      from: `"Barangay 160" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
       to: normalizedEmail,
       subject,
       text,
@@ -333,9 +331,8 @@ async function sendReturnForCompletionEmail({
   }
 
   try {
-    const { transporter, fromUser } = createTransporter();
-    await transporter.sendMail({
-      from: `"Barangay 160" <${fromUser}>`,
+    await sendMailWithFallback({
+      from: `"Barangay 160" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
       to: normalizedEmail,
       subject,
       text,
