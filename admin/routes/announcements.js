@@ -75,6 +75,26 @@ function buildAnnouncementSelect(
   `;
 }
 
+function normalizeImagesPayload(images) {
+  if (Array.isArray(images)) return images.filter(Boolean);
+  if (!images) return [];
+
+  if (typeof images === "string") {
+    const trimmed = images.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean);
+      if (typeof parsed === "string" && parsed.trim()) return [parsed.trim()];
+      return [];
+    } catch {
+      return [trimmed];
+    }
+  }
+
+  return [];
+}
+
 router.get("/resident", async (req, res) => {
   try {
     await publishScheduledAnnouncements();
@@ -198,7 +218,7 @@ router.post("/", verifyToken, async (req, res) => {
         $1, $2, $3, $4, $5, $6, $7,
         NOW(), $8, $9,
         CASE WHEN $10 = true THEN NOW() ELSE NULL END,
-        $11, $12, $10
+        $11, $12::jsonb, $10
       )
       RETURNING *
     `;
@@ -215,7 +235,7 @@ router.post("/", verifyToken, async (req, res) => {
       scheduledPublishDate || null,
       finalIsPublished,
       expirationDate || null,
-      images || [],
+      JSON.stringify(normalizeImagesPayload(images)),
     ];
 
     const result = await pool.query(queryText, values);
@@ -265,7 +285,7 @@ router.put("/:id", verifyToken, async (req, res) => {
         "ScheduledPublishDate" = $6,
         "IsPublished" = $7, 
         "ExpirationDate" = $8, 
-        "Images" = $9,
+        "Images" = $9::jsonb,
         "PublishedDate" = CASE 
                             WHEN $7 = true AND "PublishedDate" IS NULL THEN NOW() 
                             ELSE "PublishedDate" 
@@ -280,7 +300,7 @@ router.put("/:id", verifyToken, async (req, res) => {
     const values = [
       title, body, categories, dbStatus, finalIsScheduled,
       scheduledPublishDate || null, finalIsPublished, expirationDate || null,
-      images || [], numericId,
+      JSON.stringify(normalizeImagesPayload(images)), numericId,
     ];
 
     const result = await pool.query(queryText, values);
