@@ -99,7 +99,7 @@ interface Resident {
   lastName: string;
   age: number;
   birthday: string; // YYYY-MM-DD
-  gender: "Male" | "Female";
+  gender: "Male" | "Female" | "Unknown";
   civilStatus: string;
   residentType: string;
   voterStatus: "Voter" | "Non-Voter";
@@ -165,7 +165,7 @@ type ResidentRow = {
   LastName: string;
   Age: number | null;
   Birthday: string | null;
-  Gender: "Male" | "Female" | null;
+Gender: "Male" | "Female" | "Unknown" | null;
   CivilStatus: string | null;
   ResidentType: string | null;
   VoterStatus: boolean | null;
@@ -1063,7 +1063,7 @@ const parsePassportMrzData = (text: string) => {
     lastName: string;
     birthday: string;
     expirationDate: string;
-    gender?: "Male" | "Female";
+gender?: "Male" | "Female" | "Unknown";
     idNumber: string;
   } = { firstName: "", middleName: "", lastName: "", birthday: "", expirationDate: "", idNumber: "" };
 
@@ -1659,9 +1659,9 @@ const parsePostalStrictFields = (text: string) => {
   console.debug("[PostalID] candidate name lines", {
     raw: nameCandidatesRaw,
     deduped,
-    firstName,
-    middleName,
-    lastName,
+    firstName: resolvedFirstName,
+    middleName: resolvedMiddleName,
+    lastName: resolvedLastName,
     fullName,
     fallbackLikelyName,
     resolvedFirstName,
@@ -1736,12 +1736,12 @@ const extractIdDetails = (rawText: string): ParsedIdData => {
   const mrzName = idType === "PASSPORT" ? parsePassportMrzName(text) : { firstName: "", middleName: "", lastName: "" };
   const passportMrz = idType === "PASSPORT"
     ? parsePassportMrzData(text)
-    : { firstName: "", middleName: "", lastName: "", birthday: "", expirationDate: "", gender: undefined as ("Male" | "Female" | undefined), idNumber: "" };
+    : { firstName: "", middleName: "", lastName: "", birthday: "", expirationDate: "", gender: undefined as ("Male" | "Female" | "Unknown" | undefined), idNumber: "" };
   const passportStrict = idType === "PASSPORT"
     ? parsePassportStrictFields(text)
-    : { firstName: "", middleName: "", lastName: "", birthday: "", expirationDate: "", issueDate: "", gender: undefined as ("Male" | "Female" | undefined) };
-  const umidName = idType === "UMID" ? parseUmidStrictFields(text) : { firstName: "", middleName: "", lastName: "", birthday: "", gender: undefined as ("Male" | "Female" | undefined), address: "" };
-  const postalName = idType === "POSTAL_ID" ? parsePostalStrictFields(text) : { firstName: "", middleName: "", lastName: "", fullName: "", birthday: "", address: "", gender: undefined as ("Male" | "Female" | undefined), expirationDate: "" };
+    : { firstName: "", middleName: "", lastName: "", birthday: "", expirationDate: "", issueDate: "", gender: undefined as ("Male" | "Female" | "Unknown" | undefined) };
+  const umidName = idType === "UMID" ? parseUmidStrictFields(text) : { firstName: "", middleName: "", lastName: "", birthday: "", gender: undefined as ("Male" | "Female" | "Unknown" | undefined), address: "" };
+  const postalName = idType === "POSTAL_ID" ? parsePostalStrictFields(text) : { firstName: "", middleName: "", lastName: "", fullName: "", birthday: "", address: "", gender: undefined as ("Male" | "Female" | "Unknown" | undefined), expirationDate: "" };
   const pwdIdStrict = idType === "MANILA_PWD_ID" ? parseManilaPwdIdStrictFields(text) : { name: "", firstName: "", middleName: "", lastName: "", address: "", birthday: "", idNumber: "" };
   const seniorStrict = idType === "MANILA_SENIOR_CITIZEN_ID" ? parseSeniorStrictFields(text) : { name: "", address: "", birthday: "", idNumber: "" };
   const philSysName = idType === "PHILSYS_NATIONAL_ID"
@@ -1885,8 +1885,10 @@ const extractIdDetails = (rawText: string): ParsedIdData => {
     lastName: hasPhilSysName ? sanitizeNameField(finalLastName) : "",
     idNumber,
     birthday: finalBirthday,
-    gender,
-    address: sanitizeAddressField(address),
+gender:
+  gender === "Male" || gender === "Female"
+    ? gender
+    : "Unknown",    address: sanitizeAddressField(address),
     issueDate: finalIssue,
     expirationDate: finalExpiry,
     expiryPolicy: rule?.expiryPolicy,
@@ -1979,7 +1981,7 @@ export function ResidentRecords({
     lastName: "",
     age: "",
     birthday: "",
-    gender: "Male" as "Male" | "Female",
+    gender: "Male" as "Male" | "Female" | "Unknown",
     civilStatus: "Single",
     religion: "",
     residentType: "Resident",
@@ -2410,8 +2412,8 @@ export function ResidentRecords({
       lastName: resident.lastName || "",
       age: String(resident.age || ""),
       birthday: resident.birthday || "",
-      gender: resident.gender || "Male",
-      civilStatus: resident.civilStatus || "Single",
+gender: resident.gender || "Unknown",      
+civilStatus: resident.civilStatus || "Single",
       religion: resident.religion || "",
       residentType: resident.residentType || "Resident",
       voterStatus: resident.voterStatus || "Non-Voter",
