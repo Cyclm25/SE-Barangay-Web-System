@@ -5,6 +5,7 @@ require("dotenv").config();
 
 const app = express();
 const pool = require("./db");
+const { verifyMailer } = require("./utils/mailer");
 const PORT = 5001;
 
 /* =============================================
@@ -139,6 +140,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+const frontendBuildPath = path.join(__dirname, "..", "FE", "build");
+
 /* =============================================
    3. SAFE ROUTE LOADER
 ============================================= */
@@ -214,7 +217,6 @@ app.get("/api/stats/resident-types", async (req, res) => {
 /* =============================================
    6. HEALTH CHECKS
 ============================================= */
-app.get("/", (req, res) => res.send("Backend is running"));
 app.get("/_ping", (req, res) => res.status(200).json({ ok: true }));
 
 app.get("/_dbping", async (req, res) => {
@@ -226,11 +228,62 @@ app.get("/_dbping", async (req, res) => {
   }
 });
 
+app.get("/_mailping", async (req, res) => {
+  try {
+    const result = await verifyMailer();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({
+      ok: false,
+      error: e.message,
+      code: e.code || null,
+      response: e.response || null,
+      command: e.command || null,
+    });
+  }
+});
+
 /* =============================================
-   7. START SERVER
+   7. FRONTEND
+============================================= */
+app.use(express.static(frontendBuildPath));
+
+app.use((req, res, next) => {
+  if (
+    req.path.startsWith("/api") ||
+    req.path.startsWith("/auth") ||
+    req.path.startsWith("/residents") ||
+    req.path.startsWith("/requests") ||
+    req.path.startsWith("/uploads")
+  ) {
+    return next();
+  }
+
+  res.sendFile(path.join(frontendBuildPath, "index.html"), (err) => {
+    if (err) {
+      res.status(404).send("Frontend build not found");
+    }
+  });
+});
+
+/* =============================================
+   8. START SERVER
 ============================================= */
 app.listen(PORT, () => {
   console.log(`\n=============================================`);
   console.log(`Backend running at http://localhost:${PORT}`);
   console.log(`=============================================\n`);
+
+  verifyMailer()
+    .then(({ fromUser }) => {
+      console.log(`[MAIL] SMTP verified successfully as ${fromUser}`);
+    })
+    .catch((e) => {
+      console.error("[MAIL] SMTP verification failed:", {
+        message: e.message,
+        code: e.code || null,
+        response: e.response || null,
+        command: e.command || null,
+      });
+    });
 });

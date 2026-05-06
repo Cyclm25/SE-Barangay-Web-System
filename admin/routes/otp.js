@@ -2,18 +2,8 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const bcrypt = require("bcrypt");
-const nodemailer = require("nodemailer");
+const { sendMailWithFallback } = require("../utils/mailer");
 const { buildThemedEmail } = require("../utils/emailTheme");
-
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 465),
-    secure: true,
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-    },
-});
 
 function generateOtp() {
     // 6-digit OTP
@@ -82,8 +72,8 @@ router.post("/send", async (req, res) => {
         );
 
         // 7️ Send email
-        await transporter.sendMail({
-            from: process.env.SMTP_USER,
+        await sendMailWithFallback({
+            from: process.env.SMTP_USER || process.env.EMAIL_USER,
             to: trimmedEmail,
             subject: "Barangay 160 Password Reset",
             text: `Your OTP is ${otp}. Do not share this code with anyone. If you didn’t request this, please ignore this message.`,

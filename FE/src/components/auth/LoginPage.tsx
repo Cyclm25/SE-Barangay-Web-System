@@ -47,7 +47,7 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
   useEffect(() => {
     const fetchOfficials = async () => {
       try {
-        const response = await fetch("http://localhost:5001/api/officials");
+        const response = await fetch("https://se-barangay-web-system.onrender.com/api/officials");
 
         if (response.ok) {
           const data = await response.json();
@@ -88,7 +88,7 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5001/auth/login", {
+      const response = await fetch("https://se-barangay-web-system.onrender.com/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ residentId: username, password }),

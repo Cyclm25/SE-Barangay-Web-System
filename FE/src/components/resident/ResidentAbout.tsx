@@ -73,7 +73,7 @@ function resolveImageUrl(raw: string): string {
   const s = raw.trim();
   if (s.startsWith('data:') || s.startsWith('http://') || s.startsWith('https://')) return s;
   // Relative path — prepend the API base
-  return `http://localhost:5001${s.startsWith('/') ? '' : '/'}${s}`;
+  return `https://se-barangay-web-system.onrender.com${s.startsWith('/') ? '' : '/'}${s}`;
 }
 
 /** Collect every non-empty image URL from all published announcements */
@@ -133,7 +133,7 @@ export function ResidentAbout() {
   useEffect(() => {
     const fetchOfficials = async () => {
       try {
-        const response = await fetch('http://localhost:5001/api/officials');
+        const response = await fetch('https://se-barangay-web-system.onrender.com/api/officials');
         if (response.ok) {
           const data = await response.json();
           const activeOfficials: Official[] = data

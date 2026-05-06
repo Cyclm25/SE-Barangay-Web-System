@@ -1222,7 +1222,7 @@ export function BarangayOfficials() {
                       src={
                         editingOfficial.profileimage.startsWith("data:")
                           ? editingOfficial.profileimage
-                          : `http://localhost:5001${editingOfficial.profileimage}`
+                          : `https://se-barangay-web-system.onrender.com${editingOfficial.profileimage}`
                       }
                       alt={viewingOfficial.adminname}
                       className="h-full w-full object-cover"
@@ -1521,7 +1521,7 @@ export function BarangayOfficials() {
                           src={
                             official.profileimage.startsWith('data:')
                               ? official.profileimage
-                              : `http://localhost:5001${official.profileimage}`
+                              : `https://se-barangay-web-system.onrender.com${official.profileimage}`
                           }
                           alt={official.adminname}
                           className="w-full h-full object-cover"

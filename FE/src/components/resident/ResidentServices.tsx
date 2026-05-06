@@ -133,7 +133,7 @@ type ResidentProfile = {
 };
 
 function ServiceWebform({ serviceType, onBack, onRequestSubmit }: ServiceWebformProps) {
-  const API_BASE = "http://localhost:5001";
+  const API_BASE = "https://se-barangay-web-system.onrender.com";
 
   const [residentProfile, setResidentProfile] = useState<ResidentProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);

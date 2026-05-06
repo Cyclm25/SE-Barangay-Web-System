@@ -88,7 +88,7 @@ export function TransactionHistory() {
         setLoading(true);
         setError(null);
 
-        const res = await fetch("http://localhost:5001/api/transactions", {
+        const res = await fetch("https://se-barangay-web-system.onrender.com/api/transactions", {
           method: "GET",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -101,7 +101,7 @@ export function TransactionHistory() {
 
         const data = (await res.json()) as ApiResponse;
 
-        const residentsRes = await fetch("http://localhost:5001/residents", {
+        const residentsRes = await fetch("https://se-barangay-web-system.onrender.com/residents", {
           method: "GET",
           credentials: "include",
           headers: { "Content-Type": "application/json" },

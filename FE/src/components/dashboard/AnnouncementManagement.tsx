@@ -199,7 +199,7 @@ function mapApiAnnouncementToUI(a: any): Announcement {
     .map((img: string) => {
       let cleanUrl = img.trim();
       if (cleanUrl.startsWith('/uploads')) {
-        return `http://localhost:5001${cleanUrl}`;
+        return `https://se-barangay-web-system.onrender.com${cleanUrl}`;
       }
       return cleanUrl;
     });
@@ -448,7 +448,7 @@ export function AnnouncementManagement({
       });
 
       const data = res.data;
-      const imageUrl = `http://localhost:5001${data.imageUrl}`;
+      const imageUrl = `https://se-barangay-web-system.onrender.com${data.imageUrl}`;
 
       setFormData((prev) => {
         const imgs = [...prev.images];

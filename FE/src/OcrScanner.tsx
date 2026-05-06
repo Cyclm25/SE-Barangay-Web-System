@@ -763,23 +763,29 @@ export default function OcrScanner({ onDataExtracted, onImageCaptured, onScanSuc
   }, [showCamera, isScanning, captureAndScan, captureCroppedFrame, detectCardInFrame, clearFrameAnalyzeInterval]);
 
 
+  const btnBase = {
+    fontFamily: "'Inter', 'Segoe UI', ui-sans-serif, system-ui, sans-serif",
+  } as React.CSSProperties;
+
   return (
-    <div className="inline-flex max-w-full flex-col items-center gap-4 px-6 py-4 border-2 border-dashed border-[#2957a1] rounded-xl bg-blue-50/50">
+    <div className="inline-flex max-w-full flex-col items-center gap-4 px-5 py-4 border-2 border-dashed border-[#2957a1] rounded-xl bg-blue-50/50">
       {!showCamera ? (
-        <div className="w-full flex flex-col sm:flex-row gap-2">
+        <div className="w-full flex flex-row gap-2">
           <button
             type="button"
             onClick={requestCameraAccess}
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-[#2957a1] text-white rounded-lg font-bold shadow-md hover:bg-[#1e3f7a] transition-all"
+            style={btnBase}
+            className="flex-1 min-w-0 flex items-center justify-center gap-2 px-4 py-3 bg-[#2957a1] text-white rounded-lg text-[13px] font-semibold leading-tight whitespace-nowrap shadow-md hover:bg-[#1e3f7a] active:bg-[#172f5c] transition-colors duration-150"
           >
-            <Camera className="w-5 h-5" />
-            ACTIVATE CAMERA SCANNER
+            <Camera className="w-4 h-4 shrink-0" />
+            <span className="truncate">Activate Camera Scanner</span>
           </button>
           <button
             type="button"
             onClick={handleUploadIdClick}
             disabled={isScanning}
-            className="flex-1 py-3 rounded-lg font-semibold border border-[#2957a1] text-[#2957a1] bg-white hover:bg-blue-50 disabled:opacity-60"
+            style={btnBase}
+            className="shrink-0 flex items-center justify-center px-5 py-3 rounded-lg text-[13px] font-semibold leading-tight whitespace-nowrap border-2 border-[#2957a1] text-[#2957a1] bg-white hover:bg-blue-50 active:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
           >
             Upload ID
           </button>
@@ -814,37 +820,35 @@ export default function OcrScanner({ onDataExtracted, onImageCaptured, onScanSuc
             <button
               type="button"
               onClick={() => setIsMirrored((v) => !v)}
-              className="absolute top-2 right-2 z-20 px-3 py-1.5 rounded-md bg-white/90 text-[#2957a1] text-xs font-semibold shadow hover:bg-white"
+              style={btnBase}
+              className="absolute top-2 right-2 z-20 inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-white/90 text-[#2957a1] text-xs font-semibold shadow hover:bg-white transition-colors"
             >
-              <span className="inline-flex items-center gap-1">
-                <FlipHorizontal className="w-3.5 h-3.5" />
-                {isMirrored ? 'Flip Off' : 'Flip On'}
-              </span>
+              <FlipHorizontal className="w-3.5 h-3.5 shrink-0" />
+              {isMirrored ? 'Flip Off' : 'Flip On'}
             </button>
             {isScanning && (
               <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white p-4">
                 <Loader2 className="w-10 h-10 animate-spin mb-2" />
-                <p className="font-bold">{progress}</p>
+                <p className="text-sm font-semibold" style={btnBase}>{progress}</p>
               </div>
             )}
             {!isScanning && (
-              <div className="absolute bottom-2 left-2 right-2 z-20 rounded-md bg-black/60 px-3 py-2 text-center text-xs font-semibold text-white">
+              <div className="absolute bottom-2 left-2 right-2 z-20 rounded-md bg-black/60 px-3 py-2 text-center text-xs font-medium text-white" style={btnBase}>
                 {liveStatus}
               </div>
             )}
           </div>
-
 
           {/* ACTION BUTTONS */}
           <div className="flex gap-2 mt-4 w-full">
             <button
               type="button"
               onClick={() => setShowCamera(false)}
-              className="flex items-center justify-center p-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              className="flex items-center justify-center p-3 bg-gray-100 text-gray-500 rounded-lg border border-gray-200 hover:bg-gray-200 active:bg-gray-300 transition-colors duration-150"
             >
               <X className="w-5 h-5" />
             </button>
-           
+
             <button
               type="button"
               onClick={() => {
@@ -852,10 +856,11 @@ export default function OcrScanner({ onDataExtracted, onImageCaptured, onScanSuc
                 captureAndScan(false, bestFrameRef.current?.image || captureCroppedFrame() || undefined);
               }}
               disabled={isScanning}
-              className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#5CE36C] text-white rounded-lg font-bold hover:bg-[#4bc95b] shadow-lg disabled:bg-gray-400"
+              style={btnBase}
+              className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#34a444] text-white rounded-lg text-[13px] font-semibold whitespace-nowrap shadow-md hover:bg-[#2a8f39] active:bg-[#237a30] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-150"
             >
-              <Zap className="w-5 h-5" />
-              {isScanning ? 'SCANNING...' : 'SCAN NOW'}
+              <Zap className="w-4 h-4 shrink-0" />
+              {isScanning ? 'Scanning…' : 'Scan Now'}
             </button>
           </div>
           <div className="mt-2 w-full">
@@ -863,7 +868,8 @@ export default function OcrScanner({ onDataExtracted, onImageCaptured, onScanSuc
               type="button"
               onClick={handleUploadIdClick}
               disabled={isScanning}
-              className="w-full py-2.5 rounded-lg font-semibold border border-[#2957a1] text-[#2957a1] bg-white hover:bg-blue-50 disabled:opacity-60"
+              style={btnBase}
+              className="w-full flex items-center justify-center py-2.5 rounded-lg text-[13px] font-semibold whitespace-nowrap border-2 border-[#2957a1] text-[#2957a1] bg-white hover:bg-blue-50 active:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
             >
               Upload ID
             </button>

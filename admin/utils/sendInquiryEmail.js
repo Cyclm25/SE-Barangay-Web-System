@@ -1,25 +1,11 @@
-const nodemailer = require('nodemailer');
 const { buildThemedEmail } = require('./emailTheme');
+const { sendMailWithFallback } = require("./mailer");
 
 const sendInquiryEmail = async (inquiryData) => {
   const { residentName, email, subject, message, announcementTitle, receiverEmail } = inquiryData;
 
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    throw new Error('EMAIL_USER or EMAIL_PASS is not set in your .env file.');
-  }
-
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
-
-  await transporter.verify();
-
-  const mailOptions = {
-    from: `"Barangay 160 Inquiry System" <${process.env.EMAIL_USER}>`,
+    const mailOptions = {
+    from: `"Barangay 160 Inquiry System" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
     replyTo: `"${residentName}" <${email}>`,
     to: receiverEmail || process.env.BARANGAY_EMAIL || 'mabutascarlaaa@gmail.com',
     subject: `[BARANGAY INQUIRY] ${announcementTitle}: ${subject}`,
@@ -37,7 +23,7 @@ const sendInquiryEmail = async (inquiryData) => {
     }),
   };
 
-  return await transporter.sendMail(mailOptions);
+  return await sendMailWithFallback(mailOptions);
 };
 
 module.exports = { sendInquiryEmail };

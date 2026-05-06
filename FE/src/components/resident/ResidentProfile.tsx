@@ -100,7 +100,7 @@ export function ResidentProfile() {
     }
 
     (async () => {
-      const url = `http://localhost:5001/residents/${encodeURIComponent(residentId)}`;
+      const url = `https://se-barangay-web-system.onrender.com/residents/${encodeURIComponent(residentId)}`;
       console.log("➡️ Fetching:", url);
 
       try {
@@ -134,7 +134,7 @@ export function ResidentProfile() {
         if (data.ProfileImage) {
           const imgUrl = data.ProfileImage.startsWith('data:')
             ? data.ProfileImage  // base64
-            : `http://localhost:5001${data.ProfileImage}`;  // file path
+            : `https://se-barangay-web-system.onrender.com${data.ProfileImage}`;  // file path
           setProfileImage(imgUrl);
         }
 
@@ -151,7 +151,7 @@ export function ResidentProfile() {
           religion: data.Religion || data.religion || 'Roman Catholic',
           contactNumber: data.ContactNumber || '',
           email: data.Email || '',
-          houseNo: String(data.HouseNumber || '').replace(/\D/g, '').slice(0, MAX_HOUSE_NO_LENGTH),
+          houseNo: data.HouseNumber || '',
           street: data.StreetAddress || '',
           barangay: 'Barangay 160',
           city: data.City || data.city || 'Manila',
@@ -228,7 +228,7 @@ export function ResidentProfile() {
       const formData = new FormData();
       formData.append("profileImage", file, file.name);
 
-      const response = await fetch(`http://localhost:5001/api/upload/profile-picture/${residentId}`, {
+      const response = await fetch(`https://se-barangay-web-system.onrender.com/api/upload/profile-picture/${residentId}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -240,7 +240,7 @@ export function ResidentProfile() {
         throw new Error(data?.error || "Upload failed");
       }
 
-      const fullUrl = `http://localhost:5001${data.imageUrl}`;
+      const fullUrl = `https://se-barangay-web-system.onrender.com${data.imageUrl}`;
       setProfileImage(fullUrl);
       toast.success("Profile picture updated successfully!", { id: loadingId });
 
@@ -261,7 +261,7 @@ export function ResidentProfile() {
     if (!isEditing) return;
     const nextValue =
       field === 'houseNo'
-        ? value.replace(/\D/g, '').slice(0, MAX_HOUSE_NO_LENGTH)
+        ? value.toUpperCase().slice(0, MAX_HOUSE_NO_LENGTH)
         : value;
     setValidationErrors((prev) => {
       const next = { ...prev };
@@ -386,7 +386,7 @@ export function ResidentProfile() {
       };
 
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5001/residents/${encodeURIComponent(residentId)}/profile`, {
+      const res = await fetch(`https://se-barangay-web-system.onrender.com/residents/${encodeURIComponent(residentId)}/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -677,8 +677,6 @@ export function ResidentProfile() {
                   onChange={(value) => handleChange('houseNo', value)}
                   isEditing={isEditing}
                   maxLength={MAX_HOUSE_NO_LENGTH}
-                  inputMode="numeric"
-                  pattern="[0-9]*"
                 />
                 <FormField
                   label="Street"
@@ -809,23 +807,9 @@ interface FormFieldProps {
   options?: string[];
   isEditable?: boolean;
   maxLength?: number;
-  inputMode?: 'none' | 'text' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search';
-  pattern?: string;
 }
 
-function FormField({
-  label,
-  value,
-  onChange,
-  isEditing,
-  type = 'text',
-  placeholder,
-  options,
-  isEditable = false,
-  maxLength,
-  inputMode,
-  pattern,
-}: FormFieldProps) {
+function FormField({ label, value, onChange, isEditing, type = 'text', placeholder, options, isEditable = false, maxLength }: FormFieldProps) {
   const shouldUppercase = type !== 'email';
   const displayValue = value ? (shouldUppercase ? value.toUpperCase() : value) : '-';
   return (
@@ -853,8 +837,6 @@ function FormField({
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             maxLength={maxLength}
-            inputMode={inputMode}
-            pattern={pattern}
             className={`w-full border-2 border-[#2957a1] rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2957a1]/50 ${shouldUppercase ? 'uppercase' : ''}`}
           />
         )

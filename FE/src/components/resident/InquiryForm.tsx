@@ -34,7 +34,7 @@ export function InquiryForm({ announcementTitle, announcementId = null, inline =
 
     const fetchResident = async () => {
       try {
-        const res = await fetch(`http://localhost:5001/residents/${encodeURIComponent(residentId)}`, {
+        const res = await fetch(`https://se-barangay-web-system.onrender.com/residents/${encodeURIComponent(residentId)}`, {
           method: 'GET',
           headers: { Accept: 'application/json' },
         });
@@ -98,7 +98,7 @@ export function InquiryForm({ announcementTitle, announcementId = null, inline =
     setIsLoading(true);
 
     try {
-      const res = await fetch('http://localhost:5001/api/inquiry/send', {
+      const res = await fetch('https://se-barangay-web-system.onrender.com/api/inquiry/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

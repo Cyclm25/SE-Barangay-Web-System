@@ -28,7 +28,7 @@ export function ProfileSidebar({
 
     const fetchResident = async () => {
       try {
-        const res = await fetch(`http://localhost:5001/residents/${id}`);
+        const res = await fetch(`https://se-barangay-web-system.onrender.com/residents/${id}`);
         const data = await res.json();
 
         if (!res.ok) return;
@@ -37,7 +37,7 @@ export function ProfileSidebar({
         if (data.ProfileImage) {
           const imageUrl = data.ProfileImage.startsWith("data:")
             ? data.ProfileImage
-            : `http://localhost:5001${data.ProfileImage}`;
+            : `https://se-barangay-web-system.onrender.com${data.ProfileImage}`;
           setProfileImage(imageUrl);
         } else {
           setProfileImage(null);
