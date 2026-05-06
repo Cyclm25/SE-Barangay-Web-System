@@ -1,19 +1,37 @@
 export type ValidationErrors = Record<string, string>;
 
-const NAME_REGEX = /^[A-Za-z\s]+$/;
+const NAME_FIELD_ERROR = "Name fields must contain letters only and must not include numbers.";
+const AGE_FIELD_ERROR = "Please enter a valid age.";
+const NAME_REGEX = /^[A-Za-z\u00D1\u00F1]+(?:[ '\u2019-][A-Za-z\u00D1\u00F1]+)*$/;
 const USERNAME_REGEX = /^[A-Za-z0-9_]+$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PH_MOBILE_REGEX = /^(09\d{9}|639\d{9})$/;
-const HOUSE_NO_REGEX = /^\d{1,5}$/;
-const ADDRESS_TEXT_REGEX = /^[A-Za-z0-9Ññ\s.,#-]+$/;
+const HOUSE_NO_REGEX = /^\d+$/;
+const ADDRESS_TEXT_REGEX = /^[A-Za-z0-9\s.,#-]+$/;
 const RESIDENT_TYPES = new Set(["Student", "Senior Citizen", "PWD", "Indigenous", "Resident"]);
 const CIVIL_STATUSES = new Set(["Single", "Married", "Widowed", "Separated"]);
 const SEX_OPTIONS = new Set(["Male", "Female"]);
 const VOTER_STATUSES = new Set(["Voter", "Non-Voter"]);
+const MIN_RESIDENT_AGE = 12;
+const MAX_RESIDENT_AGE = 120;
+const MAX_HOUSE_NO_LENGTH = 5;
 const MAX_NUMBER_OF_CHILDREN = 69;
 
 function clean(value: unknown) {
   return String(value ?? "").trim();
+}
+
+export function normalizeNameInput(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, " ").replace(/^\s+/, "");
+}
+
+export function normalizeNameValue(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+export function hasInvalidNameValue(value: unknown) {
+  const name = normalizeNameValue(value);
+  return Boolean(name && !NAME_REGEX.test(name));
 }
 
 function addError(errors: ValidationErrors, field: string, message: string) {
@@ -32,6 +50,19 @@ export function validateNumberOfChildren(value: unknown) {
   const numberOfChildren = Number(rawValue);
   if (numberOfChildren > MAX_NUMBER_OF_CHILDREN) {
     return `Number of children cannot exceed ${MAX_NUMBER_OF_CHILDREN}`;
+  }
+
+  return "";
+}
+
+export function validateResidentAge(value: unknown) {
+  const ageValue = clean(value);
+
+  if (!ageValue) return "Age is required";
+
+  const age = Number(ageValue);
+  if (!Number.isInteger(age) || age < MIN_RESIDENT_AGE || age > MAX_RESIDENT_AGE) {
+    return AGE_FIELD_ERROR;
   }
 
   return "";
@@ -62,19 +93,22 @@ export function validatePassword(password: unknown, confirmPassword?: unknown) {
 
 export function validateResidentForm(payload: Record<string, unknown>) {
   const errors: ValidationErrors = {};
-  const firstName = clean(payload.firstName);
-  const middleName = clean(payload.middleName);
-  const lastName = clean(payload.lastName);
+  const firstName = normalizeNameValue(payload.firstName);
+  const middleName = normalizeNameValue(payload.middleName);
+  const lastName = normalizeNameValue(payload.lastName);
   const birthday = clean(payload.birthday ?? payload.birthdate);
   const ageValue = clean(payload.age);
   const gender = clean(payload.gender ?? payload.sex);
   const civilStatus = clean(payload.civilStatus);
-  const residentType = clean(payload.residentType);
+  const residentType = clean(payload.residentType) || "Resident";
   const houseNo = clean(payload.houseNo);
   const streetAddress = clean(payload.streetAddress ?? payload.street);
   const email = clean(payload.email);
   const contactNumber = normalizePhMobile(payload.contactNumber);
-  const emergencyContactName = clean(payload.emergencyContactName);
+  const fatherName = normalizeNameValue(payload.fatherName);
+  const motherName = normalizeNameValue(payload.motherName);
+  const spouseName = normalizeNameValue(payload.spouseName);
+  const emergencyContactName = normalizeNameValue(payload.emergencyContactName);
   const emergencyContactNumber = normalizePhMobile(payload.emergencyContactNumber);
   const emergencyContactAddress = clean(payload.emergencyContactAddress);
   const numberOfChildrenError = validateNumberOfChildren(payload.numberOfChildren);
@@ -83,19 +117,34 @@ export function validateResidentForm(payload: Record<string, unknown>) {
   else {
     if (firstName.length < 2) addError(errors, "firstName", "First Name must be at least 2 characters");
     if (firstName.length > 50) addError(errors, "firstName", "First Name must not exceed 50 characters");
-    if (!NAME_REGEX.test(firstName)) addError(errors, "firstName", "First Name must contain letters and spaces only");
+    if (!NAME_REGEX.test(firstName)) addError(errors, "firstName", NAME_FIELD_ERROR);
   }
 
   if (middleName) {
     if (middleName.length > 50) addError(errors, "middleName", "Middle Name must not exceed 50 characters");
-    if (!NAME_REGEX.test(middleName)) addError(errors, "middleName", "Middle Name must contain letters and spaces only");
+    if (!NAME_REGEX.test(middleName)) addError(errors, "middleName", NAME_FIELD_ERROR);
   }
 
   if (!lastName) addError(errors, "lastName", "Last Name is required");
   else {
     if (lastName.length < 2) addError(errors, "lastName", "Last Name must be at least 2 characters");
     if (lastName.length > 50) addError(errors, "lastName", "Last Name must not exceed 50 characters");
-    if (!NAME_REGEX.test(lastName)) addError(errors, "lastName", "Last Name must contain letters and spaces only");
+    if (!NAME_REGEX.test(lastName)) addError(errors, "lastName", NAME_FIELD_ERROR);
+  }
+
+  if (fatherName) {
+    if (fatherName.length > 50) addError(errors, "fatherName", "Father's Name must not exceed 50 characters");
+    if (!NAME_REGEX.test(fatherName)) addError(errors, "fatherName", NAME_FIELD_ERROR);
+  }
+
+  if (motherName) {
+    if (motherName.length > 50) addError(errors, "motherName", "Mother's Name must not exceed 50 characters");
+    if (!NAME_REGEX.test(motherName)) addError(errors, "motherName", NAME_FIELD_ERROR);
+  }
+
+  if (spouseName) {
+    if (spouseName.length > 50) addError(errors, "spouseName", "Spouse's Name must not exceed 50 characters");
+    if (!NAME_REGEX.test(spouseName)) addError(errors, "spouseName", NAME_FIELD_ERROR);
   }
 
   if (!birthday) addError(errors, "birthday", "Birth Date is required");
@@ -107,11 +156,8 @@ export function validateResidentForm(payload: Record<string, unknown>) {
     else if (birthDate >= today) addError(errors, "birthday", "Birth Date must be in the past");
   }
 
-  if (!ageValue) addError(errors, "age", "Age is required");
-  else {
-    const age = Number(ageValue);
-    if (!Number.isInteger(age) || age < 1 || age > 120) addError(errors, "age", "Age must be between 1 and 120");
-  }
+  const ageError = validateResidentAge(ageValue);
+  if (ageError) addError(errors, "age", ageError);
 
   if (!gender) addError(errors, "gender", "Sex is required");
   else if (!SEX_OPTIONS.has(gender)) addError(errors, "gender", "Sex must be one of the available options");
@@ -121,7 +167,10 @@ export function validateResidentForm(payload: Record<string, unknown>) {
   else if (!RESIDENT_TYPES.has(residentType)) addError(errors, "residentType", "Resident Type must be one of the available options");
 
   if (!houseNo) addError(errors, "houseNo", "House No. is required");
-  else if (!HOUSE_NO_REGEX.test(houseNo)) addError(errors, "houseNo", "House No. must be digits only and must not exceed 5 digits");
+  else {
+    if (houseNo.length > MAX_HOUSE_NO_LENGTH) addError(errors, "houseNo", `House No. must not exceed ${MAX_HOUSE_NO_LENGTH} digits`);
+    if (!HOUSE_NO_REGEX.test(houseNo)) addError(errors, "houseNo", "House No. must contain digits only");
+  }
   if (!streetAddress) addError(errors, "streetAddress", "Address is required");
   else {
     if (`${houseNo} ${streetAddress}`.trim().length < 5) addError(errors, "streetAddress", "Address must be at least 5 characters");
@@ -143,7 +192,7 @@ export function validateResidentForm(payload: Record<string, unknown>) {
   else {
     if (emergencyContactName.length < 2) addError(errors, "emergencyContactName", "Emergency Contact Name must be at least 2 characters");
     if (emergencyContactName.length > 50) addError(errors, "emergencyContactName", "Emergency Contact Name must not exceed 50 characters");
-    if (!NAME_REGEX.test(emergencyContactName)) addError(errors, "emergencyContactName", "Emergency Contact Name must contain letters and spaces only");
+    if (!NAME_REGEX.test(emergencyContactName)) addError(errors, "emergencyContactName", NAME_FIELD_ERROR);
   }
   if (!PH_MOBILE_REGEX.test(emergencyContactNumber)) {
     addError(errors, "emergencyContactNumber", "Emergency Contact Number must be a valid Philippine mobile number");
@@ -247,4 +296,16 @@ export function validateDocumentRequestForm(payload: Record<string, unknown>) {
   return errors;
 }
 
-export { EMAIL_REGEX, NAME_REGEX, PH_MOBILE_REGEX, USERNAME_REGEX, clean, normalizePhMobile };
+export {
+  AGE_FIELD_ERROR,
+  EMAIL_REGEX,
+  MAX_HOUSE_NO_LENGTH,
+  MAX_RESIDENT_AGE,
+  MIN_RESIDENT_AGE,
+  NAME_FIELD_ERROR,
+  NAME_REGEX,
+  PH_MOBILE_REGEX,
+  USERNAME_REGEX,
+  clean,
+  normalizePhMobile,
+};

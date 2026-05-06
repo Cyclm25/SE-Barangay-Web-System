@@ -5,7 +5,11 @@ const verifyToken = require("../middleware/verifyToken");
 const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
 const nodemailer = require("nodemailer");
 const {
+  AGE_FIELD_ERROR,
+  MAX_RESIDENT_AGE,
+  MIN_RESIDENT_AGE,
   cleanString,
+  normalizeNameValue,
   normalizeDigits,
   validateResidentPayload,
   validateResidentSelfProfilePayload,
@@ -318,22 +322,30 @@ router.post("/register", verifyToken, requireNonSkWriteAccess, async (req, res) 
       password,
     } = req.body;
 
-    const computedAge = calculateAge(birthday);
-
-    if (computedAge < 12) {
-      return res.status(400).json({
-        error: "Resident must be at least 12 years old.",
-      });
-    }
-
     const validationError = validateResidentPayload(req.body, { requirePassword: true });
     if (validationError) {
       return res.status(400).json({ error: validationError.message, errors: validationError.errors });
     }
 
+    const computedAge = calculateAge(birthday);
+    if (computedAge < MIN_RESIDENT_AGE || computedAge > MAX_RESIDENT_AGE) {
+      return res.status(400).json({
+        error: AGE_FIELD_ERROR,
+      });
+    }
+
+    const normalizedFirstName = normalizeNameValue(firstName);
+    const normalizedMiddleName = normalizeNameValue(middleName);
+    const normalizedLastName = normalizeNameValue(lastName);
+    const normalizedFatherName = normalizeNameValue(fatherName);
+    const normalizedMotherName = normalizeNameValue(motherName);
+    const normalizedSpouseName = normalizeNameValue(spouseName);
+    const normalizedEmergencyContactName = normalizeNameValue(emergencyContactName);
     const normalizedEmail = cleanString(email).toLowerCase();
     const normalizedContactNumber = normalizeDigits(contactNumber);
     const normalizedEmergencyContactNumber = normalizeDigits(emergencyContactNumber);
+    const normalizedHouseNo = cleanString(houseNo);
+    const normalizedResidentType = cleanString(residentType) || "Resident";
     const normalizedZipCode = cleanString(zipCode);
     const normalizedNumberOfChildren = cleanString(numberOfChildren)
       ? parseInt(cleanString(numberOfChildren), 10)
@@ -420,24 +432,24 @@ router.post("/register", verifyToken, requireNonSkWriteAccess, async (req, res) 
     ];
     const residentValues = [
       newResidentId,
-      firstName,
-      middleName,
-      lastName,
+      normalizedFirstName,
+      normalizedMiddleName,
+      normalizedLastName,
       computedAge,
       birthday,
       gender,
       civilStatus,
-      residentType,
+      normalizedResidentType,
       toBool(voterStatus),
-      houseNo || null,
+      normalizedHouseNo || null,
       streetAddress || null,
       normalizedContactNumber,
       normalizedEmail,
-      fatherName || null,
-      motherName || null,
-      spouseName || null,
+      normalizedFatherName || null,
+      normalizedMotherName || null,
+      normalizedSpouseName || null,
       normalizedNumberOfChildren,
-      emergencyContactName || null,
+      normalizedEmergencyContactName || null,
       normalizedEmergencyContactNumber || null,
       emergencyContactAddress || null,
       "N/A",
@@ -514,8 +526,8 @@ router.post("/register", verifyToken, requireNonSkWriteAccess, async (req, res) 
     try {
       await sendResidentAccountCreatedEmail({
         to: normalizedEmail,
-        firstName,
-        lastName,
+        firstName: normalizedFirstName,
+        lastName: normalizedLastName,
         residentId: newResidentId,
       });
     } catch (emailErr) {
@@ -584,9 +596,25 @@ router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
       return res.status(400).json({ error: validationError.message, errors: validationError.errors });
     }
 
+    const computedAge = calculateAge(birthday);
+    if (computedAge < MIN_RESIDENT_AGE || computedAge > MAX_RESIDENT_AGE) {
+      return res.status(400).json({
+        error: AGE_FIELD_ERROR,
+      });
+    }
+
+    const normalizedFirstName = normalizeNameValue(firstName);
+    const normalizedMiddleName = normalizeNameValue(middleName);
+    const normalizedLastName = normalizeNameValue(lastName);
+    const normalizedFatherName = normalizeNameValue(fatherName);
+    const normalizedMotherName = normalizeNameValue(motherName);
+    const normalizedSpouseName = normalizeNameValue(spouseName);
+    const normalizedEmergencyContactName = normalizeNameValue(emergencyContactName);
     const normalizedEmail = cleanString(email).toLowerCase();
     const normalizedContactNumber = normalizeDigits(contactNumber);
     const normalizedEmergencyContactNumber = normalizeDigits(emergencyContactNumber);
+    const normalizedHouseNo = cleanString(houseNo);
+    const normalizedResidentType = cleanString(residentType) || "Resident";
     const normalizedZipCode = cleanString(zipCode);
     const normalizedNumberOfChildren = cleanString(numberOfChildren)
       ? parseInt(cleanString(numberOfChildren), 10)
@@ -656,24 +684,24 @@ router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
     ];
 
     const updateValues = [
-      firstName,
-      middleName || null,
-      lastName,
-      parseInt(age, 10),
+      normalizedFirstName,
+      normalizedMiddleName || null,
+      normalizedLastName,
+      computedAge,
       birthday,
       gender,
       civilStatus,
-      residentType,
+      normalizedResidentType,
       toBool(voterStatus),
-      houseNo || null,
+      normalizedHouseNo || null,
       streetAddress || null,
       normalizedContactNumber,
       normalizedEmail,
-      fatherName || null,
-      motherName || null,
-      spouseName || null,
+      normalizedFatherName || null,
+      normalizedMotherName || null,
+      normalizedSpouseName || null,
       normalizedNumberOfChildren,
-      emergencyContactName || null,
+      normalizedEmergencyContactName || null,
       normalizedEmergencyContactNumber || null,
       emergencyContactAddress || null,
       profileImage || null,
@@ -831,7 +859,7 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
         civilStatus.trim() || null,
         normalizeDigits(contactNumber) || null,
         email              ? email.trim().toLowerCase() : null,
-        contactPerson      || null,
+        normalizeNameValue(contactPerson) || null,
         normalizeDigits(contactPersonNo) || null,
         contactPersonAddress || null,
         id,

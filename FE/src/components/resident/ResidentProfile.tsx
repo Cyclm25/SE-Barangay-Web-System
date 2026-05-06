@@ -3,7 +3,11 @@ import { Camera, Edit2, CreditCard } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { toast } from 'sonner';
 import { ViewBarangayID } from './ViewBarangayID';
-import { validateResidentForm, type ValidationErrors } from '../../utils/validation';
+import {
+  MAX_HOUSE_NO_LENGTH,
+  validateResidentForm,
+  type ValidationErrors,
+} from '../../utils/validation';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -147,7 +151,7 @@ export function ResidentProfile() {
           religion: data.Religion || data.religion || 'Roman Catholic',
           contactNumber: data.ContactNumber || '',
           email: data.Email || '',
-          houseNo: data.HouseNumber || '',
+          houseNo: String(data.HouseNumber || '').replace(/\D/g, '').slice(0, MAX_HOUSE_NO_LENGTH),
           street: data.StreetAddress || '',
           barangay: 'Barangay 160',
           city: data.City || data.city || 'Manila',
@@ -255,6 +259,10 @@ export function ResidentProfile() {
 
   const handleChange = (field: keyof ResidentProfileData, value: string) => {
     if (!isEditing) return;
+    const nextValue =
+      field === 'houseNo'
+        ? value.replace(/\D/g, '').slice(0, MAX_HOUSE_NO_LENGTH)
+        : value;
     setValidationErrors((prev) => {
       const next = { ...prev };
       delete next[field];
@@ -263,7 +271,7 @@ export function ResidentProfile() {
       if (field === 'street') delete next.streetAddress;
       return next;
     });
-    setDraftProfileData(prev => ({ ...(prev ?? profileData), [field]: value }));
+    setDraftProfileData(prev => ({ ...(prev ?? profileData), [field]: nextValue }));
   };
 
   const handleCancel = () => {
@@ -668,6 +676,9 @@ export function ResidentProfile() {
                   value={visibleProfileData.houseNo}
                   onChange={(value) => handleChange('houseNo', value)}
                   isEditing={isEditing}
+                  maxLength={MAX_HOUSE_NO_LENGTH}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                 />
                 <FormField
                   label="Street"
@@ -797,9 +808,24 @@ interface FormFieldProps {
   placeholder?: string;
   options?: string[];
   isEditable?: boolean;
+  maxLength?: number;
+  inputMode?: 'none' | 'text' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search';
+  pattern?: string;
 }
 
-function FormField({ label, value, onChange, isEditing, type = 'text', placeholder, options, isEditable = false }: FormFieldProps) {
+function FormField({
+  label,
+  value,
+  onChange,
+  isEditing,
+  type = 'text',
+  placeholder,
+  options,
+  isEditable = false,
+  maxLength,
+  inputMode,
+  pattern,
+}: FormFieldProps) {
   const shouldUppercase = type !== 'email';
   const displayValue = value ? (shouldUppercase ? value.toUpperCase() : value) : '-';
   return (
@@ -826,6 +852,9 @@ function FormField({ label, value, onChange, isEditing, type = 'text', placehold
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
+            maxLength={maxLength}
+            inputMode={inputMode}
+            pattern={pattern}
             className={`w-full border-2 border-[#2957a1] rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[15px] focus:outline-none focus:ring-2 focus:ring-[#2957a1]/50 ${shouldUppercase ? 'uppercase' : ''}`}
           />
         )

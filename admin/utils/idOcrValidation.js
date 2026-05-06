@@ -48,6 +48,9 @@ const SUPPORTED_ID_TYPES = {
   },
 };
 
+const MIN_RESIDENT_AGE = 12;
+const MAX_RESIDENT_AGE = 120;
+
 function detectIdType(text) {
   const normalized = String(text || "").toUpperCase();
   let best = null;
@@ -103,7 +106,7 @@ function getDateValidationError(label, ymd) {
   const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   if (label === "Date of Birth") {
     const age = calculateAge(ymd);
-    if (ymd > todayYmd || !Number.isFinite(age) || age < 0 || age > 125) return "Date of Birth is invalid";
+    if (ymd > todayYmd || !Number.isFinite(age) || age < MIN_RESIDENT_AGE || age > MAX_RESIDENT_AGE) return "Date of Birth is invalid";
   }
   if (label === "Issue Date" && ymd > todayYmd) return "Issue Date is invalid";
   return "";
