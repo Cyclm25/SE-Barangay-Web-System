@@ -282,11 +282,22 @@ router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
 // PATCH toggle active/inactive (Status boolean)
 router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, res) => {
     try {
-        const { id } = req.params;
-        const { status } = req.body;
+        const id = String(req.params?.id || "").trim();
+        if (!id) {
+            return res.status(400).json({ message: "Missing BarangayAdminID" });
+        }
+        const rawStatus = req.body?.status;
+        const status =
+            typeof rawStatus === "boolean"
+                ? rawStatus
+                : String(rawStatus).trim().toLowerCase() === "active" || String(rawStatus).trim().toLowerCase() === "true"
+                    ? true
+                    : String(rawStatus).trim().toLowerCase() === "inactive" || String(rawStatus).trim().toLowerCase() === "false"
+                        ? false
+                        : null;
 
-        if (typeof status !== "boolean") {
-            return res.status(400).json({ message: "status must be boolean (true/false)" });
+        if (status === null) {
+            return res.status(400).json({ message: "status must be boolean or Active/Inactive" });
         }
 
         const result = await pool.query(
@@ -299,7 +310,7 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
             [status, id]
         );
 
-        if (result.rowCount === 0) return res.status(404).json({ message: "Official not found" });
+        if (result.rowCount === 0) return res.status(404).json({ message: `Official not found for id: ${id}` });
         const row = result.rows[0];
         res.json({
             barangayadminid: row.BarangayAdminID,

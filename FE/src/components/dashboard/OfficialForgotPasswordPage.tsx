@@ -74,7 +74,7 @@ export function OfficialForgotPasswordPage({
 
   return (
     <div className="min-h-full bg-white">
-      <div className="flex min-h-[calc(100vh-0px)] flex-col overflow-hidden md:flex-row">
+      <div className="flex min-h-[calc(100vh-0px)] flex-col overflow-hidden">
         <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-white px-6 py-16 md:px-10">
           <Button
             type="button"
@@ -86,34 +86,10 @@ export function OfficialForgotPasswordPage({
             Back to Officials
           </Button>
 
-          <div className="relative z-10 mx-auto flex w-full max-w-[760px] flex-col items-center text-center">
-            <div className="mb-6 h-[96px] w-[96px] md:mb-8 md:h-[140px] md:w-[140px]">
-              <img src={imgLogo} alt="Barangay Logo" className="h-full w-full object-contain" />
+          <div className="relative z-10 w-full max-w-[430px] rounded-[20px] bg-white p-6 shadow-2xl md:p-8">
+            <div className="mb-5 flex justify-center">
+              <img src={imgLogo} alt="Barangay Logo" className="h-16 w-16 object-contain md:h-20 md:w-20" />
             </div>
-
-            <p className="text-center text-[18px] font-semibold tracking-[0.08em] text-[#2957a1] md:text-[34px]">
-              OFFICIAL ACCOUNT
-            </p>
-            <p className="mt-2 text-center text-[36px] font-extrabold leading-[0.95] text-[#2957a1] md:text-[72px]">
-              PASSWORD RESET
-            </p>
-            <div className="mt-5 h-[2px] w-[260px] bg-[#2957a1] md:w-[520px]" />
-            <p className="mt-4 max-w-[620px] text-center text-[13px] font-bold text-[#6287c2] md:text-[18px]">
-              Change the barangay official password directly from the admin panel
-            </p>
-          </div>
-
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 flex justify-center opacity-30">
-            <img
-              src={imgCity}
-              alt="City Background"
-              className="h-[220px] w-[720px] object-cover md:h-[360px] md:w-[1120px]"
-            />
-          </div>
-        </div>
-
-        <div className="relative flex w-full items-center justify-center bg-[#2957a1] p-4 md:w-[460px] md:p-8">
-          <div className="relative w-full max-w-[390px] rounded-[20px] bg-white p-6 shadow-2xl md:p-8">
             <div className="mb-5 flex items-center gap-3">
               <div className="rounded-full bg-blue-50 p-2">
                 <Lock className="h-5 w-5 text-[#2957a1]" />
@@ -203,6 +179,14 @@ export function OfficialForgotPasswordPage({
                 {isLoading ? "Changing Password..." : "Change Password"}
               </Button>
             </form>
+          </div>
+
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 flex justify-center opacity-20">
+            <img
+              src={imgCity}
+              alt="City Background"
+              className="h-[180px] w-[620px] object-cover md:h-[280px] md:w-[980px]"
+            />
           </div>
         </div>
       </div>

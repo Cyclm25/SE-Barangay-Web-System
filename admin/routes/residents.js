@@ -5,11 +5,16 @@ const verifyToken = require("../middleware/verifyToken");
 const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
 const nodemailer = require("nodemailer");
 const {
+  AGE_FIELD_ERROR,
+  MAX_RESIDENT_AGE,
+  MIN_RESIDENT_AGE,
   cleanString,
+  normalizeNameValue,
   normalizeDigits,
   validateResidentPayload,
   validateResidentSelfProfilePayload,
 } = require("../utils/validation");
+const { buildThemedEmail } = require("../utils/emailTheme");
 
 
 function calculateAge(birthday) {
@@ -40,15 +45,22 @@ async function sendResidentAccountCreatedEmail({ to, firstName, lastName, reside
   await transporter.sendMail({
     from: `"Barangay Office" <${process.env.EMAIL_USER}>`,
     to,
-    subject: "Resident Account Created Successfully",
-    html: `
-      <p>Good day, ${firstName || ""} ${lastName || ""},</p>
-      <p>Your resident account has been successfully created.</p>
-      <p><strong>Resident Number:</strong> ${residentId}</p>
-      <p>Please keep this resident number for login and verification purposes.</p>
-      <p>Thank you.</p>
-      <p>Barangay Office</p>
-    `,
+    subject: "Your Barangay 160 Account Credentials",
+    html: buildThemedEmail({
+      title: "Resident Account Created",
+      subtitle: "Barangay 160 Account Portal",
+      keyValues: [
+        { label: "Resident Name", value: `${firstName || ""} ${lastName || ""}`.trim() },
+        { label: "Username (Resident ID)", value: residentId },
+        { label: "Email", value: to },
+        { label: "Account Type", value: "Resident" },
+      ],
+      lines: [
+        "Your resident account has been successfully created.",
+        "For security reasons, your password is not included in this email.",
+        "If you forgot your password, use the Forgot Password feature on the login page.",
+      ],
+    }),
   });
 }
 
@@ -310,22 +322,30 @@ router.post("/register", verifyToken, requireNonSkWriteAccess, async (req, res) 
       password,
     } = req.body;
 
-    const computedAge = calculateAge(birthday);
-
-    if (computedAge < 12) {
-      return res.status(400).json({
-        error: "Resident must be at least 12 years old.",
-      });
-    }
-
     const validationError = validateResidentPayload(req.body, { requirePassword: true });
     if (validationError) {
       return res.status(400).json({ error: validationError.message, errors: validationError.errors });
     }
 
+    const computedAge = calculateAge(birthday);
+    if (computedAge < MIN_RESIDENT_AGE || computedAge > MAX_RESIDENT_AGE) {
+      return res.status(400).json({
+        error: AGE_FIELD_ERROR,
+      });
+    }
+
+    const normalizedFirstName = normalizeNameValue(firstName);
+    const normalizedMiddleName = normalizeNameValue(middleName);
+    const normalizedLastName = normalizeNameValue(lastName);
+    const normalizedFatherName = normalizeNameValue(fatherName);
+    const normalizedMotherName = normalizeNameValue(motherName);
+    const normalizedSpouseName = normalizeNameValue(spouseName);
+    const normalizedEmergencyContactName = normalizeNameValue(emergencyContactName);
     const normalizedEmail = cleanString(email).toLowerCase();
     const normalizedContactNumber = normalizeDigits(contactNumber);
     const normalizedEmergencyContactNumber = normalizeDigits(emergencyContactNumber);
+    const normalizedHouseNo = cleanString(houseNo);
+    const normalizedResidentType = cleanString(residentType) || "Resident";
     const normalizedZipCode = cleanString(zipCode);
     const normalizedNumberOfChildren = cleanString(numberOfChildren)
       ? parseInt(cleanString(numberOfChildren), 10)
@@ -412,24 +432,24 @@ router.post("/register", verifyToken, requireNonSkWriteAccess, async (req, res) 
     ];
     const residentValues = [
       newResidentId,
-      firstName,
-      middleName,
-      lastName,
+      normalizedFirstName,
+      normalizedMiddleName,
+      normalizedLastName,
       computedAge,
       birthday,
       gender,
       civilStatus,
-      residentType,
+      normalizedResidentType,
       toBool(voterStatus),
-      houseNo || null,
+      normalizedHouseNo || null,
       streetAddress || null,
       normalizedContactNumber,
       normalizedEmail,
-      fatherName || null,
-      motherName || null,
-      spouseName || null,
+      normalizedFatherName || null,
+      normalizedMotherName || null,
+      normalizedSpouseName || null,
       normalizedNumberOfChildren,
-      emergencyContactName || null,
+      normalizedEmergencyContactName || null,
       normalizedEmergencyContactNumber || null,
       emergencyContactAddress || null,
       "N/A",
@@ -506,8 +526,8 @@ router.post("/register", verifyToken, requireNonSkWriteAccess, async (req, res) 
     try {
       await sendResidentAccountCreatedEmail({
         to: normalizedEmail,
-        firstName,
-        lastName,
+        firstName: normalizedFirstName,
+        lastName: normalizedLastName,
         residentId: newResidentId,
       });
     } catch (emailErr) {
@@ -576,9 +596,25 @@ router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
       return res.status(400).json({ error: validationError.message, errors: validationError.errors });
     }
 
+    const computedAge = calculateAge(birthday);
+    if (computedAge < MIN_RESIDENT_AGE || computedAge > MAX_RESIDENT_AGE) {
+      return res.status(400).json({
+        error: AGE_FIELD_ERROR,
+      });
+    }
+
+    const normalizedFirstName = normalizeNameValue(firstName);
+    const normalizedMiddleName = normalizeNameValue(middleName);
+    const normalizedLastName = normalizeNameValue(lastName);
+    const normalizedFatherName = normalizeNameValue(fatherName);
+    const normalizedMotherName = normalizeNameValue(motherName);
+    const normalizedSpouseName = normalizeNameValue(spouseName);
+    const normalizedEmergencyContactName = normalizeNameValue(emergencyContactName);
     const normalizedEmail = cleanString(email).toLowerCase();
     const normalizedContactNumber = normalizeDigits(contactNumber);
     const normalizedEmergencyContactNumber = normalizeDigits(emergencyContactNumber);
+    const normalizedHouseNo = cleanString(houseNo);
+    const normalizedResidentType = cleanString(residentType) || "Resident";
     const normalizedZipCode = cleanString(zipCode);
     const normalizedNumberOfChildren = cleanString(numberOfChildren)
       ? parseInt(cleanString(numberOfChildren), 10)
@@ -648,24 +684,24 @@ router.put("/:id", verifyToken, requireNonSkWriteAccess, async (req, res) => {
     ];
 
     const updateValues = [
-      firstName,
-      middleName || null,
-      lastName,
-      parseInt(age, 10),
+      normalizedFirstName,
+      normalizedMiddleName || null,
+      normalizedLastName,
+      computedAge,
       birthday,
       gender,
       civilStatus,
-      residentType,
+      normalizedResidentType,
       toBool(voterStatus),
-      houseNo || null,
+      normalizedHouseNo || null,
       streetAddress || null,
       normalizedContactNumber,
       normalizedEmail,
-      fatherName || null,
-      motherName || null,
-      spouseName || null,
+      normalizedFatherName || null,
+      normalizedMotherName || null,
+      normalizedSpouseName || null,
       normalizedNumberOfChildren,
-      emergencyContactName || null,
+      normalizedEmergencyContactName || null,
       normalizedEmergencyContactNumber || null,
       emergencyContactAddress || null,
       profileImage || null,
@@ -823,7 +859,7 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
         civilStatus.trim() || null,
         normalizeDigits(contactNumber) || null,
         email              ? email.trim().toLowerCase() : null,
-        contactPerson      || null,
+        normalizeNameValue(contactPerson) || null,
         normalizeDigits(contactPersonNo) || null,
         contactPersonAddress || null,
         id,
@@ -837,6 +873,63 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
     return res.json({ message: "Profile updated successfully.", resident: result.rows[0] });
   } catch (err) {
     console.error("PUT /residents/:id Error:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rawStatus = req.body?.status;
+    const statusValue = typeof rawStatus === "string" ? rawStatus.trim().toLowerCase() : "";
+
+    let normalizedStatus = null;
+    if (rawStatus === true || statusValue === "true" || statusValue === "active") {
+      normalizedStatus = "Active";
+    } else if (rawStatus === false || statusValue === "false" || statusValue === "inactive") {
+      normalizedStatus = "Inactive";
+    }
+
+    if (!normalizedStatus) {
+      return res.status(400).json({ error: "Status must be Active or Inactive." });
+    }
+
+    const residentResult = await pool.query(
+      `
+      UPDATE resident
+      SET "status" = $1
+      WHERE TRIM("ResidentID") = TRIM($2)
+      RETURNING "ResidentID", "ResidentAccountID", "status"
+      `,
+      [normalizedStatus, id]
+    );
+
+    if (residentResult.rowCount === 0) {
+      return res.status(404).json({ error: "Resident not found." });
+    }
+
+    const resident = residentResult.rows[0];
+
+    if (resident?.ResidentAccountID) {
+      await pool.query(
+        `
+        UPDATE residentaccount
+        SET "status" = $1
+        WHERE TRIM("ResidentAccountID") = TRIM($2)
+        `,
+        [normalizedStatus, resident.ResidentAccountID]
+      );
+    }
+
+    return res.json({
+      message: `Resident ${normalizedStatus === "Active" ? "reactivated" : "deactivated"} successfully.`,
+      resident: {
+        residentId: resident.ResidentID,
+        status: resident.status,
+      },
+    });
+  } catch (err) {
+    console.error("PATCH /residents/:id/status Error:", err.message);
     return res.status(500).json({ error: err.message });
   }
 });

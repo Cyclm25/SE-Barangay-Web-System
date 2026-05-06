@@ -108,7 +108,12 @@ export default function App() {
   // Persistence logic to keep user logged in on refresh
   useEffect(() => {
     const savedUser = localStorage.getItem('app_user');
-    if (savedUser) {
+    const savedToken =
+      localStorage.getItem('token') ||
+      localStorage.getItem('authToken') ||
+      localStorage.getItem('jwt');
+
+    if (savedUser && savedToken) {
       const parsedUser = JSON.parse(savedUser);
       setUser(parsedUser);
       setIsAuthenticated(true);
@@ -117,6 +122,13 @@ export default function App() {
       if (parsedUser.position) {
         localStorage.setItem('position', parsedUser.position);
       }
+    } else if (savedUser && !savedToken) {
+      // Prevent stale app_user session from entering protected screens without JWT.
+      localStorage.removeItem('app_user');
+      localStorage.removeItem('position');
+      setUser(null);
+      setIsAuthenticated(false);
+      setAuthView('login');
     }
   }, []);
 
@@ -162,6 +174,9 @@ export default function App() {
     setIsMobileSidebarOpen(false);
     localStorage.removeItem('app_user');
     localStorage.removeItem('position');
+    localStorage.removeItem('token');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('jwt');
     toast.success('Logged out successfully.');
   };
 

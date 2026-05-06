@@ -101,7 +101,10 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
         return;
       }
 
-      localStorage.setItem("token", data.token);
+      const normalizedToken = String(data.token || "").trim().replace(/^Bearer\s+/i, "");
+      localStorage.setItem("token", normalizedToken);
+      localStorage.setItem("authToken", normalizedToken);
+      localStorage.setItem("jwt", normalizedToken);
 
       const u = data?.user ?? data;
       const role = u?.Role ?? u?.role ?? "";

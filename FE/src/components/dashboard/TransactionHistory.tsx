@@ -183,7 +183,10 @@ export function TransactionHistory() {
     const total = transactions.length;
 
     const adminActions = transactions.filter(
-      (t) => (t.accountType || "").toLowerCase() === "admin"
+      (t) => {
+        const type = (t.accountType || "").toLowerCase();
+        return type === "admin" || type === "superadmin" || type === "super admin";
+      }
     ).length;
 
     const residentActions = total - adminActions;
@@ -424,7 +427,11 @@ export function TransactionHistory() {
                   </TableRow>
                 ) : (
                   paginatedTransactions.map((transaction, index) => {
-                    const isAdmin = transaction.accountType?.toLowerCase() === "admin";
+                    const normalizedAccountType = (transaction.accountType || "").toLowerCase();
+                    const isAdmin =
+                      normalizedAccountType === "admin" ||
+                      normalizedAccountType === "superadmin" ||
+                      normalizedAccountType === "super admin";
                     return (
                       <TableRow key={transaction.id} className={`hover:bg-gray-50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"}`}>
                         <TableCell className="text-xs py-3 font-mono">
@@ -467,7 +474,11 @@ export function TransactionHistory() {
               </div>
             ) : (
               paginatedTransactions.map((transaction) => {
-                const isAdmin = transaction.accountType?.toLowerCase() === "admin";
+                const normalizedAccountType = (transaction.accountType || "").toLowerCase();
+                const isAdmin =
+                  normalizedAccountType === "admin" ||
+                  normalizedAccountType === "superadmin" ||
+                  normalizedAccountType === "super admin";
                 return (
                   <div key={transaction.id} className="rounded-lg border bg-white p-3 shadow-sm space-y-2">
                     <div className="flex items-start justify-between gap-2">

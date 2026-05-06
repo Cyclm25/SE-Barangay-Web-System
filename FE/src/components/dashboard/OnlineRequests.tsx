@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { FileText, Clock, CheckCircle, XCircle, Eye, Search, AlertCircle, Mail, Calendar, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { api } from '../../utils/api';
 
 type RequestStatus = 'Pending' | 'Processing' | 'Processing Completion' | 'Ready for Pickup' | 'Completed' | 'Rejected';
 
@@ -151,7 +152,6 @@ export function OnlineRequests({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const API_BASE = "http://localhost:5001";
 
   const isKnownStatus = (s: string): s is RequestStatus => {
     return ['Pending', 'Processing', 'Processing Completion', 'Ready for Pickup', 'Completed', 'Rejected'].includes(s);
@@ -181,7 +181,6 @@ export function OnlineRequests({
       return;
     }
     try {
-      const token = localStorage.getItem("token") || "";
       setRequests(prev =>
         prev.map(req =>
           req.id === returningRequest.id
@@ -190,17 +189,12 @@ export function OnlineRequests({
         )
       );
 
-      const res = await fetch(`${API_BASE}/requests/${returningRequest.id}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        // Backend expects the DB status label; UI maps this to "Processing Completion".
-        body: JSON.stringify({ status: 'Returned for Completion', reason: returnReason.trim() })
+      const res = await api.patch(`/requests/${returningRequest.id}/status`, {
+        status: 'Returned for Completion',
+        reason: returnReason.trim(),
       });
-      const data = await res.json();
-      if (!res.ok) {
+      const data = res.data;
+      if (!res?.status || res.status >= 400) {
         const message = String(data?.error || "").toLowerCase();
         if (message.includes("invalid status")) {
           toast.error("Unable to return request: status mapping mismatch between app and server.");
@@ -251,10 +245,9 @@ export function OnlineRequests({
     setIsLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/requests/admin/all`);
-      const data = await res.json();
-
-      if (!res.ok) {
+      const res = await api.get(`/requests/admin/all`);
+      const data = res.data;
+      if (!res?.status || res.status >= 400) {
         if (!silent) toast.error(data?.detail || data?.error || "Failed to load requests");
         setRequests([]);
         setCertificateCount(0);
@@ -369,27 +362,33 @@ export function OnlineRequests({
 
   const handleStatusChange = async (id: string, newStatus: RequestStatus, receiver?: string) => {
     try {
-      const token = localStorage.getItem("token") || "";
 
       // Optimistic update
       setRequests(prev =>
         prev.map(req =>
-          req.id === id ? { ...req, status: newStatus } : req
+          req.id === id
+            ? {
+                ...req,
+                status: newStatus,
+                // Clear previous denial/missing-requirement note once request is actively being processed or marked ready.
+                rejectionReason:
+                  newStatus === 'Processing' || newStatus === 'Ready for Pickup'
+                    ? ''
+                    : req.rejectionReason,
+              }
+            : req
         )
       );
 
-      const res = await fetch(`${API_BASE}/requests/${id}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ status: newStatus, ...(newStatus === 'Completed' ? { receiver_name: receiver } : {}) })
+      const res = await api.patch(`/requests/${id}/status`, {
+        status: newStatus,
+        ...(newStatus === 'Processing' || newStatus === 'Ready for Pickup'
+          ? { rejectionReason: '' }
+          : {}),
+        ...(newStatus === 'Completed' ? { receiver_name: receiver } : {}),
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
+      const data = res.data;
+      if (!res?.status || res.status >= 400) {
         toast.error(data.error || "Failed to update status");
         await loadInbox(false); // Revert on error
         return;
@@ -434,7 +433,6 @@ export function OnlineRequests({
     }
 
     try {
-      const token = localStorage.getItem("token") || "";
 
       // Optimistic update
       setRequests(prev =>
@@ -445,18 +443,12 @@ export function OnlineRequests({
         )
       );
 
-      const res = await fetch(`${API_BASE}/requests/${denyingRequest.id}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ status: 'Rejected', reason: denyReason })
+      const res = await api.patch(`/requests/${denyingRequest.id}/status`, {
+        status: 'Rejected',
+        reason: denyReason,
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
+      const data = res.data;
+      if (!res?.status || res.status >= 400) {
         toast.error(data.error || "Failed to deny request");
         await loadInbox(false); // Revert on error
         return;
@@ -485,7 +477,6 @@ export function OnlineRequests({
     }
 
     try {
-      const token = localStorage.getItem("token") || "";
       const rawUser = localStorage.getItem("app_user");
       const currentUser = rawUser ? JSON.parse(rawUser) : null;
       const setByAdmin = String(currentUser?.name || currentUser?.id || "Barangay Admin").trim();
@@ -494,25 +485,18 @@ export function OnlineRequests({
         prev.map(req => (req.id === appointmentRequest.id ? { ...req, status: 'Processing' } : req))
       );
 
-      const res = await fetch(`${API_BASE}/requests/${appointmentRequest.id}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          status: "Processing",
-          appointmentDate: appointmentDetails.date,
-          appointmentTime: appointmentDetails.time,
-          requirements: appointmentDetails.requirements.trim(),
-          additionalNotes: appointmentDetails.additionalNotes.trim(),
-          setByAdmin,
-        })
+      const res = await api.patch(`/requests/${appointmentRequest.id}/status`, {
+        status: "Processing",
+        appointmentDate: appointmentDetails.date,
+        appointmentTime: appointmentDetails.time,
+        requirements: appointmentDetails.requirements.trim(),
+        additionalNotes: appointmentDetails.additionalNotes.trim(),
+        setByAdmin,
       });
 
-      const data = await res.json();
+      const data = res.data;
 
-      if (!res.ok) {
+      if (!res?.status || res.status >= 400) {
         toast.error(data.error || "Failed to send appointment");
         await loadInbox(false);
         return;
@@ -849,6 +833,8 @@ export function OnlineRequests({
                 <Label htmlFor="receiverName" className="text-sm font-medium text-gray-700">Name of Receiver</Label>
                 <Input
                   id="receiverName"
+                  name="receiver_name_one_time"
+                  autoComplete="off"
                   value={receiverName}
                   onChange={(e) => {
                     const lettersOnly = e.target.value.replace(/[^a-zA-Z\s]/g, '');
@@ -934,7 +920,7 @@ export function OnlineRequests({
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 auto-rows-fr">
         <Card
-          className={`h-full bg-white transition-all ${statusFilter === 'Pending' ? 'ring-2 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#FFDA5E', ...(statusFilter === 'Pending' ? { outlineColor: '#FFDA5E' } : {}) }}
+          className={`h-full bg-white transition-all ${statusFilter === 'Pending' ? 'shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#FFDA5E', ...(statusFilter === 'Pending' ? { outlineColor: '#FFDA5E' } : {}) }}
           onClick={() => {
             if (statusFilter !== 'Pending') {
               setStatusFilter('Pending');
@@ -953,7 +939,7 @@ export function OnlineRequests({
         </Card>
 
         <Card
-          className={`h-full bg-white transition-all ${statusFilter === 'Processing' ? 'ring-2 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#2957A1' }}
+          className={`h-full bg-white transition-all ${statusFilter === 'Processing' ? 'shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#2957A1' }}
           onClick={() => {
             if (statusFilter !== 'Processing') {
               setStatusFilter('Processing');
@@ -972,7 +958,7 @@ export function OnlineRequests({
         </Card>
 
         <Card
-          className={`h-full bg-white transition-all ${statusFilter === 'Ready for Pickup' ? 'ring-2 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#CA2DE3' }}
+          className={`h-full bg-white transition-all ${statusFilter === 'Ready for Pickup' ? 'shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#CA2DE3' }}
           onClick={() => {
             if (statusFilter !== 'Ready for Pickup') {
               setStatusFilter('Ready for Pickup');
@@ -991,7 +977,7 @@ export function OnlineRequests({
         </Card>
 
         <Card
-          className={`h-full bg-white transition-all ${statusFilter === 'Completed' ? 'ring-2 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#5CE36C' }}
+          className={`h-full bg-white transition-all ${statusFilter === 'Completed' ? 'shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#5CE36C' }}
           onClick={() => statusFilter !== 'Completed' && setStatusFilter('Completed')}
         >
           <CardContent className={`h-full p-3 sm:p-4 rounded-[inherit] flex items-center`} style={{ backgroundColor: statusFilter === 'Completed' ? '#5CE36C33' : '#5CE36C08' }}>
@@ -1007,7 +993,7 @@ export function OnlineRequests({
           </CardContent>
         </Card>
         <Card
-          className={`h-full bg-white transition-all ${statusFilter === 'Rejected' ? 'ring-2 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#EA4D48' }}
+          className={`h-full bg-white transition-all ${statusFilter === 'Rejected' ? 'shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#EA4D48' }}
           onClick={() =>
             statusFilter !== 'Rejected' && setStatusFilter('Rejected')
           }
@@ -1022,7 +1008,7 @@ export function OnlineRequests({
           </CardContent>
         </Card>
         <Card
-          className={`h-full bg-white transition-all ${statusFilter === 'Processing Completion' ? 'ring-2 shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#EF9925' }}
+          className={`h-full bg-white transition-all ${statusFilter === 'Processing Completion' ? 'shadow-sm cursor-default' : 'cursor-pointer hover:shadow-md'}`} style={{ borderColor: '#EF9925' }}
           onClick={() => {
             if (statusFilter !== 'Processing Completion') setStatusFilter('Processing Completion');
             if (activeTab !== 'other') {
@@ -1244,7 +1230,8 @@ export function OnlineRequests({
                   </div>
                 )}
 
-                {viewingRequest.rejectionReason && (
+                {viewingRequest.rejectionReason &&
+                  (viewingRequest.status === 'Processing Completion' || viewingRequest.status === 'Rejected') && (
                   <div className={`rounded-[28px] bg-white p-6 shadow-sm ${
                     viewingRequest.status === 'Processing Completion' ? 'border border-orange-200' : 'border border-red-200'
                   }`}>

@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require("../db");
 const bcrypt = require("bcrypt");
 const nodemailer = require("nodemailer");
+const { buildThemedEmail } = require("../utils/emailTheme");
 
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -86,6 +87,19 @@ router.post("/send", async (req, res) => {
             to: trimmedEmail,
             subject: "Barangay 160 Password Reset",
             text: `Your OTP is ${otp}. Do not share this code with anyone. If you didn’t request this, please ignore this message.`,
+            html: buildThemedEmail({
+                title: "Password Reset OTP",
+                subtitle: "Barangay 160 Account Security",
+                keyValues: [
+                    { label: "OTP Code", value: otp },
+                    { label: "Valid For", value: "5 minutes" },
+                ],
+                lines: [
+                    "Use this one-time code to reset your password.",
+                    "Do not share this code with anyone.",
+                    "If you didn’t request this, please ignore this message.",
+                ],
+            }),
         });
 
         return res.json({ message: "OTP sent successfully" });

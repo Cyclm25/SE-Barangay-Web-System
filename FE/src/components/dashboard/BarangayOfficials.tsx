@@ -72,6 +72,15 @@ const dataPrivacyHighlights = [
   "Reasonable security measures will be applied to protect personal information from unauthorized access or disclosure.",
 ];
 
+const OFFICIAL_POSITION_OPTIONS = [
+  "Barangay Captain",
+  "Kagawad",
+  "SK Kagawad",
+  "SK Chairman",
+  "Secretary",
+  "Treasurer",
+];
+
 function toStatusText(statusBool: boolean): StatusText {
   return statusBool ? "Active" : "Inactive";
 }
@@ -500,9 +509,14 @@ export function BarangayOfficials() {
         }
       );
     } catch (err) {
-      console.error(err);
+      console.error("Failed to PATCH official status:", err);
+      const backendMessage =
+        (err as any)?.response?.data?.message ||
+        (err as any)?.response?.data?.error ||
+        (err as any)?.message ||
+        "Unknown error";
       toast.error("Failed to update status", {
-        description: "Check your backend PATCH route for status updates.",
+        description: backendMessage,
       });
     } finally {
       setLoading(false);
@@ -564,6 +578,7 @@ export function BarangayOfficials() {
 
     const trimmedEmail = editingOfficial.email.trim();
     const trimmedName = editingOfficial.adminname.trim();
+    const trimmedPosition = editingOfficial.position.trim();
     const digits = editingOfficial.contactnumber.replace(/\D/g, "");
 
     if (!trimmedName) {
@@ -572,6 +587,10 @@ export function BarangayOfficials() {
     }
     if (!trimmedEmail) {
       toast.error("Email is required.");
+      return;
+    }
+    if (!trimmedPosition) {
+      toast.error("Position is required.");
       return;
     }
     if (!gmailRegex.test(trimmedEmail)) {
@@ -587,7 +606,7 @@ export function BarangayOfficials() {
       setLoading(true);
       const res = await api.put(`/api/officials/${viewingOfficial.barangayadminid}`, {
         adminname: trimmedName,
-        position: editingOfficial.position,
+        position: trimmedPosition,
         email: trimmedEmail,
         contactnumber: digits,
         termStart: editingOfficial.termstart || null,
@@ -600,7 +619,7 @@ export function BarangayOfficials() {
       const normalized = normalizeOfficialRecord(updated, {
         ...viewingOfficial,
         adminname: trimmedName,
-        position: editingOfficial.position || null,
+        position: trimmedPosition,
         email: trimmedEmail,
         status: editingOfficial.status,
         contactnumber: digits,
@@ -614,6 +633,15 @@ export function BarangayOfficials() {
           official.barangayadminid === normalized.barangayadminid ? normalized : official
         )
       );
+      try {
+        const rawUser = localStorage.getItem("app_user");
+        const appUser = rawUser ? JSON.parse(rawUser) : null;
+        if (appUser?.id === normalized.barangayadminid) {
+          const updatedUser = { ...appUser, position: normalized.position || "" };
+          localStorage.setItem("app_user", JSON.stringify(updatedUser));
+          localStorage.setItem("position", updatedUser.position);
+        }
+      } catch (_) {}
       setShowConfirmSaveEditDialog(false);
       setViewingOfficial(null);
       setEditingOfficial(null);
@@ -763,14 +791,11 @@ export function BarangayOfficials() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Barangay Captain">
-                          Barangay Captain
-                        </SelectItem>
-                        <SelectItem value="Kagawad">Kagawad</SelectItem>
-                        <SelectItem value="SK Kagawad">SK Kagawad</SelectItem>
-                        <SelectItem value="SK Chairman">SK Chairman</SelectItem>
-                        <SelectItem value="Secretary">Secretary</SelectItem>
-                        <SelectItem value="Treasurer">Treasurer</SelectItem>
+                        {OFFICIAL_POSITION_OPTIONS.map((position) => (
+                          <SelectItem key={position} value={position}>
+                            {position}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1249,12 +1274,25 @@ export function BarangayOfficials() {
                     </div>
                     <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                       <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Position</span>
-                      <Input
+                      <Select
                         value={editingOfficial.position}
-                        readOnly
-                        disabled
-                        className="h-8 bg-gray-50 text-gray-800 disabled:opacity-100 disabled:cursor-default border-gray-200"
-                      />
+                        onValueChange={(value) =>
+                          setEditingOfficial((prev) =>
+                            prev ? { ...prev, position: value } : prev
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-8 border-gray-200 bg-white text-gray-800">
+                          <SelectValue placeholder="Select position" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {OFFICIAL_POSITION_OPTIONS.map((position) => (
+                            <SelectItem key={position} value={position}>
+                              {position}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                       <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Email</span>
