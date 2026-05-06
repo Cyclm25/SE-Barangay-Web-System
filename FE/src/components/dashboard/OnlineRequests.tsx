@@ -823,7 +823,7 @@ export function OnlineRequests({
                   <>This will move the request from Pending to Processing.</>
                 )
                 ) : confirmAction?.kind === 'ready' ? (
-                <>This will move the request from Processing to Ready for Pickup. The resident will be notified via email and SMS.</>
+                <>This will move the request from Processing to Ready for Pickup. The resident will be notified via Gmail.</>
                 ) : (
                   <>This will mark the request as Completed.</>
                 )}

@@ -2,9 +2,11 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const bcrypt = require("bcrypt");
+const nodemailer = require("nodemailer");
 const verifyToken = require("../middleware/verifyToken");
 const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
 const inactivateExpiredOfficials = require("../utils/inactivateExpiredOfficials");
+const { buildThemedEmail } = require("../utils/emailTheme");
 const {
     cleanString,
     normalizeDigits,
@@ -19,6 +21,41 @@ const OFFICIAL_POSITIONS = new Set([
     "Secretary",
     "Treasurer",
 ]);
+
+const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+});
+
+async function sendAdminAccountCreatedEmail({ to, adminName, adminId, position }) {
+    if (!to) return;
+
+    await transporter.sendMail({
+        from: `"Barangay Office" <${process.env.EMAIL_USER}>`,
+        to,
+        subject: "Your Barangay 160 Admin Account",
+        html: buildThemedEmail({
+            title: "Admin Account Created",
+            subtitle: "Barangay 160 Admin Portal",
+            keyValues: [
+                { label: "Admin Name", value: adminName || "Barangay Admin" },
+                { label: "Admin ID", value: adminId },
+                { label: "Position", value: position || "Admin" },
+                { label: "Email", value: to },
+                { label: "Account Type", value: "Barangay Admin" },
+            ],
+            lines: [
+                "Your barangay admin account has been successfully created.",
+                "For security reasons, your password is not included in this email.",
+                "Use your Admin ID to sign in. If you forgot your password, use the Forgot Password feature on the login page.",
+            ],
+            notice: "If you did not expect this account, please contact the barangay office.",
+        }),
+    });
+}
 
 function normalizeDateValue(value) {
     if (!value) return null;
@@ -168,6 +205,17 @@ router.post("/", verifyToken, requireNonSkWriteAccess, async (req, res) => {
         );
 
         await client.query("COMMIT");
+
+        try {
+            await sendAdminAccountCreatedEmail({
+                to: email,
+                adminName,
+                adminId: newId,
+                position,
+            });
+        } catch (emailErr) {
+            console.error("ADMIN ACCOUNT EMAIL ERROR:", emailErr.message);
+        }
 
         res.status(201).json({
             official: adminResult.rows[0],
