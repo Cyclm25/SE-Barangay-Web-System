@@ -56,7 +56,7 @@ export function AnnouncementDetail({
 
     const fetchRawData = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/announcements");
+        const res = await fetch("https://se-barangay-web-system.onrender.com/api/announcements");
         if (res.ok) {
           const allAnnouncements = await res.json();
           const exactMatch = allAnnouncements.find(
@@ -115,7 +115,7 @@ export function AnnouncementDetail({
     .map((img: string) => {
       const cleanUrl = img.trim();
       if (cleanUrl.startsWith("/uploads")) {
-        return `http://localhost:5001${cleanUrl}`;
+        return `https://se-barangay-web-system.onrender.com${cleanUrl}`;
       }
       return cleanUrl;
     });

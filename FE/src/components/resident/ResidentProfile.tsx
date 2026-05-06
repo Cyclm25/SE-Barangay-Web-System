@@ -100,7 +100,7 @@ export function ResidentProfile() {
     }
 
     (async () => {
-      const url = `http://localhost:5001/residents/${encodeURIComponent(residentId)}`;
+      const url = `https://se-barangay-web-system.onrender.com/residents/${encodeURIComponent(residentId)}`;
       console.log("➡️ Fetching:", url);
 
       try {
@@ -134,7 +134,7 @@ export function ResidentProfile() {
         if (data.ProfileImage) {
           const imgUrl = data.ProfileImage.startsWith('data:')
             ? data.ProfileImage  // base64
-            : `http://localhost:5001${data.ProfileImage}`;  // file path
+            : `https://se-barangay-web-system.onrender.com${data.ProfileImage}`;  // file path
           setProfileImage(imgUrl);
         }
 
@@ -228,7 +228,7 @@ export function ResidentProfile() {
       const formData = new FormData();
       formData.append("profileImage", file, file.name);
 
-      const response = await fetch(`http://localhost:5001/api/upload/profile-picture/${residentId}`, {
+      const response = await fetch(`https://se-barangay-web-system.onrender.com/api/upload/profile-picture/${residentId}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -240,7 +240,7 @@ export function ResidentProfile() {
         throw new Error(data?.error || "Upload failed");
       }
 
-      const fullUrl = `http://localhost:5001${data.imageUrl}`;
+      const fullUrl = `https://se-barangay-web-system.onrender.com${data.imageUrl}`;
       setProfileImage(fullUrl);
       toast.success("Profile picture updated successfully!", { id: loadingId });
 
@@ -386,7 +386,7 @@ export function ResidentProfile() {
       };
 
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5001/residents/${encodeURIComponent(residentId)}/profile`, {
+      const res = await fetch(`https://se-barangay-web-system.onrender.com/residents/${encodeURIComponent(residentId)}/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

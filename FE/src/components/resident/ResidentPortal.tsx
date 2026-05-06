@@ -38,13 +38,13 @@ export function ResidentPortal({ residentName, onLogout }: ResidentPortalProps) 
   useEffect(() => {
     const residentId = localStorage.getItem('residentId');
     if (!residentId) return;
-    fetch(`http://localhost:5001/residents/${encodeURIComponent(residentId)}`)
+    fetch(`https://se-barangay-web-system.onrender.com/residents/${encodeURIComponent(residentId)}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.ProfileImage) {
           const imgUrl = data.ProfileImage.startsWith('data:')
             ? data.ProfileImage
-            : `http://localhost:5001${data.ProfileImage}`;
+            : `https://se-barangay-web-system.onrender.com${data.ProfileImage}`;
           setProfileImage(imgUrl);
         }
       })

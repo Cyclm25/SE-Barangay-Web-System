@@ -4,7 +4,7 @@ import { Camera, Upload, X, RotateCcw, Check, FlipHorizontal, ZoomIn, ZoomOut, S
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { toast } from 'sonner';
 import * as faceapi from '@vladmandic/face-api';
-const API_BASE = 'http://localhost:5001';
+const API_BASE = 'https://se-barangay-web-system.onrender.com';
 
 interface ProfileImageUploadProps {
   residentId?: string;

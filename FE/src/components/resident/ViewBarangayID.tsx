@@ -25,7 +25,7 @@ export function ViewBarangayID({ onClose, profileData }: ViewBarangayIDProps) {
     const token = localStorage.getItem("token");
     console.log("TOKEN:", token);
 
-    fetch("http://localhost:5001/auth/me", {
+    fetch("https://se-barangay-web-system.onrender.com/auth/me", {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (r) => {
@@ -49,7 +49,7 @@ export function ViewBarangayID({ onClose, profileData }: ViewBarangayIDProps) {
 
     setLoadingMe(true);
 
-    fetch("http://localhost:5001/auth/me", {
+    fetch("https://se-barangay-web-system.onrender.com/auth/me", {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (r) => {

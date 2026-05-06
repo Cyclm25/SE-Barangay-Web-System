@@ -139,6 +139,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+const frontendBuildPath = path.join(__dirname, "..", "FE", "build");
+
 /* =============================================
    3. SAFE ROUTE LOADER
 ============================================= */
@@ -214,7 +216,6 @@ app.get("/api/stats/resident-types", async (req, res) => {
 /* =============================================
    6. HEALTH CHECKS
 ============================================= */
-app.get("/", (req, res) => res.send("Backend is running"));
 app.get("/_ping", (req, res) => res.status(200).json({ ok: true }));
 
 app.get("/_dbping", async (req, res) => {
@@ -227,7 +228,30 @@ app.get("/_dbping", async (req, res) => {
 });
 
 /* =============================================
-   7. START SERVER
+   7. FRONTEND
+============================================= */
+app.use(express.static(frontendBuildPath));
+
+app.use((req, res, next) => {
+  if (
+    req.path.startsWith("/api") ||
+    req.path.startsWith("/auth") ||
+    req.path.startsWith("/residents") ||
+    req.path.startsWith("/requests") ||
+    req.path.startsWith("/uploads")
+  ) {
+    return next();
+  }
+
+  res.sendFile(path.join(frontendBuildPath, "index.html"), (err) => {
+    if (err) {
+      res.status(404).send("Frontend build not found");
+    }
+  });
+});
+
+/* =============================================
+   8. START SERVER
 ============================================= */
 app.listen(PORT, () => {
   console.log(`\n=============================================`);

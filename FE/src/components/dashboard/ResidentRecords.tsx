@@ -186,7 +186,7 @@ type ResidentRow = {
   religion?: string | null;
 };
 
-const API_BASE = "http://localhost:5001";
+const API_BASE = "https://se-barangay-web-system.onrender.com";
 
 const normalizeVoterStatus = (value: unknown): "Voter" | "Non-Voter" => {
   if (value === true) return "Voter";
@@ -215,7 +215,7 @@ function mapRowToResident(r: ResidentRow): Resident {
     profileImage: (r as any).ProfileImage
       ? (r as any).ProfileImage.startsWith('data:')
         ? (r as any).ProfileImage
-        : `http://localhost:5001${(r as any).ProfileImage}`
+        : `https://se-barangay-web-system.onrender.com${(r as any).ProfileImage}`
       : undefined,
     firstName: r.FirstName ?? "",
     middleName: r.MiddleName ?? "",
