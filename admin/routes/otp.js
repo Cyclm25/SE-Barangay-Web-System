@@ -72,7 +72,9 @@ router.post("/send", async (req, res) => {
         );
 
         // 7️ Send email
-        const { transporter, fromUser } = createTransporter();`r`n        await transporter.sendMail({`r`n            from: fromUser,
+        const { transporter, fromUser } = createTransporter();
+        await transporter.sendMail({
+            from: fromUser,
             to: trimmedEmail,
             subject: "Barangay 160 Password Reset",
             text: `Your OTP is ${otp}. Do not share this code with anyone. If you didn’t request this, please ignore this message.`,
