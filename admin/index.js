@@ -5,6 +5,7 @@ require("dotenv").config();
 
 const app = express();
 const pool = require("./db");
+const { verifyMailer } = require("./utils/mailer");
 const PORT = 5001;
 
 /* =============================================
@@ -227,6 +228,21 @@ app.get("/_dbping", async (req, res) => {
   }
 });
 
+app.get("/_mailping", async (req, res) => {
+  try {
+    const result = await verifyMailer();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({
+      ok: false,
+      error: e.message,
+      code: e.code || null,
+      response: e.response || null,
+      command: e.command || null,
+    });
+  }
+});
+
 /* =============================================
    7. FRONTEND
 ============================================= */
@@ -257,4 +273,17 @@ app.listen(PORT, () => {
   console.log(`\n=============================================`);
   console.log(`Backend running at http://localhost:${PORT}`);
   console.log(`=============================================\n`);
+
+  verifyMailer()
+    .then(({ fromUser }) => {
+      console.log(`[MAIL] SMTP verified successfully as ${fromUser}`);
+    })
+    .catch((e) => {
+      console.error("[MAIL] SMTP verification failed:", {
+        message: e.message,
+        code: e.code || null,
+        response: e.response || null,
+        command: e.command || null,
+      });
+    });
 });

@@ -1,4 +1,6 @@
 const nodemailer = require("nodemailer");
+let cachedTransporter = null;
+let cachedFromUser = null;
 
 function getMailConfig() {
   const host = process.env.SMTP_HOST;
@@ -28,12 +30,31 @@ function getMailConfig() {
 }
 
 function createTransporter() {
+  if (cachedTransporter && cachedFromUser) {
+    return { transporter: cachedTransporter, fromUser: cachedFromUser };
+  }
+
   const config = getMailConfig();
   const { fromUser, ...transportConfig } = config;
-  const transporter = nodemailer.createTransport(transportConfig);
-  return { transporter, fromUser };
+  const transporter = nodemailer.createTransport({
+    ...transportConfig,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+  });
+
+  cachedTransporter = transporter;
+  cachedFromUser = fromUser;
+  return { transporter: cachedTransporter, fromUser: cachedFromUser };
+}
+
+async function verifyMailer() {
+  const { transporter, fromUser } = createTransporter();
+  await transporter.verify();
+  return { ok: true, fromUser };
 }
 
 module.exports = {
   createTransporter,
+  verifyMailer,
 };
