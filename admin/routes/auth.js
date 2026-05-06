@@ -1,7 +1,7 @@
 const router = require("express").Router();
 const pool = require("../db");
 const bcrypt = require("bcrypt");
-const nodemailer = require("nodemailer");
+const { createTransporter } = require("../utils/mailer");
 const jwt = require("jsonwebtoken");
 const verifyToken = require("../middleware/verifyToken");
 const { buildThemedEmail } = require("../utils/emailTheme");
@@ -230,13 +230,10 @@ router.post("/forgot-password", async (req, res) => {
       [otpCode, expiry, row.ResidentAccountID]
     );
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-    });
+    const { transporter, fromUser } = createTransporter();
 
     await transporter.sendMail({
-      from: `"Barangay 160" <${process.env.EMAIL_USER}>`,
+      from: `"Barangay 160" <${fromUser}>`,
       to: row.Email,
       subject: "Barangay 160 Password Reset",
       text: `Your OTP code is ${otpCode}. Do not share this code with anyone.`,

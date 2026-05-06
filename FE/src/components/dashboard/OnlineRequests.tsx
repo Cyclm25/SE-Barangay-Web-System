@@ -1,4 +1,4 @@
-﻿// OnlineRequests.tsx
+// OnlineRequests.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -398,20 +398,15 @@ export function OnlineRequests({
 
       if (newStatus === 'Ready for Pickup') {
         const emailStatus = data?.email;
-        const smsStatus = data?.sms;
         const emailOk = !!emailStatus?.success;
-        const smsOk = !!smsStatus?.success;
-
-        if (emailOk && smsOk) {
-          toast.success(`Moved to ${newStatus}. Email and SMS sent successfully.`);
-        } else if (emailOk && !smsOk && smsStatus?.attempted) {
-          toast.warning(`Moved to ${newStatus}. Email sent, but SMS failed: ${smsStatus.error || 'Unknown SMS error'}`);
-        } else if (!emailOk && emailStatus?.attempted && smsOk) {
-          toast.warning(`Moved to ${newStatus}. SMS sent, but email failed: ${emailStatus.error || 'Unknown email error'}`);
-        } else if (emailStatus?.attempted || smsStatus?.attempted) {
+        if (emailOk) {
+          toast.success(`Moved to ${newStatus}. Email sent successfully.`);
+        } else if (emailStatus?.attempted) {
+          toast.warning(`Moved to ${newStatus}. Email failed: ${emailStatus.error || 'Unknown email error'}`);
+        } else if (emailStatus?.attempted) {
           const issues = [
             emailStatus?.attempted && !emailOk ? `Email failed: ${emailStatus.error || 'Unknown email error'}` : null,
-            smsStatus?.attempted && !smsOk ? `SMS failed: ${smsStatus.error || 'Unknown SMS error'}` : null,
+            
           ].filter(Boolean).join(' ');
           toast.warning(`Moved to ${newStatus}, but notifications had issues. ${issues}`);
         } else {
@@ -532,7 +527,7 @@ export function OnlineRequests({
   const getTabCountColor = () => {
     switch (statusFilter) {
       case 'Pending':
-        return 'text-white' ; // yellow — use inline style below
+        return 'text-white' ; // yellow � use inline style below
       case 'Processing':
         return 'text-white bg-[#2957A1]';
       case 'Processing Completion':
@@ -630,7 +625,7 @@ export function OnlineRequests({
 
     return (
     <div className="space-y-3">
-      {/* ── DESKTOP TABLE (hidden on mobile) ── */}
+      {/* -- DESKTOP TABLE (hidden on mobile) -- */}
       <div className="hidden sm:block overflow-x-auto">
         <Table>
           <TableHeader className="bg-[#2957a1]">
@@ -708,7 +703,7 @@ export function OnlineRequests({
         </Table>
       </div>
 
-      {/* ── MOBILE CARDS (visible only on mobile) ── */}
+      {/* -- MOBILE CARDS (visible only on mobile) -- */}
       <div className="sm:hidden space-y-3">
         {paginated.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
@@ -768,7 +763,7 @@ export function OnlineRequests({
         )}
       </div>
 
-      {/* ── PAGINATION FOOTER ── */}
+      {/* -- PAGINATION FOOTER -- */}
       {requestList.length > 0 && (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 border-t">
           <div className="flex items-center gap-3">
@@ -782,7 +777,7 @@ export function OnlineRequests({
                 {[5, 10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>
-            <span className="text-xs text-gray-500">{rStart}–{rEnd} of {requestList.length}</span>
+            <span className="text-xs text-gray-500">{rStart}�{rEnd} of {requestList.length}</span>
           </div>
           <div className="flex items-center gap-1">
             <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100 transition-colors" aria-label="First page"><ChevronsLeft className="w-3.5 h-3.5" /></button>
@@ -1349,7 +1344,7 @@ export function OnlineRequests({
         <DialogContent className="w-[95vw] sm:max-w-[680px] md:max-w-[800px]">
           {appointmentRequest && (
             <>
-              {/* ── Header ── */}
+              {/* -- Header -- */}
               <DialogHeader className="pb-2 border-b border-gray-100">
                 <DialogTitle className="flex items-center gap-2 text-[#2957a1] text-xl font-bold">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2957a1]/10">
@@ -1363,7 +1358,7 @@ export function OnlineRequests({
               </DialogHeader>
 
               <div className="space-y-5 pt-1">
-                {/* ── Request info card ── */}
+                {/* -- Request info card -- */}
                 <div className="rounded-xl border border-[#2957a1]/15 bg-[#f4f7fc] p-4">
                   <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                     <div>
@@ -1382,10 +1377,10 @@ export function OnlineRequests({
                   </div>
                 </div>
 
-                {/* ── Date & Time row ── */}
+                {/* -- Date & Time row -- */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 
-                  {/* ── Custom Date Picker ── */}
+                  {/* -- Custom Date Picker -- */}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold uppercase tracking-widest text-gray-500">
                       Appointment Date <span className="text-red-500">*</span>
@@ -1421,7 +1416,7 @@ export function OnlineRequests({
                                 else setCalViewMonth(m => m - 1);
                               }}
                               className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors text-base"
-                            >‹</button>
+                            >�</button>
                             <span className="text-sm font-semibold text-gray-800">
                               {new Date(calViewYear, calViewMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                             </span>
@@ -1432,7 +1427,7 @@ export function OnlineRequests({
                                 else setCalViewMonth(m => m + 1);
                               }}
                               className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors text-base"
-                            >›</button>
+                            >�</button>
                           </div>
                           {/* Day headers */}
                           <div className="grid grid-cols-7 px-3 pb-1">
@@ -1485,11 +1480,11 @@ export function OnlineRequests({
                     </div>
                   </div>
 
-                  {/* ── Custom Time Picker ── */}
+                  {/* -- Custom Time Picker -- */}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold uppercase tracking-widest text-gray-500">
                       Appointment Time <span className="text-red-500">*</span>
-                      <span className="ml-2 normal-case tracking-normal font-normal text-[#2957a1]/70">(8:00 AM – 5:00 PM)</span>
+                      <span className="ml-2 normal-case tracking-normal font-normal text-[#2957a1]/70">(8:00 AM � 5:00 PM)</span>
                     </Label>
                     <div className="relative" ref={timePickerRef}>
                       <button
@@ -1532,7 +1527,7 @@ export function OnlineRequests({
                                 onChange={e => setTpHour(e.target.value)}
                                 className="appearance-none h-9 pl-3 pr-7 rounded-lg border border-gray-200 text-sm font-semibold text-gray-800 bg-white focus:outline-none focus:border-[#2957a1] focus:ring-1 focus:ring-[#2957a1]/30 cursor-pointer"
                               >
-                                {/* Office hours: 8:00 AM – 5:00 PM */}
+                                {/* Office hours: 8:00 AM � 5:00 PM */}
                                 {(tpPeriod === 'AM'
                                   ? ['08','09','10','11']
                                   : ['12','01','02','03','04','05']
@@ -1540,7 +1535,7 @@ export function OnlineRequests({
                                   <option key={h} value={h}>{h}</option>
                                 ))}
                               </select>
-                              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400 text-xs">▾</span>
+                              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400 text-xs">?</span>
                             </div>
                             <span className="text-lg font-bold text-gray-500">:</span>
                             {/* Minute select */}
@@ -1554,7 +1549,7 @@ export function OnlineRequests({
                                   <option key={m} value={m}>{m}</option>
                                 ))}
                               </select>
-                              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400 text-xs">▾</span>
+                              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400 text-xs">?</span>
                             </div>
                             {/* AM/PM toggle */}
                             <div className="ml-1 flex items-center gap-1">
@@ -1587,8 +1582,8 @@ export function OnlineRequests({
                               onClick={() => {
                                 const hNum = parseInt(tpHour, 10);
                                 // Convert 12-hour office-hours format to 24-hour
-                                // AM: 08→8, 09→9, 10→10, 11→11
-                                // PM: 12→12, 01→13, 02→14, 03→15, 04→16, 05→17
+                                // AM: 08?8, 09?9, 10?10, 11?11
+                                // PM: 12?12, 01?13, 02?14, 03?15, 04?16, 05?17
                                 const h24 = tpPeriod === 'AM' ? hNum : (hNum === 12 ? 12 : hNum + 12);
                                 setAppointmentDetails({ ...appointmentDetails, time: `${String(h24).padStart(2,'0')}:${tpMinute}` });
                                 setShowTimePicker(false);
@@ -1602,7 +1597,7 @@ export function OnlineRequests({
                   </div>
                 </div>
 
-                {/* ── Required Documents ── */}
+                {/* -- Required Documents -- */}
                 <div className="space-y-1.5">
                   <Label htmlFor="requirements" className="text-xs font-bold uppercase tracking-widest text-gray-500">
                     Required Documents to Bring <span className="text-red-500">*</span>
@@ -1617,7 +1612,7 @@ export function OnlineRequests({
                   />
                 </div>
 
-                {/* ── Additional Notes ── */}
+                {/* -- Additional Notes -- */}
                 <div className="space-y-1.5">
                   <Label htmlFor="additionalNotes" className="text-xs font-bold uppercase tracking-widest text-gray-500">
                     Additional Notes <span className="text-gray-400 font-normal normal-case tracking-normal">(Optional)</span>
@@ -1633,7 +1628,7 @@ export function OnlineRequests({
                 </div>
               </div>
 
-              {/* ── Footer ── */}
+              {/* -- Footer -- */}
               <DialogFooter className="pt-2 border-t border-gray-100 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-gray-400">
                   Sending the appointment will move this request to the <span className="font-semibold text-gray-500">Processing</span> tab.

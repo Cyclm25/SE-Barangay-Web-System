@@ -1,5 +1,5 @@
 const pool = require("../db");
-const nodemailer = require("nodemailer");
+const { createTransporter } = require("./mailer");
 const { buildThemedEmail } = require("./emailTheme");
 
 const EMAIL_LOG_TABLE_SQL = `
@@ -17,18 +17,6 @@ const EMAIL_LOG_TABLE_SQL = `
 `;
 
 let emailLogTableReady = false;
-
-function getTransporter() {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 465),
-    secure: true,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-}
 
 async function ensureEmailLogTable() {
   if (emailLogTableReady) return;
@@ -187,9 +175,9 @@ async function sendReadyForPickupEmail({
   }
 
   try {
-    const transporter = getTransporter();
+    const { transporter, fromUser } = createTransporter();
     await transporter.sendMail({
-      from: `"Barangay 160" <${process.env.SMTP_USER}>`,
+      from: `"Barangay 160" <${fromUser}>`,
       to: normalizedEmail,
       subject,
       text,
@@ -266,9 +254,9 @@ async function sendRequestRejectedEmail({
   }
 
   try {
-    const transporter = getTransporter();
+    const { transporter, fromUser } = createTransporter();
     await transporter.sendMail({
-      from: `"Barangay 160" <${process.env.SMTP_USER}>`,
+      from: `"Barangay 160" <${fromUser}>`,
       to: normalizedEmail,
       subject,
       text,
@@ -345,9 +333,9 @@ async function sendReturnForCompletionEmail({
   }
 
   try {
-    const transporter = getTransporter();
+    const { transporter, fromUser } = createTransporter();
     await transporter.sendMail({
-      from: `"Barangay 160" <${process.env.SMTP_USER}>`,
+      from: `"Barangay 160" <${fromUser}>`,
       to: normalizedEmail,
       subject,
       text,

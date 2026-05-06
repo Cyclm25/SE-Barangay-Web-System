@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const bcrypt = require("bcrypt");
-const nodemailer = require("nodemailer");
+const { createTransporter } = require("../utils/mailer");
 const verifyToken = require("../middleware/verifyToken");
 const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
 const inactivateExpiredOfficials = require("../utils/inactivateExpiredOfficials");
@@ -22,19 +22,12 @@ const OFFICIAL_POSITIONS = new Set([
     "Treasurer",
 ]);
 
-const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-    },
-});
-
 async function sendAdminAccountCreatedEmail({ to, adminName, adminId, position }) {
     if (!to) return;
+    const { transporter, fromUser } = createTransporter();
 
     await transporter.sendMail({
-        from: `"Barangay Office" <${process.env.EMAIL_USER}>`,
+        from: `"Barangay Office" <${fromUser}>`,
         to,
         subject: "Your Barangay 160 Admin Account",
         html: buildThemedEmail({

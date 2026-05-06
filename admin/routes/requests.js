@@ -3,7 +3,6 @@ const router = require("express").Router();
 const pool = require("../db");
 const verifyToken = require("../middleware/verifyToken");
 const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
-const { sendReadyForPickupSms } = require("../utils/sendSmsNotification");
 const {
   sendReadyForPickupEmail,
   sendRequestRejectedEmail,
@@ -339,12 +338,6 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
 
     await client.query("COMMIT");
 
-    let sms = {
-      attempted: false,
-      success: false,
-      skipped: true,
-      reason: "SMS only triggers when transitioning to Ready for Pickup.",
-    };
     let email = {
       attempted: false,
       success: false,
@@ -395,13 +388,6 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
           emailAddress: resident?.Email || null,
         });
 
-        sms = await sendReadyForPickupSms({
-          requestId: Number(id),
-          residentId,
-          residentName,
-          documentType: requestType,
-          rawPhoneNumber: resident?.ContactNumber || null,
-        });
       }
 
       if (status === "Rejected" && prevStatus !== "Rejected") {
@@ -431,7 +417,6 @@ router.patch("/:id/status", verifyToken, requireNonSkWriteAccess, async (req, re
       message: "Status updated",
       data: update.rows[0],
       email,
-      sms,
       rejectionEmail,
       returnForCompletionEmail,
     });

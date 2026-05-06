@@ -236,18 +236,6 @@ async function main() {
         "CreatedAt" TIMESTAMP DEFAULT NOW()
       );
 
-      CREATE TABLE IF NOT EXISTS sms_notification_log (
-        "SmsNotificationLogID" SERIAL PRIMARY KEY,
-        "RequestID" INTEGER,
-        "ResidentID" VARCHAR(20),
-        "PhoneNumber" VARCHAR(30),
-        "Provider" VARCHAR(50),
-        "Message" TEXT,
-        "Status" VARCHAR(30),
-        "ErrorMessage" TEXT,
-        "ProviderMessageId" TEXT,
-        "CreatedAt" TIMESTAMP DEFAULT NOW()
-      );
     `);
 
     const superAdminId = process.env.SUPER_ADMIN_ID || "SA20260001";

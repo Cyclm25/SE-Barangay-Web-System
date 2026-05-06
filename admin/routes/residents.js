@@ -3,7 +3,7 @@ const pool = require("../db");
 const bcrypt = require("bcrypt");
 const verifyToken = require("../middleware/verifyToken");
 const requireNonSkWriteAccess = require("../middleware/requireNonSkWriteAccess");
-const nodemailer = require("nodemailer");
+const { createTransporter } = require("../utils/mailer");
 const {
   AGE_FIELD_ERROR,
   MAX_RESIDENT_AGE,
@@ -31,19 +31,12 @@ function calculateAge(birthday) {
   return age;
 }
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
 async function sendResidentAccountCreatedEmail({ to, firstName, lastName, residentId }) {
   if (!to) return;
+  const { transporter, fromUser } = createTransporter();
 
   await transporter.sendMail({
-    from: `"Barangay Office" <${process.env.EMAIL_USER}>`,
+    from: `"Barangay Office" <${fromUser}>`,
     to,
     subject: "Your Barangay 160 Account Credentials",
     html: buildThemedEmail({
